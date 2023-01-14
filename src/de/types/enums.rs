@@ -11,7 +11,7 @@ where
 {
 	let enum_discriminant = read_discriminant(state)?;
 	match symbols.get(enum_discriminant) {
-		None => Err(Error::custom("Could not find enum discriminant in schema")),
+		None => Err(DeError::new("Could not find enum discriminant in schema")),
 		Some(variant_schema) => Ok(visitor.visit_enum(value::StrDeserializer::new(variant_schema))?),
 	}
 }

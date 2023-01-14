@@ -114,7 +114,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 					.get(union_discriminant)
 					.map(|&schema_key| &self.state.schema[schema_key])
 				{
-					None => Err(Error::custom("Could not find union discriminant in schema")),
+					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
 					Some(variant_schema) => visitor.visit_some(Self {
 						state: self.state,

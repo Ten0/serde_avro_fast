@@ -9,7 +9,7 @@ where
 {
 	let union_discriminant: usize = read_discriminant(state)?;
 	match union_schema.variants.get(union_discriminant) {
-		None => Err(Error::custom("Could not find union discriminant in schema")),
+		None => Err(DeError::new("Could not find union discriminant in schema")),
 		Some(variant_schema) => Ok(&state.schema[*variant_schema]),
 	}
 }
