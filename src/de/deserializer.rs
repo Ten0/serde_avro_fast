@@ -13,7 +13,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 		V: Visitor<'de>,
 	{
 		match self.schema {
-			Schema::Null => self.deserialize_unit(visitor),
+			Schema::Null => visitor.visit_unit(),
 			Schema::Boolean => read_bool(self.reader, visitor),
 			Schema::Int => visitor.visit_i32(self.reader.read_varint()?),
 			Schema::Long => visitor.visit_i64(self.reader.read_varint()?),
