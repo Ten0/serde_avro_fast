@@ -2,11 +2,11 @@ use super::*;
 
 use std::num::NonZeroUsize;
 
-fn read_block_len<'de, R>(reader: &mut ReaderAndConfig<R>) -> Result<Option<NonZeroUsize>, DeError>
+fn read_block_len<'de, R>(state: &mut DeserializerState<R>) -> Result<Option<NonZeroUsize>, DeError>
 where
 	R: Read<'de>,
 {
-	let len: i64 = reader.read_varint()?;
+	let len: i64 = state.read_varint()?;
 	let res;
 	if len < 0 {
 		// res = -len, properly handling i64::MIN
@@ -14,7 +14,7 @@ where
 		// Drop the number of bytes in the block to properly advance the reader
 		// Since we don't use that value, decode as u64 instead of i64 (skip zigzag decoding)
 		// TODO enable fast skipping when encountering `deserialize_ignored_any`
-		let _: u64 = reader.read_varint()?;
+		let _: u64 = state.read_varint()?;
 	} else {
 		res = len as u64;
 	}
@@ -23,13 +23,13 @@ where
 		.map(NonZeroUsize::new)
 }
 
-pub(in super::super) struct BlockReader<'r, R> {
+pub(in super::super) struct BlockReader<'r, 's, R> {
 	current_block_len: usize,
 	n_read: usize,
-	reader: &'r mut ReaderAndConfig<R>,
+	reader: &'r mut DeserializerState<'s, R>,
 }
-impl<'r, R> BlockReader<'r, R> {
-	pub(in super::super) fn new(reader: &'r mut ReaderAndConfig<R>) -> Self {
+impl<'r, 's, R> BlockReader<'r, 's, R> {
+	pub(in super::super) fn new(reader: &'r mut DeserializerState<'s, R>) -> Self {
 		Self {
 			reader,
 			current_block_len: 0,
@@ -62,9 +62,9 @@ impl<'r, R> BlockReader<'r, R> {
 	}
 }
 
-pub(in super::super) struct ArraySeqAccess<'s, 'r, R> {
-	pub(in super::super) block_reader: BlockReader<'r, R>,
-	pub(in super::super) element_schema: &'s Schema,
+pub(in super::super) struct ArraySeqAccess<'r, 's, R> {
+	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
+	pub(in super::super) element_schema: &'s SchemaNode,
 }
 impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 	type Error = DeError;
@@ -77,15 +77,15 @@ impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 			return Ok(None);
 		}
 		Ok(Some(seed.deserialize(DatumDeserializer {
-			schema: self.element_schema,
-			reader: self.block_reader.reader,
+			schema_node: self.element_schema,
+			state: self.block_reader.reader,
 		})?))
 	}
 }
 
-pub(in super::super) struct MapSeqAccess<'s, 'r, R> {
-	pub(in super::super) block_reader: BlockReader<'r, R>,
-	pub(in super::super) element_schema: &'s Schema,
+pub(in super::super) struct MapSeqAccess<'r, 's, R> {
+	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
+	pub(in super::super) element_schema: &'s SchemaNode,
 }
 impl<'de, R: Read<'de>> MapAccess<'de> for MapSeqAccess<'_, '_, R> {
 	type Error = DeError;
@@ -108,16 +108,16 @@ impl<'de, R: Read<'de>> MapAccess<'de> for MapSeqAccess<'_, '_, R> {
 		V: DeserializeSeed<'de>,
 	{
 		seed.deserialize(DatumDeserializer {
-			schema: self.element_schema,
-			reader: self.block_reader.reader,
+			schema_node: self.element_schema,
+			state: self.block_reader.reader,
 		})
 	}
 }
 
-struct StringDeserializer<'r, R> {
-	reader: &'r mut ReaderAndConfig<R>,
+struct StringDeserializer<'r, 's, R> {
+	reader: &'r mut DeserializerState<'s, R>,
 }
-impl<'de, R: Read<'de>> Deserializer<'de> for StringDeserializer<'_, R> {
+impl<'de, R: Read<'de>> Deserializer<'de> for StringDeserializer<'_, '_, R> {
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

@@ -1,25 +1,25 @@
 use super::*;
 
-fn read_len<'de, R>(reader: &mut ReaderAndConfig<R>) -> Result<usize, DeError>
+fn read_len<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
 where
 	R: Read<'de>,
 {
-	reader
+	state
 		.read_varint::<i64>()?
 		.try_into()
 		.map_err(|e| DeError::custom(format_args!("Invalid buffer length in stream: {e}")))
 }
 
 pub(in super::super) fn read_length_delimited<'de, R, BV>(
-	reader: &mut ReaderAndConfig<R>,
+	state: &mut DeserializerState<R>,
 	visitor: BV,
 ) -> Result<BV::Value, DeError>
 where
 	R: Read<'de>,
 	BV: ReadVisitor<'de>,
 {
-	let len = read_len(reader)?;
-	reader.read_slice(len, visitor)
+	let len = read_len(state)?;
+	state.read_slice(len, visitor)
 }
 
 pub(in super::super) struct BytesVisitor<V>(pub(in super::super) V);

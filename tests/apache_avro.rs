@@ -85,9 +85,11 @@ lazy_static! {
 }
 
 pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(schema: &Schema, slice: &[u8]) -> Value {
-	let sjv: T =
-		serde::Deserialize::deserialize(serde_avro_fast::de::ReaderAndConfig::from_slice(slice).deserializer(schema))
-			.unwrap();
+	let fast_schema = serde_avro_fast::Schema::from_apache_schema(schema).unwrap();
+	let sjv: T = serde::Deserialize::deserialize(
+		serde_avro_fast::de::DeserializerState::from_slice(slice, &fast_schema).deserializer(),
+	)
+	.unwrap();
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	let avro_value_reinterpreted = avro_value.resolve(schema).unwrap();
 	avro_value_reinterpreted

@@ -1,3 +1,4 @@
 pub mod de;
+pub mod schema;
 
-pub use apache_avro::Schema;
+pub use schema::Schema;
