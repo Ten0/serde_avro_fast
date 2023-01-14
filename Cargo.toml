@@ -1,0 +1,10 @@
+[package]
+	edition = "2021"
+	name = "serde_avro_fast"
+	version = "0.1.0"
+
+[dependencies]
+	apache-avro = { git = "https://github.com/apache/avro.git" }
+	integer-encoding = { default-features = false, version = "3" }
+	serde = "1"
+	thiserror = "1"
