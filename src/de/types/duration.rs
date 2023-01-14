@@ -89,4 +89,8 @@ impl<'de> SeqAccess<'de> for DurationMapAndSeqAccess<'_> {
 			Ok(None)
 		}
 	}
+
+	fn size_hint(&self) -> Option<usize> {
+		Some(self.duration_buf.len() / 4)
+	}
 }
