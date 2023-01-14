@@ -10,12 +10,10 @@ use serde::de::*;
 
 pub struct DatumDeserializer<'s, 'r, R> {
 	schema: &'s Schema,
-	reader: &'r mut R,
-	config: DeserializerConfig, // as soon as this is larger than a usize, put a ref
+	reader: &'r mut ReaderAndConfig<R>,
 }
-
-#[derive(Clone, Copy)]
-struct DeserializerConfig {
+struct ReaderAndConfig<R> {
+	reader: R,
 	max_seq_size: usize,
 }
 
@@ -37,11 +35,11 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			Schema::String => read_length_delimited(self.reader, StringVisitor(visitor)),
 			Schema::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				element_schema: &**elements_schema,
-				block_reader: BlockReader::new(self.reader, self.config),
+				block_reader: BlockReader::new(self.reader),
 			}),
 			Schema::Map(elements_schema) => visitor.visit_map(MapSeqAccess {
 				element_schema: &**elements_schema,
-				block_reader: BlockReader::new(self.reader, self.config),
+				block_reader: BlockReader::new(self.reader),
 			}),
 			Schema::Union(_) => todo!(),
 			Schema::Record {
@@ -216,5 +214,18 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 		V: Visitor<'de>,
 	{
 		todo!()
+	}
+}
+
+impl<R> std::ops::Deref for ReaderAndConfig<R> {
+	type Target = R;
+	fn deref(&self) -> &Self::Target {
+		&self.reader
+	}
+}
+
+impl<R> std::ops::DerefMut for ReaderAndConfig<R> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.reader
 	}
 }

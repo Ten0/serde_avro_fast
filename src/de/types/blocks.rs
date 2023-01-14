@@ -2,7 +2,7 @@ use super::*;
 
 use std::num::NonZeroUsize;
 
-fn read_block_len<'de, R>(reader: &mut R) -> Result<Option<NonZeroUsize>, DeError>
+fn read_block_len<'de, R>(reader: &mut ReaderAndConfig<R>) -> Result<Option<NonZeroUsize>, DeError>
 where
 	R: Read<'de>,
 {
@@ -26,14 +26,12 @@ where
 pub(in super::super) struct BlockReader<'r, R> {
 	current_block_len: usize,
 	n_read: usize,
-	reader: &'r mut R,
-	config: DeserializerConfig,
+	reader: &'r mut ReaderAndConfig<R>,
 }
 impl<'r, R> BlockReader<'r, R> {
-	pub(in super::super) fn new(reader: &'r mut R, config: DeserializerConfig) -> Self {
+	pub(in super::super) fn new(reader: &'r mut ReaderAndConfig<R>) -> Self {
 		Self {
 			reader,
-			config,
 			current_block_len: 0,
 			n_read: 0,
 		}
@@ -50,7 +48,7 @@ impl<'r, R> BlockReader<'r, R> {
 					Some(new_len) => {
 						let l = new_len.get();
 						let n_read = self.n_read.saturating_add(l);
-						if n_read > self.config.max_seq_size {
+						if n_read > self.reader.max_seq_size {
 							return Err(DeError::new("Exceeding max sequence size while deserializing"));
 						}
 						self.n_read = n_read;
@@ -81,7 +79,6 @@ impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 		Ok(Some(seed.deserialize(DatumDeserializer {
 			schema: self.element_schema,
 			reader: self.block_reader.reader,
-			config: self.block_reader.config,
 		})?))
 	}
 }
@@ -113,13 +110,12 @@ impl<'de, R: Read<'de>> MapAccess<'de> for MapSeqAccess<'_, '_, R> {
 		seed.deserialize(DatumDeserializer {
 			schema: self.element_schema,
 			reader: self.block_reader.reader,
-			config: self.block_reader.config,
 		})
 	}
 }
 
 struct StringDeserializer<'r, R> {
-	reader: &'r mut R,
+	reader: &'r mut ReaderAndConfig<R>,
 }
 impl<'de, R: Read<'de>> Deserializer<'de> for StringDeserializer<'_, R> {
 	type Error = DeError;

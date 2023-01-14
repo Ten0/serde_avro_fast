@@ -1,6 +1,6 @@
 use super::*;
 
-pub(in super::super) fn read_bool<'de, R, V>(reader: &mut R, visitor: V) -> Result<V::Value, DeError>
+pub(in super::super) fn read_bool<'de, R, V>(reader: &mut ReaderAndConfig<R>, visitor: V) -> Result<V::Value, DeError>
 where
 	R: Read<'de>,
 	V: Visitor<'de>,

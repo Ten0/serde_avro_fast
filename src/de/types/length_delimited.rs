@@ -1,6 +1,6 @@
 use super::*;
 
-fn read_len<'de, R>(reader: &mut R) -> Result<usize, DeError>
+fn read_len<'de, R>(reader: &mut ReaderAndConfig<R>) -> Result<usize, DeError>
 where
 	R: Read<'de>,
 {
@@ -10,7 +10,10 @@ where
 		.map_err(|e| DeError::custom(format_args!("Invalid buffer length in stream: {e}")))
 }
 
-pub(in super::super) fn read_length_delimited<'de, R, BV>(reader: &mut R, visitor: BV) -> Result<BV::Value, DeError>
+pub(in super::super) fn read_length_delimited<'de, R, BV>(
+	reader: &mut ReaderAndConfig<R>,
+	visitor: BV,
+) -> Result<BV::Value, DeError>
 where
 	R: Read<'de>,
 	BV: ReadVisitor<'de>,
