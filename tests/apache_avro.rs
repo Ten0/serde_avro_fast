@@ -114,6 +114,7 @@ macro_rules! tests {
 				#[test]
 				fn [<test_round_trip_ $idx>]() {
 					let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[$idx];
+					println!("{raw_schema}");
 					let schema = Schema::parse_str(raw_schema).unwrap();
 					let encoded = to_avro_datum(&schema, value.clone()).unwrap();
 					let decoded = from_avro_datum(&schema, &encoded);

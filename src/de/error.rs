@@ -1,12 +1,17 @@
 use {serde::de::Error, std::borrow::Cow};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(thiserror::Error)]
 #[error("{}", inner.value)]
 pub struct DeError {
 	inner: Box<ErrorInner>,
 }
 
-#[derive(Debug)]
+impl std::fmt::Debug for DeError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Debug::fmt(&*self.inner.value, f)
+	}
+}
+
 struct ErrorInner {
 	value: Cow<'static, str>,
 }
