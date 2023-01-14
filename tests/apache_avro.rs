@@ -84,8 +84,8 @@ lazy_static! {
 	]);
 }
 
-pub fn from_avro_datum(schema: &Schema, slice: &[u8]) -> Value {
-	let sjv: serde_json::Value =
+pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(schema: &Schema, slice: &[u8]) -> Value {
+	let sjv: T =
 		serde::Deserialize::deserialize(serde_avro_fast::de::ReaderAndConfig::from_slice(slice).deserializer(schema))
 			.unwrap();
 	let avro_value = apache_avro::to_value(sjv).unwrap();
@@ -117,7 +117,11 @@ macro_rules! tests {
 					println!("{raw_schema}");
 					let schema = Schema::parse_str(raw_schema).unwrap();
 					let encoded = to_avro_datum(&schema, value.clone()).unwrap();
-					let decoded = from_avro_datum(&schema, &encoded);
+					let decoded = static_cond::static_cond!(if $idx == 03 {
+						from_avro_datum::<serde_bytes::ByteBuf>(&schema, &encoded)
+					} else {
+						from_avro_datum::<serde_json::Value>(&schema, &encoded)
+					});
 					assert_eq!(value, &decoded);
 				}
 			)*
