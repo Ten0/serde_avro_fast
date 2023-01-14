@@ -6,7 +6,7 @@ mod types;
 use {deserializer::*, error::DeError, read::*, types::*};
 
 use crate::{
-	schema::{SchemaNode, SchemaStorage, UnionSchema},
+	schema::{RecordField, SchemaNode, SchemaStorage, UnionSchema},
 	Schema,
 };
 

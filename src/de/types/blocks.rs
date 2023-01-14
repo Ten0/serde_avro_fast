@@ -83,11 +83,11 @@ impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 	}
 }
 
-pub(in super::super) struct MapSeqAccess<'r, 's, R> {
+pub(in super::super) struct MapMapAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
 	pub(in super::super) element_schema: &'s SchemaNode,
 }
-impl<'de, R: Read<'de>> MapAccess<'de> for MapSeqAccess<'_, '_, R> {
+impl<'de, R: Read<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 	type Error = DeError;
 
 	fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
