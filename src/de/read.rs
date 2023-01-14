@@ -22,6 +22,11 @@ pub trait Read<'de>: std::io::Read + Sized {
 pub struct SliceRead<'de> {
 	slice: &'de [u8],
 }
+impl<'de> SliceRead<'de> {
+	pub fn new(slice: &'de [u8]) -> Self {
+		Self { slice }
+	}
+}
 impl<'de> Read<'de> for SliceRead<'de> {
 	fn read_slice<V>(&mut self, n: usize, visitor: V) -> Result<V::Value, DeError>
 	where
@@ -62,6 +67,15 @@ pub struct ReaderRead<R> {
 	scratch: Vec<u8>,
 	/// This is a safeguard for malformed data
 	max_alloc_size: usize,
+}
+impl<R: std::io::Read> ReaderRead<R> {
+	pub fn new(reader: R) -> Self {
+		Self {
+			reader,
+			scratch: Vec::new(),
+			max_alloc_size: 512 * 512 * 1024 * 1024,
+		}
+	}
 }
 impl<'de, R: std::io::Read> Read<'de> for ReaderRead<R> {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
