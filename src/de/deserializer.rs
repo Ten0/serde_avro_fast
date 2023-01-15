@@ -1,5 +1,6 @@
 use super::*;
 
+/// Can't be instantiated directly - has to be constructed from a [`DeserializerState`]
 pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode,

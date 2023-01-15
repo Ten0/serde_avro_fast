@@ -2,7 +2,7 @@ use super::{DeError, Error};
 
 use integer_encoding::{VarInt, VarIntReader};
 
-pub trait Read<'de>: std::io::Read + Sized {
+pub trait Read<'de>: std::io::Read + Sized + private::Sealed {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
 		V: ReadVisitor<'de>;
@@ -19,6 +19,10 @@ pub trait Read<'de>: std::io::Read + Sized {
 	}
 }
 
+mod private {
+	pub trait Sealed {}
+}
+
 pub struct SliceRead<'de> {
 	slice: &'de [u8],
 }
@@ -27,6 +31,7 @@ impl<'de> SliceRead<'de> {
 		Self { slice }
 	}
 }
+impl private::Sealed for SliceRead<'_> {}
 impl<'de> Read<'de> for SliceRead<'de> {
 	fn read_slice<V>(&mut self, n: usize, visitor: V) -> Result<V::Value, DeError>
 	where
@@ -68,6 +73,7 @@ pub struct ReaderRead<R> {
 	/// This is a safeguard for malformed data
 	max_alloc_size: usize,
 }
+impl<R: std::io::Read> private::Sealed for ReaderRead<R> {}
 impl<R: std::io::Read> ReaderRead<R> {
 	pub fn new(reader: R) -> Self {
 		Self {

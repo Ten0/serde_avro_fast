@@ -1,9 +1,10 @@
 mod deserializer;
 mod error;
-mod read;
+pub mod read;
 mod types;
 
-use {deserializer::*, error::DeError, read::*, types::*};
+pub use {deserializer::*, error::DeError};
+use {read::*, types::*};
 
 use crate::{
 	schema::{RecordField, SchemaNode, SchemaStorage, UnionSchema},
@@ -34,14 +35,14 @@ impl<'s, 'de, R: Read<'de>> DeserializerState<'s, R> {
 	}
 }
 impl<'s, 'a> DeserializerState<'s, read::SliceRead<'a>> {
-	pub fn from_slice(s: &'a [u8], schema: &'s Schema) -> Self {
-		Self::new(read::SliceRead::new(s), schema)
+	pub fn from_slice(slice: &'a [u8], schema: &'s Schema) -> Self {
+		Self::new(read::SliceRead::new(slice), schema)
 	}
 }
 
 impl<'s, R: std::io::Read> DeserializerState<'s, read::ReaderRead<R>> {
-	pub fn from_reader(r: R, schema: &'s Schema) -> Self {
-		Self::new(read::ReaderRead::new(r), schema)
+	pub fn from_reader(reader: R, schema: &'s Schema) -> Self {
+		Self::new(read::ReaderRead::new(reader), schema)
 	}
 }
 
