@@ -6,30 +6,27 @@ mod types;
 pub use {deserializer::*, error::DeError};
 use {read::*, types::*};
 
-use crate::{
-	schema::{RecordField, SchemaNode, SchemaStorage, UnionSchema},
-	Schema,
-};
+use crate::schema::{RecordField, Schema, SchemaNode, UnionSchema};
 
 use serde::de::*;
 
 pub struct DeserializerState<'s, R> {
 	reader: R,
-	schema: &'s SchemaStorage,
+	schema_root: &'s SchemaNode<'s>,
 	max_seq_size: usize,
 }
 impl<'s, 'de, R: Read<'de>> DeserializerState<'s, R> {
 	pub fn new(r: R, schema: &'s Schema) -> Self {
 		DeserializerState {
 			reader: r,
-			schema: schema.storage(),
+			schema_root: schema.root(),
 			max_seq_size: 1_000_000_000,
 		}
 	}
 
 	pub fn deserializer<'r>(&'r mut self) -> DatumDeserializer<'r, 's, R> {
 		DatumDeserializer {
-			schema_node: self.schema.root(),
+			schema_node: self.schema_root,
 			state: self,
 		}
 	}

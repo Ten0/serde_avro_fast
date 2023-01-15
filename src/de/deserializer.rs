@@ -3,7 +3,7 @@ use super::*;
 /// Can't be instantiated directly - has to be constructed from a [`DeserializerState`]
 pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
-	pub(super) schema_node: &'s SchemaNode,
+	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
 impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
@@ -23,11 +23,11 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			SchemaNode::Bytes => read_length_delimited(self.state, BytesVisitor(visitor)),
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				element_schema: &self.state.schema[elements_schema],
+				elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Map(elements_schema) => visitor.visit_map(MapMapAccess {
-				element_schema: &self.state.schema[elements_schema],
+				element_schema: elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Union(ref union_schema) => DatumDeserializer {
@@ -133,7 +133,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 				match union_schema
 					.variants
 					.get(union_discriminant)
-					.map(|&schema_key| &self.state.schema[schema_key])
+					.map(|&schema_key| schema_key)
 				{
 					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
@@ -154,7 +154,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 		// TODO deserialize map as [(key,value)]
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				element_schema: &self.state.schema[elements_schema],
+				elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Duration => visitor.visit_seq(DurationMapAndSeqAccess {
@@ -171,7 +171,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 		// Allows deserializing Duration as (u32, u32, u32)
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				element_schema: &self.state.schema[elements_schema],
+				elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Duration if len == 3 => visitor.visit_seq(DurationMapAndSeqAccess {

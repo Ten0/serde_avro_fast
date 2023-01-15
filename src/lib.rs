@@ -3,6 +3,9 @@ pub mod schema;
 
 pub use schema::Schema;
 
+/// Because we use some of its types (namely, schema), reexport it in case interop is needed by users
+pub use apache_avro;
+
 pub fn from_datum_slice<'a, T>(slice: &'a [u8], schema: &Schema) -> Result<T, de::DeError>
 where
 	T: serde::Deserialize<'a>,

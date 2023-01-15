@@ -1,9 +1,11 @@
+//! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is used for its initialization
 use std::collections::{hash_map, HashMap};
 
+/// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for its initialization
 #[derive(Clone, Debug)]
 pub struct Schema {
 	// First node in the array is considered to be the root
-	nodes: Vec<SchemaNode>,
+	pub(super) nodes: Vec<SchemaNode>,
 }
 
 impl Schema {
@@ -14,7 +16,7 @@ impl Schema {
 
 #[derive(Copy, Clone, Debug)]
 pub struct SchemaKey {
-	idx: usize,
+	pub(super) idx: usize,
 }
 
 /// Represents any valid Avro schema
@@ -125,30 +127,8 @@ impl std::ops::Index<SchemaKey> for Schema {
 	}
 }
 
-impl Schema {
-	pub(crate) fn storage(&self) -> &SchemaStorage {
-		ref_cast::RefCast::ref_cast(self.nodes())
-	}
-}
-#[derive(ref_cast::RefCast)]
-#[repr(transparent)]
-pub(crate) struct SchemaStorage {
-	nodes: [SchemaNode],
-}
-impl SchemaStorage {
-	pub(crate) fn root(&self) -> &SchemaNode {
-		&self.nodes[0]
-	}
-}
-impl std::ops::Index<SchemaKey> for SchemaStorage {
-	type Output = SchemaNode;
-	fn index(&self, key: SchemaKey) -> &Self::Output {
-		&self.nodes[key.idx]
-	}
-}
-
-mod apache {
-	pub(super) use apache_avro::{schema::Name, Error, Schema};
+pub(crate) mod apache {
+	pub(crate) use apache_avro::{schema::Name, Error, Schema};
 }
 
 #[derive(Debug, thiserror::Error)]

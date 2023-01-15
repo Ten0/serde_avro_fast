@@ -9,7 +9,6 @@
 [dependencies]
 	apache-avro = { git = "https://github.com/apache/avro.git" }
 	integer-encoding = { default-features = false, version = "3" }
-	ref-cast = "1"
 	serde = "1"
 	thiserror = "1"
 

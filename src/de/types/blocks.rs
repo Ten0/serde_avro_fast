@@ -64,7 +64,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 
 pub(in super::super) struct ArraySeqAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
-	pub(in super::super) element_schema: &'s SchemaNode,
+	pub(in super::super) elements_schema: &'s SchemaNode<'s>,
 }
 impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 	type Error = DeError;
@@ -77,7 +77,7 @@ impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 			return Ok(None);
 		}
 		Ok(Some(seed.deserialize(DatumDeserializer {
-			schema_node: self.element_schema,
+			schema_node: self.elements_schema,
 			state: self.block_reader.reader,
 		})?))
 	}
@@ -85,7 +85,7 @@ impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 
 pub(in super::super) struct MapMapAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
-	pub(in super::super) element_schema: &'s SchemaNode,
+	pub(in super::super) element_schema: &'s SchemaNode<'s>,
 }
 impl<'de, R: Read<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 	type Error = DeError;

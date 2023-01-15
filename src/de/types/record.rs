@@ -2,7 +2,7 @@ use super::*;
 
 pub(in super::super) struct RecordMapAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
-	pub(in super::super) record_fields: std::slice::Iter<'s, RecordField>,
+	pub(in super::super) record_fields: std::slice::Iter<'s, RecordField<'s>>,
 }
 impl<'de, R: Read<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 	type Error = DeError;
@@ -22,11 +22,11 @@ impl<'de, R: Read<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 		V: DeserializeSeed<'de>,
 	{
 		seed.deserialize(DatumDeserializer {
-			schema_node: &self.state.schema[self
+			schema_node: self
 				.record_fields
 				.next()
 				.expect("Called next_value without seed returning Some before")
-				.schema],
+				.schema,
 			state: self.state,
 		})
 	}
