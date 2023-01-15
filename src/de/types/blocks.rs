@@ -52,7 +52,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 							return Err(DeError::new("Exceeding max sequence size while deserializing"));
 						}
 						self.n_read = n_read;
-						l
+						l - 1
 					}
 				}
 			}
