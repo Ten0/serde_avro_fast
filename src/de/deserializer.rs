@@ -41,10 +41,13 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			SchemaNode::Enum { ref symbols } => read_enum_as_str(self.state, symbols, visitor),
 			SchemaNode::Fixed { size } => self.state.read_slice(size, BytesVisitor(visitor)),
 			SchemaNode::Decimal {
-				precision,
-				scale,
-				inner,
-			} => todo!(),
+				precision: _,
+				scale: _,
+				inner: _,
+			} => {
+				// TODO support
+				Err(DeError::new("Decimal deserialization is unsupported for now"))
+			}
 			SchemaNode::Uuid => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Date => visitor.visit_i32(self.state.read_varint()?),
 			SchemaNode::TimeMillis => visitor.visit_i32(self.state.read_varint()?),
