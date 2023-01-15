@@ -103,6 +103,21 @@ pub struct RecordField {
 	pub schema: SchemaKey,
 }
 
+impl std::str::FromStr for Schema {
+	type Err = ParseSchemaError;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let apache_schema = apache::Schema::parse_str(s)?;
+		Ok(Schema::from_apache_schema(&apache_schema)?)
+	}
+}
+#[derive(thiserror::Error, Debug)]
+pub enum ParseSchemaError {
+	#[error("Could not parse Schema using apache-avro lib: {0}")]
+	ApacheAvro(#[from] apache::Error),
+	#[error("Could not turn apache-avro schema into fast schema: {0}")]
+	ApacheToFast(#[from] BuildSchemaFromApacheSchemaError),
+}
+
 impl std::ops::Index<SchemaKey> for Schema {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
@@ -133,18 +148,18 @@ impl std::ops::Index<SchemaKey> for SchemaStorage {
 }
 
 mod apache {
-	pub(super) use apache_avro::{schema::Name, Schema};
+	pub(super) use apache_avro::{schema::Name, Error, Schema};
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CouldNotBuildSchemaFromApacheSchema {
+pub enum BuildSchemaFromApacheSchemaError {
 	#[error("The apache_avro::Schema contained an unknown reference: {0}")]
 	InvalidReference(apache::Name),
 	#[error("The apache_avro::Schema contains duplicate definitions for {0}")]
 	DuplicateName(apache::Name),
 }
 impl Schema {
-	pub fn from_apache_schema(apache_schema: &apache::Schema) -> Result<Self, CouldNotBuildSchemaFromApacheSchema> {
+	pub fn from_apache_schema(apache_schema: &apache::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
 		let mut names: HashMap<apache::Name, usize> = HashMap::new();
 		let mut schema = Self { nodes: Vec::new() };
 		let mut unresolved_names: Vec<apache::Name> = Vec::new();
@@ -156,7 +171,7 @@ impl Schema {
 			unresolved_names: &mut Vec<apache::Name>,
 			apache_schema: &'a apache::Schema,
 			enclosing_namespace: &Option<String>,
-		) -> Result<SchemaKey, CouldNotBuildSchemaFromApacheSchema> {
+		) -> Result<SchemaKey, BuildSchemaFromApacheSchemaError> {
 			let idx = schema.nodes.len();
 			schema.nodes.push(SchemaNode::Null);
 			let new_node = match apache_schema {
@@ -190,7 +205,7 @@ impl Schema {
 				apache::Schema::Enum { name, symbols, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(CouldNotBuildSchemaFromApacheSchema::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -203,7 +218,7 @@ impl Schema {
 				apache::Schema::Fixed { name, size, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(CouldNotBuildSchemaFromApacheSchema::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -228,11 +243,11 @@ impl Schema {
 									)?,
 								})
 							})
-							.collect::<Result<_, CouldNotBuildSchemaFromApacheSchema>>()?,
+							.collect::<Result<_, BuildSchemaFromApacheSchemaError>>()?,
 					};
 					match names.entry(fully_qualified_name) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(CouldNotBuildSchemaFromApacheSchema::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -274,7 +289,7 @@ impl Schema {
 			.map(|name| {
 				names
 					.get(&name)
-					.ok_or(CouldNotBuildSchemaFromApacheSchema::InvalidReference(name))
+					.ok_or(BuildSchemaFromApacheSchemaError::InvalidReference(name))
 					.map(|&idx| SchemaKey { idx })
 			})
 			.collect::<Result<_, _>>()?;
