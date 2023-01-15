@@ -223,7 +223,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 		&datum.as_slice(),
 		|b, &datum| {
 			b.iter(|| {
-				let _deserialized: SmallStruct = serde_avro_fast::datum_from_slice(datum, &fast_schema).unwrap();
+				let _deserialized: SmallStruct = serde_avro_fast::from_datum_slice(datum, &fast_schema).unwrap();
 			})
 		},
 	);
@@ -248,7 +248,7 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 		&datum.as_slice(),
 		|b, &datum| {
 			b.iter(|| {
-				let _deserialized: BigStruct = serde_avro_fast::datum_from_slice(datum, &fast_schema).unwrap();
+				let _deserialized: BigStruct = serde_avro_fast::from_datum_slice(datum, &fast_schema).unwrap();
 			})
 		},
 	);
