@@ -38,7 +38,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 				record_fields: record_schema.fields.iter(),
 				state: self.state,
 			}),
-			SchemaNode::Enum { ref symbols } => read_enum(self.state, symbols, visitor),
+			SchemaNode::Enum { ref symbols } => read_enum_as_str(self.state, symbols, visitor),
 			SchemaNode::Fixed { size } => self.state.read_slice(size, BytesVisitor(visitor)),
 			SchemaNode::Decimal {
 				precision,
@@ -58,9 +58,27 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	}
 
 	serde::forward_to_deserialize_any! {
-		bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
+		bool i8 i16 i32 i64 i128 u8 u16 u32 u128 f32 f64 char
 		unit unit_struct newtype_struct
 		//tuple_struct map struct enum identifier ignored_any
+	}
+
+	fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		// Allow deserializing discriminants without making the string lookup for enums
+		match *self.schema_node {
+			SchemaNode::Enum { symbols: _ } => {
+				let discriminant: i64 = self.state.read_varint()?;
+				visitor.visit_u64(
+					discriminant
+						.try_into()
+						.map_err(|e| DeError::custom(format_args!("Got negative enum discriminant: {e}")))?,
+				)
+			}
+			_ => self.deserialize_any(visitor),
+		}
 	}
 
 	fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
