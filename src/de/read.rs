@@ -85,15 +85,16 @@ impl<'de, R: std::io::Read> Read<'de> for ReaderRead<R> {
 		if n > self.max_alloc_size {
 			return Err(DeError::custom(format_args!(
 				"Allocation size that would be required ({n}) is larger than allowed for this \
-                    deserializer from reader ({}) - this is probably due to malformed data",
+					deserializer from reader ({}) - this is probably due to malformed data",
 				self.max_alloc_size
 			)));
 		}
-		self.scratch.resize(n, 0);
-		self.reader
-			.read_exact(self.scratch.as_mut_slice())
-			.map_err(DeError::io)?;
-		read_visitor.visit(&self.scratch)
+		if n > self.scratch.len() {
+			self.scratch.resize(n, 0);
+		}
+		let scratch = &mut self.scratch[..n];
+		self.reader.read_exact(scratch).map_err(DeError::io)?;
+		read_visitor.visit(scratch)
 	}
 }
 impl<R: std::io::Read> std::io::Read for ReaderRead<R> {
