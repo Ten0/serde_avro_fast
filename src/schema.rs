@@ -257,14 +257,13 @@ impl Schema {
 				apache_avro::Schema::Double => SchemaNode::Double,
 				apache_avro::Schema::Bytes => SchemaNode::Bytes,
 				apache_avro::Schema::String => SchemaNode::String,
-
-				apache_avro::Schema::Uuid => todo!(),
-				apache_avro::Schema::Date => todo!(),
-				apache_avro::Schema::TimeMillis => todo!(),
-				apache_avro::Schema::TimeMicros => todo!(),
-				apache_avro::Schema::TimestampMillis => todo!(),
-				apache_avro::Schema::TimestampMicros => todo!(),
-				apache_avro::Schema::Duration => todo!(),
+				apache_avro::Schema::Uuid => SchemaNode::Uuid,
+				apache_avro::Schema::Date => SchemaNode::Date,
+				apache_avro::Schema::TimeMillis => SchemaNode::TimeMillis,
+				apache_avro::Schema::TimeMicros => SchemaNode::TimeMicros,
+				apache_avro::Schema::TimestampMillis => SchemaNode::TimestampMillis,
+				apache_avro::Schema::TimestampMicros => SchemaNode::TimestampMicros,
+				apache_avro::Schema::Duration => SchemaNode::Duration,
 			};
 			schema.nodes[idx] = new_node;
 			Ok(SchemaKey { idx })

@@ -59,8 +59,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 
 	serde::forward_to_deserialize_any! {
 		bool i8 i16 i32 i64 i128 u8 u16 u32 u128 f32 f64 char
-		unit unit_struct newtype_struct
-		//tuple_struct map struct enum identifier ignored_any
+		unit unit_struct newtype_struct identifier
 	}
 
 	fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -189,38 +188,33 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	where
 		V: Visitor<'de>,
 	{
-		todo!()
+		// TODO [{key, value}] could be deserialized into a map
+		self.deserialize_any(visitor)
 	}
 
 	fn deserialize_struct<V>(
 		self,
-		name: &'static str,
-		fields: &'static [&'static str],
+		_: &'static str,
+		_: &'static [&'static str],
 		visitor: V,
 	) -> Result<V::Value, Self::Error>
 	where
 		V: Visitor<'de>,
 	{
-		todo!()
+		self.deserialize_map(visitor)
 	}
 
 	fn deserialize_enum<V>(
 		self,
-		name: &'static str,
-		variants: &'static [&'static str],
+		_: &'static str,
+		_: &'static [&'static str],
 		visitor: V,
 	) -> Result<V::Value, Self::Error>
 	where
 		V: Visitor<'de>,
 	{
-		todo!()
-	}
-
-	fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-	where
-		V: Visitor<'de>,
-	{
-		todo!()
+		// TODO special-case union and enum
+		self.deserialize_any(visitor)
 	}
 
 	fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
