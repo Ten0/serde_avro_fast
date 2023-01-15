@@ -213,7 +213,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 		|b, &datum| {
 			b.iter(|| {
 				let value = apache_avro::from_avro_datum(&schema, &mut &*datum, None).unwrap();
-				let _deserialized: SmallStructApache = apache_avro::from_value(&value).unwrap();
+				apache_avro::from_value::<SmallStructApache>(&value).unwrap()
 			})
 		},
 	);
@@ -221,11 +221,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "small"),
 		&datum.as_slice(),
-		|b, &datum| {
-			b.iter(|| {
-				let _deserialized: SmallStruct = serde_avro_fast::from_datum_slice(datum, &fast_schema).unwrap();
-			})
-		},
+		|b, &datum| b.iter(|| serde_avro_fast::from_datum_slice::<SmallStruct>(datum, &fast_schema).unwrap()),
 	);
 }
 
@@ -238,7 +234,7 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 		|b, &datum| {
 			b.iter(|| {
 				let value = apache_avro::from_avro_datum(&schema, &mut &*datum, None).unwrap();
-				let _deserialized: BigStructApache = apache_avro::from_value(&value).unwrap();
+				apache_avro::from_value::<BigStructApache>(&value).unwrap()
 			})
 		},
 	);
@@ -246,11 +242,7 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "big"),
 		&datum.as_slice(),
-		|b, &datum| {
-			b.iter(|| {
-				let _deserialized: BigStruct = serde_avro_fast::from_datum_slice(datum, &fast_schema).unwrap();
-			})
-		},
+		|b, &datum| b.iter(|| serde_avro_fast::from_datum_slice::<BigStruct>(datum, &fast_schema).unwrap()),
 	);
 }
 criterion_group!(benches, bench_small_schema_read_record, bench_big_schema_read_record);
