@@ -30,13 +30,13 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 				element_schema: elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
-			SchemaNode::Union(ref union_schema) => DatumDeserializer {
-				schema_node: read_union_discriminant(self.state, union_schema)?,
+			SchemaNode::Union(ref union) => DatumDeserializer {
+				schema_node: read_union_discriminant(self.state, union)?,
 				state: self.state,
 			}
 			.deserialize_any(visitor),
-			SchemaNode::Record(ref record_schema) => visitor.visit_map(RecordMapAccess {
-				record_fields: record_schema.fields.iter(),
+			SchemaNode::Record(ref record) => visitor.visit_map(RecordMapAccess {
+				record_fields: record.fields.iter(),
 				state: self.state,
 			}),
 			SchemaNode::Enum { ref symbols } => read_enum_as_str(self.state, symbols, visitor),
@@ -128,13 +128,9 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	{
 		match self.schema_node {
 			SchemaNode::Null => visitor.visit_none(),
-			SchemaNode::Union(union_schema) => {
+			SchemaNode::Union(union) => {
 				let union_discriminant: usize = read_discriminant(self.state)?;
-				match union_schema
-					.variants
-					.get(union_discriminant)
-					.map(|&schema_key| schema_key)
-				{
+				match union.variants.get(union_discriminant).map(|&schema_key| schema_key) {
 					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
 					Some(variant_schema) => visitor.visit_some(Self {

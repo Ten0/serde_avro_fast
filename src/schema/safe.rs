@@ -9,19 +9,46 @@ pub struct Schema {
 }
 
 impl Schema {
-	pub fn nodes(&self) -> &[SchemaNode] {
-		&self.nodes
+	/// Obtain the underlying graph storage
+	///
+	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
+	pub fn into_nodes(self) -> Vec<SchemaNode> {
+		self.nodes
+	}
+
+	/// Initializes from a set of nodes
+	///
+	/// Panics if `nodes` is empty.
+	///
+	/// It is expected that all `SchemaKey`s contained in there refer to correct indexes in this vector, otherwise this
+	/// may panic on future use or when converting to [`crate::Schema`].
+	pub fn from_nodes(nodes: Vec<SchemaNode>) -> Self {
+		assert!(!nodes.is_empty());
+		Self { nodes }
 	}
 }
 
+/// The location of a node in the [`Schema`]
+///
+/// This can be used to [`Index`](std::ops::Index) into the [`Schema`].
 #[derive(Copy, Clone, Debug)]
 pub struct SchemaKey {
 	pub(super) idx: usize,
 }
 
+impl SchemaKey {
+	pub fn from_idx(idx: usize) -> Self {
+		Self { idx }
+	}
+	pub fn idx(self) -> usize {
+		self.idx
+	}
+}
+
 /// Represents any valid Avro schema
+///
 /// More information about Avro schemas can be found in the
-/// [Avro Specification](https://avro.apache.org/docs/current/spec.html#schemas)
+/// [Avro Specification](https://avro.apache.org/docs/current/specification/).
 #[derive(Clone, Debug)]
 pub enum SchemaNode {
 	/// A `null` Avro schema.
@@ -50,12 +77,9 @@ pub enum SchemaNode {
 	/// `Map` keys are assumed to be `string`.
 	Map(SchemaKey),
 	/// A `union` Avro schema.
-	Union(UnionSchema),
+	Union(Union),
 	/// A `record` Avro schema.
-	///
-	/// The `lookup` table maps field names to their position in the `Vec`
-	/// of `fields`.
-	Record(RecordSchema),
+	Record(Record),
 	/// An `enum` Avro schema.
 	Enum { symbols: Vec<String> },
 	/// A `fixed` Avro schema.
@@ -82,23 +106,39 @@ pub enum SchemaNode {
 	/// time zone or date in particular.
 	TimeMicros,
 	/// An instant in time represented as the number of milliseconds after the UNIX epoch.
+	///
+	/// You probably want to use
+	/// [`TimestampMilliSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMilliSeconds.html)
+	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMillis,
 	/// An instant in time represented as the number of microseconds after the UNIX epoch.
+	///
+	/// You probably want to use
+	/// [`TimestampMicroSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMicroSeconds.html)
+	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMicros,
 	/// An amount of time defined by a number of months, days and milliseconds.
+	///
+	/// This deserializes to a struct that has the `months`, `days`, and `milliseconds` fields declared as `u32`s,
+	/// or to a `(u32, u32, u32)` tuple, or to its raw representation
+	/// [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
+	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub struct UnionSchema {
+pub struct Union {
 	pub variants: Vec<SchemaKey>,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub struct RecordSchema {
+pub struct Record {
 	pub fields: Vec<RecordField>,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
 pub struct RecordField {
 	pub name: String,
@@ -112,6 +152,7 @@ impl std::str::FromStr for Schema {
 		Ok(Schema::from_apache_schema(&apache_schema)?)
 	}
 }
+/// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON `&str`
 #[derive(thiserror::Error, Debug)]
 pub enum ParseSchemaError {
 	#[error("Could not parse Schema using apache-avro lib: {0}")]
@@ -131,6 +172,8 @@ pub(crate) mod apache {
 	pub(crate) use apache_avro::{schema::Name, Error, Schema};
 }
 
+/// Any error that may happen when converting a [`Schema`](apache::Schema) from the `apache-avro` crate into a
+/// [`Schema`]
 #[derive(Debug, thiserror::Error)]
 pub enum BuildSchemaFromApacheSchemaError {
 	#[error("The apache_avro::Schema contained an unknown reference: {0}")]
@@ -139,6 +182,7 @@ pub enum BuildSchemaFromApacheSchemaError {
 	DuplicateName(apache::Name),
 }
 impl Schema {
+	/// Attempt to convert a [`Schema`](apache::Schema) from the `apache-avro` crate into a [`Schema`]
 	pub fn from_apache_schema(apache_schema: &apache::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
 		let mut names: HashMap<apache::Name, usize> = HashMap::new();
 		let mut schema = Self { nodes: Vec::new() };
@@ -175,7 +219,7 @@ impl Schema {
 					apache_schema,
 					enclosing_namespace,
 				)?),
-				apache::Schema::Union(union_schemas) => SchemaNode::Union(UnionSchema {
+				apache::Schema::Union(union_schemas) => SchemaNode::Union(Union {
 					variants: union_schemas
 						.variants()
 						.iter()
@@ -208,7 +252,7 @@ impl Schema {
 				}
 				apache::Schema::Record { name, fields, .. } => {
 					let fully_qualified_name = name.fully_qualified_name(enclosing_namespace);
-					let record_schema = RecordSchema {
+					let record = Record {
 						fields: fields
 							.iter()
 							.map(|field| {
@@ -231,7 +275,7 @@ impl Schema {
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
-							SchemaNode::Record(record_schema)
+							SchemaNode::Record(record)
 						}
 					}
 				}

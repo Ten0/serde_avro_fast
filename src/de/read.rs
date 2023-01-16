@@ -1,7 +1,14 @@
+//! Abstract reading from slices (propagating lifetime) or any other `impl Read` behind the same interface
+//!
+//! The deserializer is implemented generically on this.
+
 use super::{DeError, Error};
 
 use integer_encoding::{VarInt, VarIntReader};
 
+/// Abstracts reading from slices (propagating lifetime) or any other `impl Read` behind the same interface
+///
+/// The deserializer is implemented generically on this.
 pub trait Read<'de>: std::io::Read + Sized + private::Sealed {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
@@ -23,6 +30,7 @@ mod private {
 	pub trait Sealed {}
 }
 
+/// Implements `Read<'de>` reading from `&'de [u8]`
 pub struct SliceRead<'de> {
 	slice: &'de [u8],
 }
@@ -67,6 +75,7 @@ impl std::io::Read for SliceRead<'_> {
 	}
 }
 
+/// Implements `Read<'de>` reading from any `impl Read`
 pub struct ReaderRead<R> {
 	reader: R,
 	scratch: Vec<u8>,
@@ -112,6 +121,7 @@ impl<R: std::io::Read> std::io::Read for ReaderRead<R> {
 	}
 }
 
+/// Largely internal trait for `Read` usage (probably don't use this directly)
 pub trait ReadVisitor<'de>: Sized {
 	type Value;
 	fn visit(self, bytes: &[u8]) -> Result<Self::Value, DeError>;

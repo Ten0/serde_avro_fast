@@ -1,5 +1,6 @@
 use {serde::de::Error, std::borrow::Cow};
 
+/// Any error that may happen during deserialization
 #[derive(thiserror::Error)]
 #[error("{}", inner.value)]
 pub struct DeError {

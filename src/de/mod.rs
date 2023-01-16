@@ -1,3 +1,8 @@
+//! Defines everything necessary for avro deserialization
+//!
+//! You typically want to use top-level functions such as [`from_datum_slice`](crate::from_datum_slice)
+//! but access to this may be necessary for more advanced usage.
+
 mod deserializer;
 mod error;
 pub mod read;
@@ -6,10 +11,13 @@ mod types;
 pub use {deserializer::*, error::DeError};
 use {read::*, types::*};
 
-use crate::schema::{RecordField, Schema, SchemaNode, UnionSchema};
+use crate::schema::{RecordField, Schema, SchemaNode, Union};
 
 use serde::de::*;
 
+/// All configuration and state necessary for the deserialization to run
+///
+/// Does not implement [`Deserializer`] directly (use [`.deserializer`](Self::deserializer) to obtain that).
 pub struct DeserializerState<'s, R> {
 	reader: R,
 	schema_root: &'s SchemaNode<'s>,

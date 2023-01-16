@@ -1,10 +1,17 @@
 use super::safe::SchemaNode as SafeSchemaNode;
 
-/// The most performant and easiest to navigate version of the schema.
+/// The most performant and easiest to navigate version of an Avro schema
 ///
-/// It is however built using `unsafe`, so it can only be built from [its safe counterpart](crate::schema::safe::Schema)
-/// because it makes the conversion code simple enough that we can reasonably guarantee its correctness despite the
-/// usage of `unsafe`.
+/// Navigated through [`SchemaNode`] via [`.root`](Schema::root).
+///
+/// To achieve the ideal performance and ease of use via self-referencing [`SchemaNode`]s all held in the [`Schema`], it
+/// is built using `unsafe`, so it can only be built through [its safe counterpart](crate::schema::safe::Schema) (via
+/// [`From`]) because it makes the conversion code simple enough that we can reasonably guarantee its correctness
+/// despite the usage of `unsafe`.
+///
+/// It is useful to implement it this way because, due to how referencing via
+/// [Names](https://avro.apache.org/docs/current/specification/#names) work in Avro,
+/// the most performant representation of an Avro schema is not a tree but a possibly-cyclic general directed graph.
 #[derive(Debug)]
 pub struct Schema {
 	// First node in the array is considered to be the root
@@ -16,15 +23,21 @@ pub struct Schema {
 }
 
 impl Schema {
-	// this downgrades the fake lifetime in a way that makes it correct
+	/// The Avro schema is represented internally as a directed graph of nodes, all stored in [`Schema`].
+	///
+	/// The root node represents the whole schema.
 	pub fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
+		// the signature of this function downgrades the fake 'static lifetime in a way that makes it correct
 		&self.nodes[0]
 	}
 }
 
 /// Represents any valid Avro schema
+///
 /// More information about Avro schemas can be found in the
-/// [Avro Specification](https://avro.apache.org/docs/current/spec.html#schemas)
+/// [Avro Specification](https://avro.apache.org/docs/current/specification/).
+///
+/// This enum is borrowed from a [`Schema`] and is used to navigate it.
 #[derive(Debug)]
 pub enum SchemaNode<'a> {
 	/// A `null` Avro schema.
@@ -53,12 +66,9 @@ pub enum SchemaNode<'a> {
 	/// `Map` keys are assumed to be `string`.
 	Map(&'a SchemaNode<'a>),
 	/// A `union` Avro schema.
-	Union(UnionSchema<'a>),
+	Union(Union<'a>),
 	/// A `record` Avro schema.
-	///
-	/// The `lookup` table maps field names to their position in the `Vec`
-	/// of `fields`.
-	Record(RecordSchema<'a>),
+	Record(Record<'a>),
 	/// An `enum` Avro schema.
 	Enum { symbols: Vec<String> },
 	/// A `fixed` Avro schema.
@@ -85,23 +95,39 @@ pub enum SchemaNode<'a> {
 	/// time zone or date in particular.
 	TimeMicros,
 	/// An instant in time represented as the number of milliseconds after the UNIX epoch.
+	///
+	/// You probably want to use
+	/// [`TimestampMilliSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMilliSeconds.html)
+	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMillis,
 	/// An instant in time represented as the number of microseconds after the UNIX epoch.
+	///
+	/// You probably want to use
+	/// [`TimestampMicroSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMicroSeconds.html)
+	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMicros,
 	/// An amount of time defined by a number of months, days and milliseconds.
+	///
+	/// This deserializes to a struct that has the `months`, `days`, and `milliseconds` fields declared as `u32`s,
+	/// or to a `(u32, u32, u32)` tuple, or to its raw representation
+	/// [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
+	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub struct UnionSchema<'a> {
+pub struct Union<'a> {
 	pub variants: Vec<&'a SchemaNode<'a>>,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub struct RecordSchema<'a> {
+pub struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 }
 
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
 pub struct RecordField<'a> {
 	pub name: String,
@@ -146,15 +172,15 @@ impl From<super::safe::Schema> for Schema {
 					SafeSchemaNode::String => SchemaNode::String,
 					SafeSchemaNode::Array(schema_key) => SchemaNode::Array(key_to_node(schema_key)),
 					SafeSchemaNode::Map(schema_key) => SchemaNode::Map(key_to_node(schema_key)),
-					SafeSchemaNode::Union(union_schema) => SchemaNode::Union(UnionSchema {
-						variants: union_schema
+					SafeSchemaNode::Union(union) => SchemaNode::Union(Union {
+						variants: union
 							.variants
 							.into_iter()
 							.map(|schema_key| key_to_node(schema_key))
 							.collect(),
 					}),
-					SafeSchemaNode::Record(record_schema) => SchemaNode::Record(RecordSchema {
-						fields: record_schema
+					SafeSchemaNode::Record(record) => SchemaNode::Record(Record {
+						fields: record
 							.fields
 							.into_iter()
 							.map(|f| RecordField {
