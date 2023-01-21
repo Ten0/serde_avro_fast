@@ -19,10 +19,10 @@ pub trait Read<'de>: std::io::Read + Sized + private::Sealed {
 	{
 		<Self as VarIntReader>::read_varint(self).map_err(DeError::io)
 	}
-	fn read_const_size_buf<V, const N: usize>(&mut self, f: impl FnOnce([u8; N]) -> V) -> Result<V, DeError> {
+	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
 		let mut buf = [0u8; N];
 		self.read_exact(&mut buf).map_err(DeError::io)?;
-		Ok(f(buf))
+		Ok(buf)
 	}
 }
 

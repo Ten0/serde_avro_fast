@@ -18,8 +18,8 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			SchemaNode::Boolean => read_bool(self.state, visitor),
 			SchemaNode::Int => visitor.visit_i32(self.state.read_varint()?),
 			SchemaNode::Long => visitor.visit_i64(self.state.read_varint()?),
-			SchemaNode::Float => visitor.visit_f32(self.state.read_const_size_buf(f32::from_le_bytes)?),
-			SchemaNode::Double => visitor.visit_f64(self.state.read_const_size_buf(f64::from_le_bytes)?),
+			SchemaNode::Float => visitor.visit_f32(f32::from_le_bytes(self.state.read_const_size_buf()?)),
+			SchemaNode::Double => visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?)),
 			SchemaNode::Bytes => read_length_delimited(self.state, BytesVisitor(visitor)),
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
@@ -56,7 +56,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			SchemaNode::TimestampMillis => visitor.visit_i64(self.state.read_varint()?),
 			SchemaNode::TimestampMicros => visitor.visit_i64(self.state.read_varint()?),
 			SchemaNode::Duration => visitor.visit_map(DurationMapAndSeqAccess {
-				duration_buf: &self.state.read_const_size_buf::<_, 12>(std::convert::identity)?,
+				duration_buf: &self.state.read_const_size_buf::<12>()?,
 			}),
 		}
 	}
@@ -154,7 +154,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Duration => visitor.visit_seq(DurationMapAndSeqAccess {
-				duration_buf: &self.state.read_const_size_buf::<_, 12>(std::convert::identity)?,
+				duration_buf: &self.state.read_const_size_buf::<12>()?,
 			}),
 			_ => self.deserialize_any(visitor),
 		}
@@ -171,7 +171,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 				block_reader: BlockReader::new(self.state),
 			}),
 			SchemaNode::Duration if len == 3 => visitor.visit_seq(DurationMapAndSeqAccess {
-				duration_buf: &self.state.read_const_size_buf::<_, 12>(std::convert::identity)?,
+				duration_buf: &self.state.read_const_size_buf::<12>()?,
 			}),
 			_ => self.deserialize_any(visitor),
 		}
