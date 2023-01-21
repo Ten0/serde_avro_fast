@@ -48,3 +48,14 @@ impl serde::de::Error for DeError {
 		}
 	}
 }
+
+/// This is implemented just to support the trick with decimal where we use their serialize implementation
+/// to enable zero-alloc deserialization
+impl serde::ser::Error for DeError {
+	fn custom<T>(msg: T) -> Self
+	where
+		T: std::fmt::Display,
+	{
+		<Self as serde::de::Error>::custom(msg)
+	}
+}

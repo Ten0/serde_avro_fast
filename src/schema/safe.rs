@@ -91,7 +91,7 @@ pub enum SchemaNode {
 	/// integer greater than 0.
 	Decimal {
 		precision: usize,
-		scale: usize,
+		scale: u32,
 		inner: SchemaKey,
 	},
 	/// A universally unique identifier, annotating a string.
@@ -180,6 +180,8 @@ pub enum BuildSchemaFromApacheSchemaError {
 	InvalidReference(apache::Name),
 	#[error("The apache_avro::Schema contains duplicate definitions for {0}")]
 	DuplicateName(apache::Name),
+	#[error("The apache_avro::Schema contains an unreasonably large `scale` for a Decimal")]
+	DecimalScaleTooLarge { scale_value: usize },
 }
 impl Schema {
 	/// Attempt to convert a [`Schema`](apache::Schema) from the `apache-avro` crate into a [`Schema`]
@@ -285,7 +287,12 @@ impl Schema {
 					inner,
 				} => SchemaNode::Decimal {
 					precision: *precision,
-					scale: *scale,
+					scale: {
+						let scale_value = *scale;
+						scale_value
+							.try_into()
+							.map_err(|_| BuildSchemaFromApacheSchemaError::DecimalScaleTooLarge { scale_value })?
+					},
 					inner: apache_schema_to_node(schema, names, unresolved_names, inner, enclosing_namespace)?,
 				},
 				apache_avro::Schema::Null => SchemaNode::Null,

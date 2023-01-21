@@ -1,6 +1,6 @@
 use super::*;
 
-fn read_len<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
+pub(super) fn read_len<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
 where
 	R: Read<'de>,
 {

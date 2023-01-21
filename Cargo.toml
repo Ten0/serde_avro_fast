@@ -9,7 +9,9 @@
 [dependencies]
 	apache-avro = { git = "https://github.com/apache/avro.git" }
 	integer-encoding = { default-features = false, version = "3" }
+	rust_decimal = { version = "1", default-features = false, features = ["std", "serde-with-str"] }
 	serde = "1"
+	serde_serializer_quick_unsupported = "0.1"
 	thiserror = "1"
 
 [dev-dependencies]

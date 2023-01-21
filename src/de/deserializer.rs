@@ -43,12 +43,9 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 			SchemaNode::Fixed { size } => self.state.read_slice(size, BytesVisitor(visitor)),
 			SchemaNode::Decimal {
 				precision: _,
-				scale: _,
-				inner: _,
-			} => {
-				// TODO support
-				Err(DeError::new("Decimal deserialization is unsupported for now"))
-			}
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::Str, visitor),
 			SchemaNode::Uuid => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Date => visitor.visit_i32(self.state.read_varint()?),
 			SchemaNode::TimeMillis => visitor.visit_i32(self.state.read_varint()?),
@@ -62,7 +59,7 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	}
 
 	serde::forward_to_deserialize_any! {
-		bool i8 i16 i32 i64 i128 u8 u16 u32 u128 f32 f64 char
+		bool i8 i16 i32 u8 u16 u32 f32 char
 		unit unit_struct newtype_struct identifier
 	}
 
@@ -80,6 +77,69 @@ impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 						.map_err(|e| DeError::custom(format_args!("Got negative enum discriminant: {e}")))?,
 				)
 			}
+			SchemaNode::Decimal {
+				precision: _,
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::U64, visitor),
+			_ => self.deserialize_any(visitor),
+		}
+	}
+
+	fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		match *self.schema_node {
+			SchemaNode::Long => visitor.visit_i64(self.state.read_varint()?),
+			SchemaNode::Decimal {
+				precision: _,
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::I64, visitor),
+			_ => self.deserialize_any(visitor),
+		}
+	}
+
+	fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		match *self.schema_node {
+			SchemaNode::Decimal {
+				precision: _,
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::U128, visitor),
+			_ => self.deserialize_any(visitor),
+		}
+	}
+
+	fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		match *self.schema_node {
+			SchemaNode::Decimal {
+				precision: _,
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::I128, visitor),
+			_ => self.deserialize_any(visitor),
+		}
+	}
+
+	fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		match *self.schema_node {
+			SchemaNode::Double => visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?)),
+			SchemaNode::Decimal {
+				precision: _,
+				scale,
+				inner,
+			} => read_decimal(self.state, scale, inner, VisitorHint::F64, visitor),
 			_ => self.deserialize_any(visitor),
 		}
 	}
