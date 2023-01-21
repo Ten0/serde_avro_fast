@@ -6,6 +6,8 @@ use std::collections::{hash_map, HashMap};
 pub struct Schema {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
+	pub(super) parsing_canonical_form: String,
+	pub(super) fingerprint: [u8; 8],
 }
 
 impl Schema {
@@ -16,15 +18,16 @@ impl Schema {
 		self.nodes
 	}
 
-	/// Initializes from a set of nodes
-	///
-	/// Panics if `nodes` is empty.
-	///
-	/// It is expected that all `SchemaKey`s contained in there refer to correct indexes in this vector, otherwise this
-	/// may panic on future use or when converting to [`crate::Schema`].
-	pub fn from_nodes(nodes: Vec<SchemaNode>) -> Self {
-		assert!(!nodes.is_empty());
-		Self { nodes }
+	/// Obtain the
+	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
+	/// of the schema
+	pub fn parsing_canonical_form(&self) -> &str {
+		&&self.parsing_canonical_form
+	}
+
+	/// Obtain the Rabin fingerprint of the schema
+	pub fn rabin_fingerprint(&self) -> &[u8; 8] {
+		&self.fingerprint
 	}
 }
 
@@ -169,7 +172,7 @@ impl std::ops::Index<SchemaKey> for Schema {
 }
 
 pub(crate) mod apache {
-	pub(crate) use apache_avro::{schema::Name, Error, Schema};
+	pub(crate) use apache_avro::{rabin::Rabin, schema::Name, Error, Schema};
 }
 
 /// Any error that may happen when converting a [`Schema`](apache::Schema) from the `apache-avro` crate into a
@@ -187,7 +190,12 @@ impl Schema {
 	/// Attempt to convert a [`Schema`](apache::Schema) from the `apache-avro` crate into a [`Schema`]
 	pub fn from_apache_schema(apache_schema: &apache::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
 		let mut names: HashMap<apache::Name, usize> = HashMap::new();
-		let mut schema = Self { nodes: Vec::new() };
+		let parsing_canonical_form = apache_schema.canonical_form();
+		let mut schema = Self {
+			nodes: Vec::new(),
+			fingerprint: <apache::Rabin as digest::Digest>::digest(&parsing_canonical_form).into(),
+			parsing_canonical_form,
+		};
 		let mut unresolved_names: Vec<apache::Name> = Vec::new();
 		const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 		apache_schema_to_node(&mut schema, &mut names, &mut unresolved_names, apache_schema, &None)?;

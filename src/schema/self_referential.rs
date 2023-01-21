@@ -20,6 +20,8 @@ pub struct Schema {
 	// which will downcast it and we never push anything more in there (which would cause
 	// reallocation and invalidate all nodes) this is correct.
 	nodes: Vec<SchemaNode<'static>>,
+	parsing_canonical_form: String,
+	fingerprint: [u8; 8],
 }
 
 impl Schema {
@@ -29,6 +31,18 @@ impl Schema {
 	pub fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
 		// the signature of this function downgrades the fake 'static lifetime in a way that makes it correct
 		&self.nodes[0]
+	}
+
+	/// Obtain the
+	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
+	/// of the schema
+	pub fn parsing_canonical_form(&self) -> &str {
+		self.parsing_canonical_form.as_str()
+	}
+
+	/// Obtain the Rabin fingerprint of the schema
+	pub fn rabin_fingerprint(&self) -> &[u8; 8] {
+		&self.fingerprint
 	}
 }
 
@@ -141,6 +155,8 @@ impl From<super::safe::Schema> for Schema {
 		// This allocation should never be moved otherwise references will become invalid
 		let mut ret = Self {
 			nodes: (0..safe.nodes.len()).map(|_| SchemaNode::Null).collect(),
+			parsing_canonical_form: safe.parsing_canonical_form,
+			fingerprint: safe.fingerprint,
 		};
 		let len = ret.nodes.len();
 		// Let's be extra-sure (second condition is for calls to add)
