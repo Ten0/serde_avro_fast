@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn read_len<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 {
 	state
 		.read_varint::<i64>()?
@@ -15,7 +15,7 @@ pub(in super::super) fn read_length_delimited<'de, R, BV>(
 	visitor: BV,
 ) -> Result<BV::Value, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 	BV: ReadVisitor<'de>,
 {
 	let len = read_len(state)?;

@@ -4,7 +4,7 @@ pub(in super::super) struct RecordMapAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
 	pub(in super::super) record_fields: std::slice::Iter<'s, RecordField<'s>>,
 }
-impl<'de, R: Read<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 	type Error = DeError;
 
 	fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>

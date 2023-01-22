@@ -2,7 +2,7 @@ use super::*;
 
 pub(in super::super) fn read_discriminant<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 {
 	let union_discriminant: i64 = state.read_varint()?;
 	union_discriminant

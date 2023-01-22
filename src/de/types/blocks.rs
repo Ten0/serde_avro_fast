@@ -4,7 +4,7 @@ use std::num::NonZeroUsize;
 
 fn read_block_len<'de, R>(state: &mut DeserializerState<R>) -> Result<Option<NonZeroUsize>, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 {
 	let len: i64 = state.read_varint()?;
 	let res;
@@ -38,7 +38,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 	}
 	fn has_more<'de>(&mut self) -> Result<bool, DeError>
 	where
-		R: Read<'de>,
+		R: ReadSlice<'de>,
 	{
 		self.current_block_len = match self.current_block_len.checked_sub(1) {
 			None => {
@@ -48,7 +48,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 					Some(new_len) => {
 						let l = new_len.get();
 						let n_read = self.n_read.saturating_add(l);
-						if n_read > self.reader.max_seq_size {
+						if n_read > self.reader.config.max_seq_size {
 							return Err(DeError::new("Exceeding max sequence size while deserializing"));
 						}
 						self.n_read = n_read;
@@ -66,7 +66,7 @@ pub(in super::super) struct ArraySeqAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
 	pub(in super::super) elements_schema: &'s SchemaNode<'s>,
 }
-impl<'de, R: Read<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 	type Error = DeError;
 
 	fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -87,7 +87,7 @@ pub(in super::super) struct MapMapAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
 	pub(in super::super) element_schema: &'s SchemaNode<'s>,
 }
-impl<'de, R: Read<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 	type Error = DeError;
 
 	fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -117,7 +117,7 @@ impl<'de, R: Read<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 struct StringDeserializer<'r, 's, R> {
 	reader: &'r mut DeserializerState<'s, R>,
 }
-impl<'de, R: Read<'de>> Deserializer<'de> for StringDeserializer<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>> Deserializer<'de> for StringDeserializer<'_, '_, R> {
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

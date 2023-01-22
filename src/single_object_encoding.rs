@@ -16,7 +16,7 @@ where
 		.try_into()
 		.unwrap();
 	check_header(header, schema)?;
-	crate::from_datum_slice(&slice[10..], schema)
+	from_datum_slice(&slice[10..], schema)
 }
 
 /// Deserialize from an avro
@@ -32,7 +32,7 @@ where
 	let mut header_buf = [0u8; 10];
 	reader.read_exact(&mut header_buf).map_err(de::DeError::io)?;
 	check_header(&header_buf, schema)?;
-	crate::from_datum_reader(reader, schema)
+	from_datum_reader(reader, schema)
 }
 
 fn check_header(slice: &[u8; 10], schema: &Schema) -> Result<(), de::DeError> {

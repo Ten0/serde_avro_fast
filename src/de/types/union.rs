@@ -5,7 +5,7 @@ pub(in super::super) fn read_union_discriminant<'de, 's, R>(
 	union: &'s Union,
 ) -> Result<&'s SchemaNode<'s>, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 {
 	let union_discriminant: usize = read_discriminant(state)?;
 	match union.variants.get(union_discriminant) {

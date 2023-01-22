@@ -6,7 +6,7 @@ pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'de, R: Read<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

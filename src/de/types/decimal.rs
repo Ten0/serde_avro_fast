@@ -14,7 +14,7 @@ pub(in super::super) fn read_decimal<'de, R, V>(
 	visitor: V,
 ) -> Result<V::Value, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 	V: Visitor<'de>,
 {
 	let size = match *inner {

@@ -57,6 +57,8 @@ pub use schema::Schema;
 mod single_object_encoding;
 pub use single_object_encoding::{from_single_object_reader, from_single_object_slice};
 
+pub mod object_container_file_encoding;
+
 /// Because we use some of its types (namely, schema), reexport it in case interop is needed by users
 pub use apache_avro;
 

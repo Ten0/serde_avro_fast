@@ -6,7 +6,7 @@ pub(in super::super) fn read_enum_as_str<'de, R, V>(
 	visitor: V,
 ) -> Result<V::Value, DeError>
 where
-	R: Read<'de>,
+	R: ReadSlice<'de>,
 	V: Visitor<'de>,
 {
 	let enum_discriminant = read_discriminant(state)?;
