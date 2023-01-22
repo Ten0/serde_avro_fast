@@ -93,7 +93,7 @@ where
 	}
 
 	/// Iterator over the deserialized values
-	pub fn deserialize<'r, 'rs, T: DeserializeOwned>(&'r mut self) -> DeserializeIterator<'r, 'rs, R, T>
+	pub fn deserialize<'r, 'rs, T: DeserializeOwned>(&'r mut self) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
 		<R as de::read::Take>::Take: ReadSlice<'rs>,
 	{
@@ -105,15 +105,13 @@ where
 	/// Note that this may fail if the provided `T` requires to borrow from the input
 	/// and the input is actually an `impl Read`, or if the blocks are compressed.
 	/// (`deserialize_next` typechecks that we have `DeserializeOwned` to make sure that is never the case)
-	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(&'r mut self) -> DeserializeIterator<'r, 'de, R, T>
+	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
+		&'r mut self,
+	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
 		<R as de::read::Take>::Take: ReadSlice<'de>,
 	{
-		DeserializeIterator {
-			reader: self,
-			target: std::marker::PhantomData,
-			lifetime: std::marker::PhantomData,
-		}
+		std::iter::from_fn(|| self.deserialize_next_borrowed().transpose())
 	}
 
 	/// Attempt to deserialize the next value
@@ -209,31 +207,4 @@ enum ReaderState<'s, R: de::read::Take> {
 		codec_data: CompressionCodecState<'s, R::Take>,
 		n_objects_in_block: usize,
 	},
-}
-
-pub struct DeserializeIterator<'r, 'de, R: de::read::Take, T> {
-	reader: &'r mut Reader<R>,
-	target: std::marker::PhantomData<T>,
-	lifetime: std::marker::PhantomData<&'de ()>,
-}
-impl<'de, R, T> Iterator for DeserializeIterator<'_, 'de, R, T>
-where
-	R: Read + de::read::Take + std::io::BufRead,
-	<R as de::read::Take>::Take: ReadSlice<'de> + std::io::BufRead,
-	T: Deserialize<'de>,
-{
-	type Item = Result<T, de::DeError>;
-	fn next(&mut self) -> Option<Self::Item> {
-		self.reader.deserialize_next_borrowed().transpose()
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		(
-			match self.reader.reader_state {
-				ReaderState::InBlock { n_objects_in_block, .. } => n_objects_in_block,
-				_ => 0,
-			},
-			None,
-		)
-	}
 }
