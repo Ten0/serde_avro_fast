@@ -153,28 +153,6 @@ impl<R: std::io::BufRead> std::io::BufRead for ReaderRead<R> {
 	}
 }
 
-/*impl<R: private::Sealed> private::Sealed for &'_ mut R {}
-impl<R: Read> Read for &'_ mut R {
-	fn read_varint<I>(&mut self) -> Result<I, DeError>
-	where
-		I: VarInt,
-	{
-		<R as Read>::read_varint(*self)
-	}
-
-	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
-		<R as Read>::read_const_size_buf(*self)
-	}
-}
-impl<'de, R: ReadSlice<'de>> ReadSlice<'de> for &'_ mut R {
-	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
-	where
-		V: ReadVisitor<'de>,
-	{
-		<R as ReadSlice<'de>>::read_slice(*self, n, read_visitor)
-	}
-}*/
-
 /// Largely internal trait for `Read` usage (probably don't use this directly)
 pub trait ReadVisitor<'de>: Sized {
 	type Value;
@@ -248,6 +226,15 @@ impl std::io::Read for SliceReadTake<'_> {
 	}
 	fn read_vectored(&mut self, bufs: &mut [std::io::IoSliceMut<'_>]) -> std::io::Result<usize> {
 		self.inner_slice_read.read_vectored(bufs)
+	}
+}
+impl std::io::BufRead for SliceReadTake<'_> {
+	fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+		self.inner_slice_read.fill_buf()
+	}
+
+	fn consume(&mut self, amt: usize) {
+		self.inner_slice_read.consume(amt)
 	}
 }
 

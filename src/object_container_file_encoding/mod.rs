@@ -29,11 +29,35 @@ pub enum FailedToInitializeReader {
 	FailedToParseSchema(schema::ParseSchemaError),
 }
 
+impl<'a> Reader<de::read::SliceRead<'a>> {
+	/// Read from a slice
+	///
+	/// Useful if the entire file has already been loaded in memory and you wish to deserialize borrowing
+	/// from this slice.
+	///
+	/// Note that deserialization will only be able to borrow from this slice if there is no compression codec.
+	/// To be safe that it works in both cases, you may use `Cow<str>` tagged with `#[serde(borrow)]`.
+	pub fn from_slice(slice: &'a [u8]) -> Result<Self, FailedToInitializeReader> {
+		Self::new(de::read::SliceRead::new(slice))
+	}
+}
+
+impl<R: std::io::BufRead> Reader<de::read::ReaderRead<R>> {
+	/// Read from any `impl BufRead`
+	///
+	/// Note that if your reader has [`Read`](std::io::Read) but not [`BufRead`](std::io::BufRead), you may simply wrap
+	/// it into a [`std::io::BufReader`].
+	pub fn from_reader(reader: R) -> Result<Self, FailedToInitializeReader> {
+		Self::new(de::read::ReaderRead::new(reader))
+	}
+}
+
 impl<R> Reader<R>
 where
 	R: Read + de::read::Take + std::io::BufRead,
 	<R as de::read::Take>::Take: std::io::BufRead,
 {
+	/// You should typically use `from_slice` or `from_reader` instead
 	pub fn new<'de>(mut reader: R) -> Result<Self, FailedToInitializeReader>
 	where
 		R: ReadSlice<'de>,
