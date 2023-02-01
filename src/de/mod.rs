@@ -6,10 +6,9 @@
 mod deserializer;
 mod error;
 pub mod read;
-mod types;
 
+use read::*;
 pub use {deserializer::*, error::DeError};
-use {read::*, types::*};
 
 use crate::schema::{RecordField, Schema, SchemaNode, Union};
 

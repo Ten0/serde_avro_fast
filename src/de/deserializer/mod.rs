@@ -1,3 +1,8 @@
+mod types;
+mod unit_variant_enum_access;
+
+use {types::*, unit_variant_enum_access::UnitVariantEnumAccess};
+
 use super::*;
 
 /// Can't be instantiated directly - has to be constructed from a [`DeserializerState`]
@@ -273,8 +278,11 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
-		// TODO special-case union and enum
-		self.deserialize_any(visitor)
+		// TODO special-case union
+		visitor.visit_enum(UnitVariantEnumAccess {
+			state: self.state,
+			schema_node: self.schema_node,
+		})
 	}
 
 	fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
