@@ -157,5 +157,9 @@ fn test_decimal() {
 		}
 	));
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
-	assert_eq!(deserialized, 0.2)
+	assert_eq!(deserialized, 0.2);
+	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2");
+	let deserialized: rust_decimal::Decimal = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2".parse().unwrap());
 }
