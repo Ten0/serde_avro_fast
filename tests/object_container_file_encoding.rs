@@ -2,7 +2,7 @@
 //! https://github.com/apache/avro/blob/6d90ec4b1c4ba47dba16650c54b4c15265016190/lang/rust/avro/src/reader.rs#L470
 //! updated to match this crate's interface
 
-use serde_avro_fast::{from_datum_slice, object_container_file_encoding::Reader, Schema};
+use serde_avro_fast::{from_datum_reader, from_datum_slice, object_container_file_encoding::Reader, Schema};
 
 use {pretty_assertions::assert_eq, serde::Deserialize};
 
@@ -115,7 +115,7 @@ fn test_from_avro_datum_with_union_to_struct() {
 	};
 
 	assert_eq!(
-		from_datum_slice::<TestRecord3240>(encoded, &schema).unwrap(),
+		from_datum_reader::<&[u8], TestRecord3240>(encoded, &schema).unwrap(),
 		expected_record
 	);
 }
