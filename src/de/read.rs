@@ -52,7 +52,9 @@ impl<'de> Read for SliceRead<'de> {
 		I: VarInt,
 	{
 		match I::decode_var(self.slice) {
-			None => Err(DeError::new("All bytes have MSB set when decoding varint")),
+			None => Err(DeError::new(
+				"All bytes have MSB set when decoding varint (Reached EOF)",
+			)),
 			Some((val, read)) => {
 				self.slice = &self.slice[read..];
 				Ok(val)
