@@ -2,6 +2,43 @@
 //!
 //! You typically want to use top-level functions such as [`from_datum_slice`](crate::from_datum_slice)
 //! but access to this may be necessary for more advanced usage.
+//!
+//! Such usage would go as follows:
+//! ```
+//! let schema: serde_avro_fast::Schema = r#"
+//! {
+//! 	"namespace": "test",
+//! 	"type": "record",
+//! 	"name": "Test",
+//! 	"fields": [
+//! 		{
+//! 			"type": {
+//! 				"type": "string"
+//! 			},
+//! 			"name": "field"
+//! 		}
+//! 	]
+//! }
+//! "#
+//! .parse()
+//! .expect("Failed to parse schema");
+//!
+//! #[derive(serde::Deserialize, Debug, PartialEq)]
+//! struct Test {
+//! 	field: String,
+//! }
+//!
+//! let avro_datum: &[u8] = &[6, 102, 111, 111]; // Any `impl Read`
+//!
+//! let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum); // Of course, don't actually use `ReaderRead` if you have a slice
+//! avro_reader.max_alloc_size = 32 * 1024;
+//! let mut deserializer_state = serde_avro_fast::de::DeserializerState::new(avro_reader, &schema);
+//! let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer()).expect("Failed to deserialize");
+//! assert_eq!(
+//! 	result,
+//! 	Test { field: "foo".to_owned() }
+//! );
+//! ```
 
 mod deserializer;
 mod error;
@@ -21,9 +58,19 @@ pub struct DeserializerState<'s, R> {
 	pub(crate) reader: R,
 	config: DeserializerConfig<'s>,
 }
+/// Schema + other configs for deserialization
 #[derive(Clone)]
 pub struct DeserializerConfig<'s> {
 	schema_root: &'s SchemaNode<'s>,
+	/// If a sequence turns out to be longer than this during deserialization,
+	/// we will throw an error instead.
+	///
+	/// This is to avoid running into an infinite loop at deserialization time.
+	/// Default for this is `1 000 000 000` (~1s CPU time)
+	///
+	/// Note that if you're deserializing from an `impl Read` instead of a slice
+	/// (consequently using [`ReaderRead`]), there's an additional similar parameter
+	/// [there](ReaderRead::max_alloc_size) that you may want to configure.
 	pub max_seq_size: usize,
 }
 

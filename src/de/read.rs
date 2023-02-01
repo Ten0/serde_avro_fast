@@ -99,7 +99,9 @@ pub struct ReaderRead<R> {
 	reader: R,
 	scratch: Vec<u8>,
 	/// This is a safeguard for malformed data
-	max_alloc_size: usize,
+	///
+	/// See [`de`](crate::de) module documentation for an example
+	pub max_alloc_size: usize,
 }
 impl<R: std::io::Read> private::Sealed for ReaderRead<R> {}
 impl<R: std::io::Read> ReaderRead<R> {

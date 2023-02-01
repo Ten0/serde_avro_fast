@@ -47,7 +47,7 @@
 //! serde_avro_fast/big     time:   [165.87 ns 166.92 ns 168.09 ns] <- x11 improvement
 //! ```
 //!
-//! It currently has a dependency on [`apache_avro`], just to parse the schema.
+//! It currently has a dependency on [`apache_avro`], to parse the schema and obtain its fingerprint.
 
 pub mod de;
 pub mod schema;

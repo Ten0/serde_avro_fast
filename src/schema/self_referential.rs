@@ -93,7 +93,7 @@ pub enum SchemaNode<'a> {
 	/// `scale` defaults to 0 and is an integer greater than or equal to 0 and `precision` is an
 	/// integer greater than 0.
 	///
-	/// https://avro.apache.org/docs/current/specification/#decimal
+	/// <https://avro.apache.org/docs/current/specification/#decimal>
 	Decimal {
 		precision: usize,
 		scale: u32,
