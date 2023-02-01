@@ -91,7 +91,8 @@ pub(in super::super) enum VisitorHint {
 }
 
 /// We're using this struct because when serializing decimal uses a private API that does not allocate
-/// so we can benefit from that by providing it with a serializer that actually just visits
+/// so we can benefit from that by providing it with a serializer that actually just visits the `Visitor`
+/// provided by the the original `Deserialize` impl
 struct SerializeToVisitorStr<'de, V, E> {
 	visitor: V,
 	_lifetime: PhantomData<&'de ()>,
