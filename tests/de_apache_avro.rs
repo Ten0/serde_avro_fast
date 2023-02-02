@@ -131,11 +131,11 @@ fn test_decimal() {
 	dbg!(schema.root());
 	assert!(matches!(
 		schema.root(),
-		SchemaNode::Decimal {
+		SchemaNode::Decimal(serde_avro_fast::schema::Decimal {
 			precision: 4,
 			scale: 1,
 			inner: SchemaNode::Bytes
-		}
+		})
 	));
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, 0.2);

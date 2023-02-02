@@ -100,11 +100,7 @@ pub enum SchemaNode<'a> {
 	/// `precision` is an integer greater than 0.
 	///
 	/// <https://avro.apache.org/docs/current/specification/#decimal>
-	Decimal {
-		precision: usize,
-		scale: u32,
-		inner: &'a SchemaNode<'a>,
-	},
+	Decimal(Decimal<'a>),
 	/// A universally unique identifier, annotating a string.
 	Uuid,
 	/// Logical type which represents the number of days since the unix epoch.
@@ -140,22 +136,30 @@ pub enum SchemaNode<'a> {
 }
 
 /// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Union<'a> {
 	pub variants: Vec<&'a SchemaNode<'a>>,
 }
 
 /// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 }
 
 /// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RecordField<'a> {
 	pub name: String,
 	pub schema: &'a SchemaNode<'a>,
+}
+
+/// Component of a [`SchemaNode`]
+#[derive(Debug)]
+pub struct Decimal<'a> {
+	pub precision: usize,
+	pub scale: u32,
+	pub inner: &'a SchemaNode<'a>,
 }
 
 impl From<super::safe::Schema> for Schema {
@@ -220,15 +224,11 @@ impl From<super::safe::Schema> for Schema {
 					}),
 					SafeSchemaNode::Enum { symbols } => SchemaNode::Enum { symbols },
 					SafeSchemaNode::Fixed { size } => SchemaNode::Fixed { size },
-					SafeSchemaNode::Decimal {
-						precision,
-						scale,
-						inner,
-					} => SchemaNode::Decimal {
-						precision,
-						scale,
-						inner: key_to_node(inner),
-					},
+					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(Decimal {
+						precision: decimal.precision,
+						scale: decimal.scale,
+						inner: key_to_node(decimal.inner),
+					}),
 					SafeSchemaNode::Uuid => SchemaNode::Uuid,
 					SafeSchemaNode::Date => SchemaNode::Date,
 					SafeSchemaNode::TimeMillis => SchemaNode::TimeMillis,

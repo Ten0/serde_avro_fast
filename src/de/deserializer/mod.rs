@@ -51,11 +51,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			}),
 			SchemaNode::Enum { ref symbols } => read_enum_as_str(self.state, symbols, visitor),
 			SchemaNode::Fixed { size } => self.state.read_slice(size, BytesVisitor(visitor)),
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::Str, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::Str,
+				visitor,
+			),
 			SchemaNode::Uuid => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Date => visitor.visit_i32(self.state.read_varint()?),
 			SchemaNode::TimeMillis => visitor.visit_i32(self.state.read_varint()?),
@@ -85,11 +87,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 					DeError::custom(format_args!("Got negative enum discriminant: {e}"))
 				})?)
 			}
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::U64, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::U64,
+				visitor,
+			),
 			_ => self.deserialize_any(visitor),
 		}
 	}
@@ -100,11 +104,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	{
 		match *self.schema_node {
 			SchemaNode::Long => visitor.visit_i64(self.state.read_varint()?),
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::I64, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::I64,
+				visitor,
+			),
 			_ => self.deserialize_any(visitor),
 		}
 	}
@@ -114,11 +120,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		match *self.schema_node {
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::U128, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::U128,
+				visitor,
+			),
 			_ => self.deserialize_any(visitor),
 		}
 	}
@@ -128,11 +136,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		match *self.schema_node {
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::I128, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::I128,
+				visitor,
+			),
 			_ => self.deserialize_any(visitor),
 		}
 	}
@@ -145,11 +155,13 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Double => {
 				visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?))
 			}
-			SchemaNode::Decimal {
-				precision: _,
-				scale,
-				inner,
-			} => read_decimal(self.state, scale, inner, VisitorHint::F64, visitor),
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				decimal.scale,
+				decimal.inner,
+				VisitorHint::F64,
+				visitor,
+			),
 			_ => self.deserialize_any(visitor),
 		}
 	}

@@ -78,17 +78,9 @@ pub enum SchemaNode {
 	Map(SchemaKey),
 	Union(Union),
 	Record(Record),
-	Enum {
-		symbols: Vec<String>,
-	},
-	Fixed {
-		size: usize,
-	},
-	Decimal {
-		precision: usize,
-		scale: u32,
-		inner: SchemaKey,
-	},
+	Enum { symbols: Vec<String> },
+	Fixed { size: usize },
+	Decimal(Decimal),
 	Uuid,
 	Date,
 	TimeMillis,
@@ -115,6 +107,14 @@ pub struct Record {
 pub struct RecordField {
 	pub name: String,
 	pub schema: SchemaKey,
+}
+
+/// Component of a [`SchemaNode`]
+#[derive(Clone, Debug)]
+pub struct Decimal {
+	pub precision: usize,
+	pub scale: u32,
+	pub inner: SchemaKey,
 }
 
 impl std::str::FromStr for Schema {
@@ -289,7 +289,7 @@ impl Schema {
 					precision,
 					scale,
 					inner,
-				} => SchemaNode::Decimal {
+				} => SchemaNode::Decimal(Decimal {
 					precision: *precision,
 					scale: {
 						let scale_value = *scale;
@@ -304,7 +304,7 @@ impl Schema {
 						inner,
 						enclosing_namespace,
 					)?,
-				},
+				}),
 				apache_avro::Schema::Null => SchemaNode::Null,
 				apache_avro::Schema::Boolean => SchemaNode::Boolean,
 				apache_avro::Schema::Int => SchemaNode::Int,
@@ -343,11 +343,11 @@ impl Schema {
 			match schema_node {
 				SchemaNode::Array(key)
 				| SchemaNode::Map(key)
-				| SchemaNode::Decimal {
+				| SchemaNode::Decimal(Decimal {
 					inner: key,
 					precision: _,
 					scale: _,
-				} => fix_key(key),
+				}) => fix_key(key),
 				SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
 				SchemaNode::Record(record) => record
 					.fields
