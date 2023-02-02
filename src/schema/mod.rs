@@ -18,7 +18,7 @@ impl std::str::FromStr for Schema {
 
 impl Schema {
 	/// Attempt to convert a [`Schema`](safe::apache::Schema) from the `apache-avro` crate into a [`Schema`]
-	pub fn from_apache_schema(apache_schema: &safe::apache::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
+	pub fn from_apache_schema(apache_schema: &apache_avro::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
 		let safe_schema = safe::Schema::from_apache_schema(apache_schema)?;
 		Ok(safe_schema.into())
 	}

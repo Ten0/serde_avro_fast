@@ -2,6 +2,10 @@
 use std::collections::{hash_map, HashMap};
 
 /// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for its initialization
+///
+/// In there, references to other nodes are represented as [`SchemaKey`], which allow to index into [`Schema`].
+///
+/// For details about the meaning of the fields, see the [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
 pub struct Schema {
 	// First node in the array is considered to be the root
@@ -48,84 +52,42 @@ impl SchemaKey {
 	}
 }
 
-/// Represents any valid Avro schema
+/// The safe (non self-referential) counterpart of [`SchemaNode`](crate::schema::SchemaNode)
 ///
-/// More information about Avro schemas can be found in the
-/// [Avro Specification](https://avro.apache.org/docs/current/specification/).
+/// In there, references to other nodes are represented as [`SchemaKey`], which allow to index into [`Schema`].
+///
+/// For details about the meaning of the fields, see the [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
 pub enum SchemaNode {
-	/// A `null` Avro schema.
 	Null,
-	/// A `boolean` Avro schema.
 	Boolean,
-	/// An `int` Avro schema.
 	Int,
-	/// A `long` Avro schema.
 	Long,
-	/// A `float` Avro schema.
 	Float,
-	/// A `double` Avro schema.
 	Double,
-	/// A `bytes` Avro schema.
-	/// `Bytes` represents a sequence of 8-bit unsigned bytes.
 	Bytes,
-	/// A `string` Avro schema.
-	/// `String` represents a unicode character sequence.
 	String,
-	/// A `array` Avro schema. Avro arrays are required to have the same type for each element.
-	/// This variant holds the `Schema` for the array element type.
 	Array(SchemaKey),
-	/// A `map` Avro schema.
-	/// `Map` holds a pointer to the `Schema` of its values, which must all be the same schema.
-	/// `Map` keys are assumed to be `string`.
 	Map(SchemaKey),
-	/// A `union` Avro schema.
 	Union(Union),
-	/// A `record` Avro schema.
 	Record(Record),
-	/// An `enum` Avro schema.
-	Enum { symbols: Vec<String> },
-	/// A `fixed` Avro schema.
-	Fixed { size: usize },
-	/// Logical type which represents `Decimal` values. The underlying type is serialized and
-	/// deserialized as `Schema::Bytes` or `Schema::Fixed`.
-	///
-	/// `scale` defaults to 0 and is an integer greater than or equal to 0 and `precision` is an
-	/// integer greater than 0.
+	Enum {
+		symbols: Vec<String>,
+	},
+	Fixed {
+		size: usize,
+	},
 	Decimal {
 		precision: usize,
 		scale: u32,
 		inner: SchemaKey,
 	},
-	/// A universally unique identifier, annotating a string.
 	Uuid,
-	/// Logical type which represents the number of days since the unix epoch.
-	/// Serialization format is `Schema::Int`.
 	Date,
-	/// The time of day in number of milliseconds after midnight with no reference any calendar,
-	/// time zone or date in particular.
 	TimeMillis,
-	/// The time of day in number of microseconds after midnight with no reference any calendar,
-	/// time zone or date in particular.
 	TimeMicros,
-	/// An instant in time represented as the number of milliseconds after the UNIX epoch.
-	///
-	/// You probably want to use
-	/// [`TimestampMilliSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMilliSeconds.html)
-	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMillis,
-	/// An instant in time represented as the number of microseconds after the UNIX epoch.
-	///
-	/// You probably want to use
-	/// [`TimestampMicroSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMicroSeconds.html)
-	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMicros,
-	/// An amount of time defined by a number of months, days and milliseconds.
-	///
-	/// This deserializes to a struct that has the `months`, `days`, and `milliseconds` fields declared as `u32`s,
-	/// or to a `(u32, u32, u32)` tuple, or to its raw representation
-	/// [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
-	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
 }
 
@@ -151,7 +113,7 @@ pub struct RecordField {
 impl std::str::FromStr for Schema {
 	type Err = ParseSchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let apache_schema = apache::Schema::parse_str(s)?;
+		let apache_schema = apache_avro::Schema::parse_str(s)?;
 		Ok(Schema::from_apache_schema(&apache_schema)?)
 	}
 }
@@ -159,7 +121,7 @@ impl std::str::FromStr for Schema {
 #[derive(thiserror::Error, Debug)]
 pub enum ParseSchemaError {
 	#[error("Could not parse Schema using apache-avro lib: {0}")]
-	ApacheAvro(#[from] apache::Error),
+	ApacheAvro(#[from] apache_avro::Error),
 	#[error("Could not turn apache-avro schema into fast schema: {0}")]
 	ApacheToFast(#[from] BuildSchemaFromApacheSchemaError),
 }
@@ -171,72 +133,68 @@ impl std::ops::Index<SchemaKey> for Schema {
 	}
 }
 
-pub(crate) mod apache {
-	pub(crate) use apache_avro::{rabin::Rabin, schema::Name, Error, Schema};
-}
-
-/// Any error that may happen when converting a [`Schema`](apache::Schema) from the `apache-avro` crate into a
+/// Any error that may happen when converting a [`Schema`](apache_avro::Schema) from the `apache-avro` crate into a
 /// [`Schema`]
 #[derive(Debug, thiserror::Error)]
 pub enum BuildSchemaFromApacheSchemaError {
 	#[error("The apache_avro::Schema contained an unknown reference: {0}")]
-	InvalidReference(apache::Name),
+	InvalidReference(apache_avro::schema::Name),
 	#[error("The apache_avro::Schema contains duplicate definitions for {0}")]
-	DuplicateName(apache::Name),
+	DuplicateName(apache_avro::schema::Name),
 	#[error("The apache_avro::Schema contains an unreasonably large `scale` for a Decimal")]
 	DecimalScaleTooLarge { scale_value: usize },
 }
 impl Schema {
-	/// Attempt to convert a [`Schema`](apache::Schema) from the `apache-avro` crate into a [`Schema`]
-	pub fn from_apache_schema(apache_schema: &apache::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
-		let mut names: HashMap<apache::Name, usize> = HashMap::new();
+	/// Attempt to convert a [`Schema`](apache_avro::Schema) from the `apache-avro` crate into a [`Schema`]
+	pub fn from_apache_schema(apache_schema: &apache_avro::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
+		let mut names: HashMap<apache_avro::schema::Name, usize> = HashMap::new();
 		let parsing_canonical_form = apache_schema.canonical_form();
 		let mut schema = Self {
 			nodes: Vec::new(),
-			fingerprint: <apache::Rabin as digest::Digest>::digest(&parsing_canonical_form).into(),
+			fingerprint: <apache_avro::rabin::Rabin as digest::Digest>::digest(&parsing_canonical_form).into(),
 			parsing_canonical_form,
 		};
-		let mut unresolved_names: Vec<apache::Name> = Vec::new();
+		let mut unresolved_names: Vec<apache_avro::schema::Name> = Vec::new();
 		const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 		apache_schema_to_node(&mut schema, &mut names, &mut unresolved_names, apache_schema, &None)?;
 		fn apache_schema_to_node<'a>(
 			schema: &mut Schema,
-			names: &mut HashMap<apache::Name, usize>,
-			unresolved_names: &mut Vec<apache::Name>,
-			apache_schema: &'a apache::Schema,
+			names: &mut HashMap<apache_avro::schema::Name, usize>,
+			unresolved_names: &mut Vec<apache_avro::schema::Name>,
+			apache_schema: &'a apache_avro::Schema,
 			enclosing_namespace: &Option<String>,
 		) -> Result<SchemaKey, BuildSchemaFromApacheSchemaError> {
 			let idx = schema.nodes.len();
 			schema.nodes.push(SchemaNode::Null);
 			let new_node = match apache_schema {
-				apache::Schema::Ref { name } => {
+				apache_avro::Schema::Ref { name } => {
 					schema.nodes.pop().unwrap();
 					let idx = unresolved_names.len();
 					unresolved_names.push(name.fully_qualified_name(enclosing_namespace));
 					return Ok(SchemaKey { idx: REMAP_BIT | idx });
 				}
-				apache::Schema::Array(apache_schema) => SchemaNode::Array(apache_schema_to_node(
+				apache_avro::Schema::Array(apache_schema) => SchemaNode::Array(apache_schema_to_node(
 					schema,
 					names,
 					unresolved_names,
 					apache_schema,
 					enclosing_namespace,
 				)?),
-				apache::Schema::Map(apache_schema) => SchemaNode::Map(apache_schema_to_node(
+				apache_avro::Schema::Map(apache_schema) => SchemaNode::Map(apache_schema_to_node(
 					schema,
 					names,
 					unresolved_names,
 					apache_schema,
 					enclosing_namespace,
 				)?),
-				apache::Schema::Union(union_schemas) => SchemaNode::Union(Union {
+				apache_avro::Schema::Union(union_schemas) => SchemaNode::Union(Union {
 					variants: union_schemas
 						.variants()
 						.iter()
 						.map(|s| apache_schema_to_node(schema, names, unresolved_names, s, enclosing_namespace))
 						.collect::<Result<_, _>>()?,
 				}),
-				apache::Schema::Enum { name, symbols, .. } => {
+				apache_avro::Schema::Enum { name, symbols, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
 							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
@@ -249,7 +207,7 @@ impl Schema {
 						}
 					}
 				}
-				apache::Schema::Fixed { name, size, .. } => {
+				apache_avro::Schema::Fixed { name, size, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
 							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
@@ -260,7 +218,7 @@ impl Schema {
 						}
 					}
 				}
-				apache::Schema::Record { name, fields, .. } => {
+				apache_avro::Schema::Record { name, fields, .. } => {
 					let fully_qualified_name = name.fully_qualified_name(enclosing_namespace);
 					let record = Record {
 						fields: fields
