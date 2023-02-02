@@ -12,8 +12,9 @@ where
 		// res = -len, properly handling i64::MIN
 		res = u64::from_ne_bytes(len.to_ne_bytes()).wrapping_neg();
 		// Drop the number of bytes in the block to properly advance the reader
-		// Since we don't use that value, decode as u64 instead of i64 (skip zigzag decoding)
-		// TODO enable fast skipping when encountering `deserialize_ignored_any`
+		// Since we don't use that value, decode as u64 instead of i64 (skip zigzag
+		// decoding) TODO enable fast skipping when encountering
+		// `deserialize_ignored_any`
 		let _: u64 = state.read_varint()?;
 	} else {
 		res = len as u64;
@@ -49,7 +50,9 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 						let l = new_len.get();
 						let n_read = self.n_read.saturating_add(l);
 						if n_read > self.reader.config.max_seq_size {
-							return Err(DeError::new("Exceeding max sequence size while deserializing"));
+							return Err(DeError::new(
+								"Exceeding max sequence size while deserializing",
+							));
 						}
 						self.n_read = n_read;
 						l - 1

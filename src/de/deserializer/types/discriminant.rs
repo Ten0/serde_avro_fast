@@ -1,6 +1,8 @@
 use super::*;
 
-pub(in super::super) fn read_discriminant<'de, R>(state: &mut DeserializerState<R>) -> Result<usize, DeError>
+pub(in super::super) fn read_discriminant<'de, R>(
+	state: &mut DeserializerState<R>,
+) -> Result<usize, DeError>
 where
 	R: ReadSlice<'de>,
 {

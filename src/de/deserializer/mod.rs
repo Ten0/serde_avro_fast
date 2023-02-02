@@ -5,7 +5,8 @@ use {types::*, unit_variant_enum_access::UnitVariantEnumAccess};
 
 use super::*;
 
-/// Can't be instantiated directly - has to be constructed from a [`DeserializerState`]
+/// Can't be instantiated directly - has to be constructed from a
+/// [`DeserializerState`]
 pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
@@ -23,8 +24,12 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Boolean => read_bool(self.state, visitor),
 			SchemaNode::Int => visitor.visit_i32(self.state.read_varint()?),
 			SchemaNode::Long => visitor.visit_i64(self.state.read_varint()?),
-			SchemaNode::Float => visitor.visit_f32(f32::from_le_bytes(self.state.read_const_size_buf()?)),
-			SchemaNode::Double => visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?)),
+			SchemaNode::Float => {
+				visitor.visit_f32(f32::from_le_bytes(self.state.read_const_size_buf()?))
+			}
+			SchemaNode::Double => {
+				visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?))
+			}
 			SchemaNode::Bytes => read_length_delimited(self.state, BytesVisitor(visitor)),
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
@@ -76,11 +81,9 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::Enum { symbols: _ } => {
 				let discriminant: i64 = self.state.read_varint()?;
-				visitor.visit_u64(
-					discriminant
-						.try_into()
-						.map_err(|e| DeError::custom(format_args!("Got negative enum discriminant: {e}")))?,
-				)
+				visitor.visit_u64(discriminant.try_into().map_err(|e| {
+					DeError::custom(format_args!("Got negative enum discriminant: {e}"))
+				})?)
 			}
 			SchemaNode::Decimal {
 				precision: _,
@@ -139,7 +142,9 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		match *self.schema_node {
-			SchemaNode::Double => visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?)),
+			SchemaNode::Double => {
+				visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?))
+			}
 			SchemaNode::Decimal {
 				precision: _,
 				scale,
@@ -153,7 +158,8 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
-		// If we get hinted on str, we may attempt to deserialize byte arrays as utf-8 encoded strings
+		// If we get hinted on str, we may attempt to deserialize byte arrays as utf-8
+		// encoded strings
 		match *self.schema_node {
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Bytes => read_length_delimited(self.state, StringVisitor(visitor)),
@@ -195,7 +201,11 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Null => visitor.visit_none(),
 			SchemaNode::Union(union) => {
 				let union_discriminant: usize = read_discriminant(self.state)?;
-				match union.variants.get(union_discriminant).map(|&schema_key| schema_key) {
+				match union
+					.variants
+					.get(union_discriminant)
+					.map(|&schema_key| schema_key)
+				{
 					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
 					Some(variant_schema) => visitor.visit_some(Self {
@@ -242,7 +252,12 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		}
 	}
 
-	fn deserialize_tuple_struct<V>(self, _: &'static str, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+	fn deserialize_tuple_struct<V>(
+		self,
+		_: &'static str,
+		len: usize,
+		visitor: V,
+	) -> Result<V::Value, Self::Error>
 	where
 		V: Visitor<'de>,
 	{

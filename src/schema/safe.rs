@@ -1,11 +1,15 @@
-//! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is used for its initialization
+//! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is
+//! used for its initialization
 use std::collections::{hash_map, HashMap};
 
-/// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for its initialization
+/// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for
+/// its initialization
 ///
-/// In there, references to other nodes are represented as [`SchemaKey`], which allow to index into [`Schema`].
+/// In there, references to other nodes are represented as [`SchemaKey`], which
+/// allow to index into [`Schema`].
 ///
-/// For details about the meaning of the fields, see the [`SchemaNode`](crate::schema::SchemaNode) documentation.
+/// For details about the meaning of the fields, see the
+/// [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
 pub struct Schema {
 	// First node in the array is considered to be the root
@@ -52,11 +56,14 @@ impl SchemaKey {
 	}
 }
 
-/// The safe (non self-referential) counterpart of [`SchemaNode`](crate::schema::SchemaNode)
+/// The safe (non self-referential) counterpart of
+/// [`SchemaNode`](crate::schema::SchemaNode)
 ///
-/// In there, references to other nodes are represented as [`SchemaKey`], which allow to index into [`Schema`].
+/// In there, references to other nodes are represented as [`SchemaKey`], which
+/// allow to index into [`Schema`].
 ///
-/// For details about the meaning of the fields, see the [`SchemaNode`](crate::schema::SchemaNode) documentation.
+/// For details about the meaning of the fields, see the
+/// [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
 pub enum SchemaNode {
 	Null,
@@ -117,7 +124,8 @@ impl std::str::FromStr for Schema {
 		Ok(Schema::from_apache_schema(&apache_schema)?)
 	}
 }
-/// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON `&str`
+/// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON
+/// `&str`
 #[derive(thiserror::Error, Debug)]
 pub enum ParseSchemaError {
 	#[error("Could not parse Schema using apache-avro lib: {0}")]
@@ -133,8 +141,8 @@ impl std::ops::Index<SchemaKey> for Schema {
 	}
 }
 
-/// Any error that may happen when converting a [`Schema`](apache_avro::Schema) from the `apache-avro` crate into a
-/// [`Schema`]
+/// Any error that may happen when converting a [`Schema`](apache_avro::Schema)
+/// from the `apache-avro` crate into a [`Schema`]
 #[derive(Debug, thiserror::Error)]
 pub enum BuildSchemaFromApacheSchemaError {
 	#[error("The apache_avro::Schema contained an unknown reference: {0}")]
@@ -145,18 +153,30 @@ pub enum BuildSchemaFromApacheSchemaError {
 	DecimalScaleTooLarge { scale_value: usize },
 }
 impl Schema {
-	/// Attempt to convert a [`Schema`](apache_avro::Schema) from the `apache-avro` crate into a [`Schema`]
-	pub fn from_apache_schema(apache_schema: &apache_avro::Schema) -> Result<Self, BuildSchemaFromApacheSchemaError> {
+	/// Attempt to convert a [`Schema`](apache_avro::Schema) from the
+	/// `apache-avro` crate into a [`Schema`]
+	pub fn from_apache_schema(
+		apache_schema: &apache_avro::Schema,
+	) -> Result<Self, BuildSchemaFromApacheSchemaError> {
 		let mut names: HashMap<apache_avro::schema::Name, usize> = HashMap::new();
 		let parsing_canonical_form = apache_schema.canonical_form();
 		let mut schema = Self {
 			nodes: Vec::new(),
-			fingerprint: <apache_avro::rabin::Rabin as digest::Digest>::digest(&parsing_canonical_form).into(),
+			fingerprint: <apache_avro::rabin::Rabin as digest::Digest>::digest(
+				&parsing_canonical_form,
+			)
+			.into(),
 			parsing_canonical_form,
 		};
 		let mut unresolved_names: Vec<apache_avro::schema::Name> = Vec::new();
 		const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
-		apache_schema_to_node(&mut schema, &mut names, &mut unresolved_names, apache_schema, &None)?;
+		apache_schema_to_node(
+			&mut schema,
+			&mut names,
+			&mut unresolved_names,
+			apache_schema,
+			&None,
+		)?;
 		fn apache_schema_to_node<'a>(
 			schema: &mut Schema,
 			names: &mut HashMap<apache_avro::schema::Name, usize>,
@@ -171,15 +191,19 @@ impl Schema {
 					schema.nodes.pop().unwrap();
 					let idx = unresolved_names.len();
 					unresolved_names.push(name.fully_qualified_name(enclosing_namespace));
-					return Ok(SchemaKey { idx: REMAP_BIT | idx });
+					return Ok(SchemaKey {
+						idx: REMAP_BIT | idx,
+					});
 				}
-				apache_avro::Schema::Array(apache_schema) => SchemaNode::Array(apache_schema_to_node(
-					schema,
-					names,
-					unresolved_names,
-					apache_schema,
-					enclosing_namespace,
-				)?),
+				apache_avro::Schema::Array(apache_schema) => {
+					SchemaNode::Array(apache_schema_to_node(
+						schema,
+						names,
+						unresolved_names,
+						apache_schema,
+						enclosing_namespace,
+					)?)
+				}
 				apache_avro::Schema::Map(apache_schema) => SchemaNode::Map(apache_schema_to_node(
 					schema,
 					names,
@@ -191,13 +215,23 @@ impl Schema {
 					variants: union_schemas
 						.variants()
 						.iter()
-						.map(|s| apache_schema_to_node(schema, names, unresolved_names, s, enclosing_namespace))
+						.map(|s| {
+							apache_schema_to_node(
+								schema,
+								names,
+								unresolved_names,
+								s,
+								enclosing_namespace,
+							)
+						})
 						.collect::<Result<_, _>>()?,
 				}),
 				apache_avro::Schema::Enum { name, symbols, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
+								occ.remove_entry().0,
+							))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -210,7 +244,9 @@ impl Schema {
 				apache_avro::Schema::Fixed { name, size, .. } => {
 					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
+								occ.remove_entry().0,
+							))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -239,7 +275,9 @@ impl Schema {
 					};
 					match names.entry(fully_qualified_name) {
 						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0))
+							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
+								occ.remove_entry().0,
+							))
 						}
 						hash_map::Entry::Vacant(vacant) => {
 							vacant.insert(idx);
@@ -255,11 +293,17 @@ impl Schema {
 					precision: *precision,
 					scale: {
 						let scale_value = *scale;
-						scale_value
-							.try_into()
-							.map_err(|_| BuildSchemaFromApacheSchemaError::DecimalScaleTooLarge { scale_value })?
+						scale_value.try_into().map_err(|_| {
+							BuildSchemaFromApacheSchemaError::DecimalScaleTooLarge { scale_value }
+						})?
 					},
-					inner: apache_schema_to_node(schema, names, unresolved_names, inner, enclosing_namespace)?,
+					inner: apache_schema_to_node(
+						schema,
+						names,
+						unresolved_names,
+						inner,
+						enclosing_namespace,
+					)?,
 				},
 				apache_avro::Schema::Null => SchemaNode::Null,
 				apache_avro::Schema::Boolean => SchemaNode::Boolean,
@@ -305,7 +349,10 @@ impl Schema {
 					scale: _,
 				} => fix_key(key),
 				SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
-				SchemaNode::Record(record) => record.fields.iter_mut().for_each(|f| fix_key(&mut f.schema)),
+				SchemaNode::Record(record) => record
+					.fields
+					.iter_mut()
+					.for_each(|f| fix_key(&mut f.schema)),
 				SchemaNode::Null
 				| SchemaNode::Boolean
 				| SchemaNode::Int

@@ -221,7 +221,11 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "small"),
 		&datum.as_slice(),
-		|b, &datum| b.iter(|| serde_avro_fast::from_datum_slice::<SmallStruct>(datum, &fast_schema).unwrap()),
+		|b, &datum| {
+			b.iter(|| {
+				serde_avro_fast::from_datum_slice::<SmallStruct>(datum, &fast_schema).unwrap()
+			})
+		},
 	);
 }
 
@@ -242,8 +246,14 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "big"),
 		&datum.as_slice(),
-		|b, &datum| b.iter(|| serde_avro_fast::from_datum_slice::<BigStruct>(datum, &fast_schema).unwrap()),
+		|b, &datum| {
+			b.iter(|| serde_avro_fast::from_datum_slice::<BigStruct>(datum, &fast_schema).unwrap())
+		},
 	);
 }
-criterion_group!(benches, bench_small_schema_read_record, bench_big_schema_read_record);
+criterion_group!(
+	benches,
+	bench_small_schema_read_record,
+	bench_big_schema_read_record
+);
 criterion_main!(benches);

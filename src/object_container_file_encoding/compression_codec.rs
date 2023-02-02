@@ -7,13 +7,14 @@ pub enum CompressionCodec {
 	/// The `Null` codec simply passes through data uncompressed.
 	Null,
 	/// The `Deflate` codec writes the data block using the deflate algorithm
-	/// as specified in RFC 1951, and typically implemented using the zlib library.
-	/// Note that this format (unlike the "zlib format" in RFC 1950) does not have a checksum.
+	/// as specified in RFC 1951, and typically implemented using the zlib
+	/// library. Note that this format (unlike the "zlib format" in RFC 1950)
+	/// does not have a checksum.
 	Deflate,
 	#[cfg(feature = "snappy")]
 	/// The `Snappy` codec uses Google's [Snappy](http://google.github.io/snappy/)
-	/// compression library. Each compressed block is followed by the 4-byte, big-endian
-	/// CRC32 checksum of the uncompressed data in the block.
+	/// compression library. Each compressed block is followed by the 4-byte,
+	/// big-endian CRC32 checksum of the uncompressed data in the block.
 	Snappy,
 	#[cfg(feature = "zstandard")]
 	Zstandard,
@@ -47,9 +48,9 @@ impl CompressionCodec {
 			},
 			CompressionCodec::Deflate => CompressionCodecState::Deflate {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(de::read::Take::take(
-						reader, block_size,
-					)?)),
+					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
+						de::read::Take::take(reader, block_size)?,
+					)),
 					config,
 				),
 			},
@@ -62,7 +63,8 @@ pub(super) enum CompressionCodecState<'s, R> {
 		deserializer_state: DeserializerState<'s, R>,
 	},
 	Deflate {
-		deserializer_state: DeserializerState<'s, de::read::ReaderRead<flate2::bufread::DeflateDecoder<R>>>,
+		deserializer_state:
+			DeserializerState<'s, de::read::ReaderRead<flate2::bufread::DeflateDecoder<R>>>,
 	},
 }
 

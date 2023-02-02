@@ -1,6 +1,9 @@
 use super::*;
 
-pub(in super::super) fn read_bool<'de, R, V>(state: &mut DeserializerState<R>, visitor: V) -> Result<V::Value, DeError>
+pub(in super::super) fn read_bool<'de, R, V>(
+	state: &mut DeserializerState<R>,
+	visitor: V,
+) -> Result<V::Value, DeError>
 where
 	R: ReadSlice<'de>,
 	V: Visitor<'de>,

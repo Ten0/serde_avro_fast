@@ -1,7 +1,16 @@
 //! Defines everything necessary for avro deserialization
 //!
-//! You typically want to use top-level functions such as [`from_datum_slice`](crate::from_datum_slice)
-//! but access to this may be necessary for more advanced usage.
+//! # For advanced usage
+//!
+//! You typically want to use top-level functions such as
+//! [`from_datum_slice`](crate::from_datum_slice) but access to this may be
+//! necessary for more advanced usage.
+//!
+//! This gives manual access to the type that implements
+//! [`serde::Deserializer`], as well as its building blocks in order to set
+//! configuration parameters meant to prevent DOS:
+//! - [`DeserializerConfig::max_seq_size`]
+//! - [`read::ReaderRead::max_alloc_size`]
 //!
 //! Such usage would go as follows:
 //! ```
@@ -30,13 +39,31 @@
 //!
 //! let avro_datum: &[u8] = &[6, 102, 111, 111]; // Any `impl Read`
 //!
-//! let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum); // Of course, don't actually use `ReaderRead` if you have a slice
+//! // Of course, don't actually use `ReaderRead` if you have a slice
+//! let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum);
+//!
+//! // Now we can set some custom parameters
 //! avro_reader.max_alloc_size = 32 * 1024;
-//! let mut deserializer_state = serde_avro_fast::de::DeserializerState::new(avro_reader, &schema);
-//! let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer()).expect("Failed to deserialize");
+//!
+//! // We can also set parameters that are common to the slice version and the reader version
+//! let mut deserializer_config = serde_avro_fast::de::DeserializerConfig::new(&schema);
+//! deserializer_config.max_seq_size = 1_000_000;
+//!
+//! // Now we can build the struct that will generally serve through deserialization
+//! let mut deserializer_state =
+//! 	serde_avro_fast::de::DeserializerState::with_config(avro_reader, deserializer_config);
+//!
+//! // It's not the `&mut DeserializerState` that implements `serde::Deserializer` directly, instead
+//! // it is `DatumDeserializer` (which is essentially an `&mut DeserializerState` but not exactly
+//! // because it also keeps track of the current schema node)
+//! // We build it through `DeserializerState::deserializer`
+//! let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer())
+//! 	.expect("Failed to deserialize");
 //! assert_eq!(
 //! 	result,
-//! 	Test { field: "foo".to_owned() }
+//! 	Test {
+//! 		field: "foo".to_owned()
+//! 	}
 //! );
 //! ```
 
@@ -53,7 +80,10 @@ use serde::de::*;
 
 /// All configuration and state necessary for the deserialization to run
 ///
-/// Does not implement [`Deserializer`] directly (use [`.deserializer`](Self::deserializer) to obtain that).
+/// Notably holds the reader and a [`DeserializerConfig`].
+///
+/// Does not implement [`Deserializer`] directly (use
+/// [`.deserializer`](Self::deserializer) to obtain that).
 pub struct DeserializerState<'s, R> {
 	pub(crate) reader: R,
 	config: DeserializerConfig<'s>,
@@ -69,8 +99,9 @@ pub struct DeserializerConfig<'s> {
 	/// Default for this is `1 000 000 000` (~1s CPU time)
 	///
 	/// Note that if you're deserializing from an `impl Read` instead of a slice
-	/// (consequently using [`ReaderRead`]), there's an additional similar parameter
-	/// [there](ReaderRead::max_alloc_size) that you may want to configure.
+	/// (consequently using [`ReaderRead`]), there's an additional similar
+	/// parameter [there](ReaderRead::max_alloc_size) that you may want to
+	/// configure.
 	pub max_seq_size: usize,
 }
 

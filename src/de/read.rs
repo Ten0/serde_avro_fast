@@ -1,4 +1,5 @@
-//! Abstract reading from slices (propagating lifetime) or any other `impl Read` behind the same interface
+//! Abstract reading from slices (propagating lifetime) or any other `impl Read`
+//! behind the same interface
 //!
 //! The deserializer is implemented generically on this.
 
@@ -6,7 +7,8 @@ use super::{DeError, Error};
 
 use integer_encoding::{VarInt, VarIntReader};
 
-/// Abstracts reading from slices (propagating lifetime) or any other `impl Read` behind the same interface
+/// Abstracts reading from slices (propagating lifetime) or any other `impl
+/// Read` behind the same interface
 ///
 /// The deserializer is implemented generically on this.
 pub trait Read: std::io::Read + Sized + private::Sealed {
@@ -23,7 +25,8 @@ pub trait Read: std::io::Read + Sized + private::Sealed {
 	}
 }
 
-/// Abstracts reading from slices (propagating lifetime) or any other `impl Read` behind the same interface
+/// Abstracts reading from slices (propagating lifetime) or any other `impl
+/// Read` behind the same interface
 ///
 /// The deserializer is implemented generically on this.
 pub trait ReadSlice<'de>: Read {

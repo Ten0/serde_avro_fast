@@ -42,21 +42,34 @@ mod private {
 		where
 			T: DeserializeSeed<'de>,
 		{
-			Err(Error::invalid_type(Unexpected::UnitVariant, &"newtype variant"))
+			Err(Error::invalid_type(
+				Unexpected::UnitVariant,
+				&"newtype variant",
+			))
 		}
 
 		fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value, Self::Error>
 		where
 			V: Visitor<'de>,
 		{
-			Err(Error::invalid_type(Unexpected::UnitVariant, &"tuple variant"))
+			Err(Error::invalid_type(
+				Unexpected::UnitVariant,
+				&"tuple variant",
+			))
 		}
 
-		fn struct_variant<V>(self, _fields: &'static [&'static str], _visitor: V) -> Result<V::Value, Self::Error>
+		fn struct_variant<V>(
+			self,
+			_fields: &'static [&'static str],
+			_visitor: V,
+		) -> Result<V::Value, Self::Error>
 		where
 			V: Visitor<'de>,
 		{
-			Err(Error::invalid_type(Unexpected::UnitVariant, &"struct variant"))
+			Err(Error::invalid_type(
+				Unexpected::UnitVariant,
+				&"struct variant",
+			))
 		}
 	}
 }

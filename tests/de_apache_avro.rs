@@ -11,8 +11,14 @@ lazy_static! {
 	static ref SCHEMAS_TO_VALIDATE: Vec<(&'static str, Value)> = vec![
 		(r#""null""#, Value::Null),
 		(r#""boolean""#, Value::Boolean(true)),
-		(r#""string""#, Value::String("adsfasdf09809dsf-=adsf".to_string())),
-		(r#""bytes""#, Value::Bytes("12345abcd".to_string().into_bytes())),
+		(
+			r#""string""#,
+			Value::String("adsfasdf09809dsf-=adsf".to_string())
+		),
+		(
+			r#""bytes""#,
+			Value::Bytes("12345abcd".to_string().into_bytes())
+		),
 		(r#""int""#, Value::Int(1234)),
 		(r#""long""#, Value::Long(1234)),
 		(r#""float""#, Value::Float(1234.0)),
@@ -42,7 +48,10 @@ lazy_static! {
 				.collect()
 			)
 		),
-		(r#"["string", "null", "long"]"#, Value::Union(1, Box::new(Value::Null))),
+		(
+			r#"["string", "null", "long"]"#,
+			Value::Union(1, Box::new(Value::Null))
+		),
 		(
 			r#"{"type": "record", "name": "Test", "fields": [{"name": "f", "type": "long"}]}"#,
 			Value::Record(vec![("f".to_string(), Value::Long(1))])
@@ -50,7 +59,10 @@ lazy_static! {
 	];
 }
 
-pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(schema: &Schema, slice: &[u8]) -> Value {
+pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(
+	schema: &Schema,
+	slice: &[u8],
+) -> Value {
 	let fast_schema = serde_avro_fast::Schema::from_apache_schema(schema).unwrap();
 	let sjv: T = serde::Deserialize::deserialize(
 		serde_avro_fast::de::DeserializerState::from_slice(slice, &fast_schema).deserializer(),
@@ -61,7 +73,9 @@ pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(schema
 	avro_value_reinterpreted
 }
 
-fn test_round_trip<T: serde::de::DeserializeOwned + serde::Serialize>(&(raw_schema, ref value): &(&str, Value)) {
+fn test_round_trip<T: serde::de::DeserializeOwned + serde::Serialize>(
+	&(raw_schema, ref value): &(&str, Value),
+) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
 	let encoded = to_avro_datum(&schema, value.clone()).unwrap();
@@ -109,9 +123,10 @@ fn test_round_trip_08() {
 
 #[test]
 fn test_decimal() {
-	let schema: serde_avro_fast::Schema = r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
-		.parse()
-		.unwrap();
+	let schema: serde_avro_fast::Schema =
+		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
+			.parse()
+			.unwrap();
 	use serde_avro_fast::schema::SchemaNode;
 	dbg!(schema.root());
 	assert!(matches!(
@@ -126,6 +141,7 @@ fn test_decimal() {
 	assert_eq!(deserialized, 0.2);
 	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2");
-	let deserialized: rust_decimal::Decimal = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2".parse().unwrap());
 }
