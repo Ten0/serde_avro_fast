@@ -14,45 +14,46 @@ where
 	}
 }
 
-pub(in super::super) struct UnionEnumAccess<'r, 's, R> {
+pub(in super::super) struct SchemaTypeNameEnumAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
-	pub(in super::super) union: &'s Union<'s>,
+	pub(in super::super) variant_schema: &'s SchemaNode<'s>,
 }
 
-impl<'r, 's, 'de, R: ReadSlice<'de>> EnumAccess<'de> for UnionEnumAccess<'r, 's, R>
+impl<'de, 'r, 's, R> EnumAccess<'de> for SchemaTypeNameEnumAccess<'r, 's, R>
 where
 	R: ReadSlice<'de>,
 {
 	type Error = DeError;
-	type Variant = UnionAsEnumVariantAccess<'r, 's, R>;
+	type Variant = SchemaTypeNameVariantAccess<'r, 's, R>;
 
 	fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
 	where
 		V: DeserializeSeed<'de>,
 	{
-		let schema_node = read_union_discriminant(self.state, self.union)?;
-		seed.deserialize(SchemaNameDeserializer { schema_node })
-			.map(|value| {
-				(
-					value,
-					UnionAsEnumVariantAccess {
-						datum_deserializer: DatumDeserializer {
-							state: self.state,
-							schema_node,
-						},
+		seed.deserialize(SchemaTypeNameDeserializer {
+			schema_node: self.variant_schema,
+		})
+		.map(|value| {
+			(
+				value,
+				SchemaTypeNameVariantAccess {
+					datum_deserializer: DatumDeserializer {
+						state: self.state,
+						schema_node: self.variant_schema,
 					},
-				)
-			})
+				},
+			)
+		})
 	}
 }
 
 /// Implemented this way instead of using serde's StrDeserializer to help it get
 /// inlined so that const propagation will get rid of the string matching
-struct SchemaNameDeserializer<'s> {
+struct SchemaTypeNameDeserializer<'s> {
 	schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'de> Deserializer<'de> for SchemaNameDeserializer<'_> {
+impl<'de> Deserializer<'de> for SchemaTypeNameDeserializer<'_> {
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -95,11 +96,11 @@ impl<'de> Deserializer<'de> for SchemaNameDeserializer<'_> {
 	}
 }
 
-pub(in super::super) struct UnionAsEnumVariantAccess<'r, 's, R> {
+pub struct SchemaTypeNameVariantAccess<'r, 's, R> {
 	datum_deserializer: DatumDeserializer<'r, 's, R>,
 }
 
-impl<'de, R> VariantAccess<'de> for UnionAsEnumVariantAccess<'_, '_, R>
+impl<'de, R> VariantAccess<'de> for SchemaTypeNameVariantAccess<'_, '_, R>
 where
 	R: ReadSlice<'de>,
 {

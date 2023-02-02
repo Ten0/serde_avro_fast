@@ -61,7 +61,26 @@ fn union_as_enum() {
 }
 
 #[test]
-fn option() {
+fn union_straight_to_actual_type() {
+	let schema: Schema = SCHEMA.parse().unwrap();
+	assert_eq!(
+		from_datum_slice::<&str>(&[0, 2, b'a'], &schema).unwrap(),
+		"a"
+	);
+	assert_eq!(from_datum_slice::<()>(&[2], &schema).unwrap(), ());
+	assert_eq!(from_datum_slice::<i64>(&[4, 2], &schema).unwrap(), 1);
+	assert_eq!(
+		from_datum_slice::<Vec<&str>>(&[6, 4, 2, b'a', 2, b'b', 0], &schema).unwrap(),
+		vec!["a", "b"]
+	);
+	assert_eq!(
+		from_datum_slice::<Record2>(&[10, 3], &schema).unwrap(),
+		Record2 { b: -2 }
+	);
+}
+
+#[test]
+fn option_complex() {
 	let schema: Schema = SCHEMA.parse().unwrap();
 	let fds = |s: &'static [u8]| from_datum_slice::<Option<Union<'static>>>(s, &schema).unwrap();
 	assert_eq!(fds(&[0, 2, b'a']), Some(Union::String));
@@ -82,7 +101,7 @@ fn option_simple() {
 }
 
 #[test]
-fn option_only_behavior() {
+fn option_of_enum_union_single() {
 	let schema: Schema = r#"["string", "null"]"#.parse().unwrap();
 	#[derive(serde_derive::Deserialize, PartialEq, Debug)]
 	enum WhatDoWeDoHere {
@@ -95,7 +114,7 @@ fn option_only_behavior() {
 }
 
 #[test]
-fn option_enum_behavior() {
+fn option_of_enum_union_multi() {
 	let schema: Schema =
 		r#"["string", "null", {"name":"AnEnum", "type": "enum", "symbols": ["A", "B"]}]"#
 			.parse()

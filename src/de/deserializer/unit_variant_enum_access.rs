@@ -16,7 +16,7 @@ where
 	where
 		V: DeserializeSeed<'de>,
 	{
-		seed.deserialize(DatumDeserializer {
+		seed.deserialize(DatumDeserializer::<_, false> {
 			state: self.state,
 			schema_node: self.schema_node,
 		})
@@ -24,7 +24,7 @@ where
 	}
 }
 
-// Copied from serde:
+// Inspired from serde's:
 
 mod private {
 	use super::*;

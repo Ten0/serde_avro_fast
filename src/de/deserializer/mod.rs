@@ -7,12 +7,25 @@ use super::*;
 
 /// Can't be instantiated directly - has to be constructed from a
 /// [`DeserializerState`]
-pub struct DatumDeserializer<'r, 's, R> {
+///
+/// `FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT` is set when
+/// encountering a `Union`, and it makes it so that
+/// `deserialize_enum` will always provide the schema type name
+/// as variant name. (so it can be deserialized into `enum X { String(s),
+/// Long(i64) }`).
+/// If it isn't set, it will favor providing the actual value
+/// as variant identifier if it makes sense (e.g. if `SchemaNode` is a `String`
+/// which you know may only value "A" or "B", you can deserialize into an `enum
+/// X {A, B}`. You can also deserialize an `Int` or `Long` into an enum,
+/// numbered from 0 to `n_variants`)
+pub struct DatumDeserializer<'r, 's, R, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool = false> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
+impl<'de, R: ReadSlice<'de>, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool> Deserializer<'de>
+	for DatumDeserializer<'_, '_, R, FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT>
+{
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -40,15 +53,18 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				element_schema: elements_schema,
 				block_reader: BlockReader::new(self.state),
 			}),
-			SchemaNode::Union(ref union) => DatumDeserializer {
+			SchemaNode::Union(ref union) => Self {
 				schema_node: read_union_discriminant(self.state, union)?,
 				state: self.state,
 			}
 			.deserialize_any(visitor),
-			SchemaNode::Record(ref record) => visitor.visit_map(RecordMapAccess {
-				record_fields: record.fields.iter(),
-				state: self.state,
-			}),
+			SchemaNode::Record(ref record) => {
+				// TODO prevent infinite loop on recursive structs
+				visitor.visit_map(RecordMapAccess {
+					record_fields: record.fields.iter(),
+					state: self.state,
+				})
+			}
 			SchemaNode::Enum(ref enum_) => read_enum_as_str(self.state, &enum_.symbols, visitor),
 			SchemaNode::Fixed(ref fixed) => {
 				self.state.read_slice(fixed.size, BytesVisitor(visitor))
@@ -74,7 +90,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 
 	serde::forward_to_deserialize_any! {
 		bool i8 i16 i32 u8 u16 u32 f32 char
-		unit unit_struct newtype_struct identifier
+		unit unit_struct newtype_struct
 	}
 
 	fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -224,7 +240,19 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				{
 					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
-					Some(variant_schema) => visitor.visit_some(Self {
+					Some(variant_schema)
+						if union.variants.len() == 2
+							&& matches!(
+								union.variants[1 - union_discriminant],
+								SchemaNode::Null
+							) =>
+					{
+						visitor.visit_some(DatumDeserializer::<_, false> {
+							state: self.state,
+							schema_node: variant_schema,
+						})
+					}
+					Some(variant_schema) => visitor.visit_some(DatumDeserializer::<_, true> {
 						state: self.state,
 						schema_node: variant_schema,
 					}),
@@ -309,15 +337,64 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
+		if FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT {
+			visitor.visit_enum(SchemaTypeNameEnumAccess {
+				state: self.state,
+				variant_schema: self.schema_node,
+			})
+		} else {
+			match *self.schema_node {
+				SchemaNode::Union(ref union) => visitor.visit_enum(SchemaTypeNameEnumAccess {
+					variant_schema: read_union_discriminant(self.state, union)?,
+					state: self.state,
+				}),
+				ref possible_unit_variant_identifier @ (SchemaNode::Int
+				| SchemaNode::Long
+				| SchemaNode::Bytes
+				| SchemaNode::String
+				| SchemaNode::Enum(_)
+				| SchemaNode::Fixed(_)) => visitor.visit_enum(UnitVariantEnumAccess {
+					state: self.state,
+					schema_node: possible_unit_variant_identifier,
+				}),
+				ref not_unit_variant_identifier @ (SchemaNode::Null
+				| SchemaNode::Boolean
+				| SchemaNode::Float
+				| SchemaNode::Double
+				| SchemaNode::Array(_)
+				| SchemaNode::Map(_)
+				| SchemaNode::Record(_)
+				| SchemaNode::Decimal(_)
+				| SchemaNode::Uuid
+				| SchemaNode::Date
+				| SchemaNode::TimeMillis
+				| SchemaNode::TimeMicros
+				| SchemaNode::TimestampMillis
+				| SchemaNode::TimestampMicros
+				| SchemaNode::Duration) => visitor.visit_enum(SchemaTypeNameEnumAccess {
+					state: self.state,
+					variant_schema: not_unit_variant_identifier,
+				}),
+			}
+		}
+	}
+
+	fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
 		match *self.schema_node {
-			SchemaNode::Union(ref union) => visitor.visit_enum(UnionEnumAccess {
-				state: self.state,
-				union,
+			SchemaNode::Int => visitor.visit_u64({
+				let val: i32 = self.state.read_varint()?;
+				val.try_into()
+					.map_err(|_| DeError::new("Failed to convert i32 to u64 for enum identifier"))?
 			}),
-			_ => visitor.visit_enum(UnitVariantEnumAccess {
-				state: self.state,
-				schema_node: self.schema_node,
+			SchemaNode::Long => visitor.visit_u64({
+				let val: i64 = self.state.read_varint()?;
+				val.try_into()
+					.map_err(|_| DeError::new("Failed to convert i64 to u64 for enum identifier"))?
 			}),
+			_ => self.deserialize_any(visitor),
 		}
 	}
 
@@ -326,6 +403,9 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		// TODO skip more efficiently using blocks size hints
+		// https://stackoverflow.com/a/42247224/3799609
+		// Ideally this would specialize if we have Seek on our generic reader but we
+		// don't have specialization
 		self.deserialize_any(visitor)
 	}
 }
