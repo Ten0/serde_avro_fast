@@ -309,11 +309,16 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
-		// TODO special-case union
-		visitor.visit_enum(UnitVariantEnumAccess {
-			state: self.state,
-			schema_node: self.schema_node,
-		})
+		match *self.schema_node {
+			SchemaNode::Union(ref union) => visitor.visit_enum(UnionEnumAccess {
+				state: self.state,
+				union,
+			}),
+			_ => visitor.visit_enum(UnitVariantEnumAccess {
+				state: self.state,
+				schema_node: self.schema_node,
+			}),
+		}
 	}
 
 	fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

@@ -21,12 +21,12 @@ const RAW_SMALL_SCHEMA: &str = r#"
 }
 "#;
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct SmallStruct<'a> {
 	field: &'a str,
 }
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct SmallStructApache {
 	field: String,
@@ -131,7 +131,7 @@ const RAW_ADDRESS_SCHEMA: &str = r#"
 }
 "#;
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct BigStruct<'a> {
 	username: &'a str,
@@ -141,7 +141,7 @@ struct BigStruct<'a> {
 	address: Address<'a>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct Address<'a> {
 	street: &'a str,
@@ -151,7 +151,7 @@ struct Address<'a> {
 	zip: &'a str,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct BigStructApache {
 	username: String,
@@ -161,7 +161,7 @@ struct BigStructApache {
 	address: AddressApache,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct AddressApache {
 	street: String,

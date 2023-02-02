@@ -120,7 +120,7 @@ fn make_big_record() -> anyhow::Result<(apache_avro::Schema, apache_avro::types:
 	Ok((big_schema, big_record))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct BigStruct<'a> {
 	username: &'a str,
@@ -130,7 +130,7 @@ struct BigStruct<'a> {
 	address: Address<'a>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct Address<'a> {
 	street: &'a str,
@@ -140,7 +140,7 @@ struct Address<'a> {
 	zip: &'a str,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct BigStructApache {
 	username: String,
@@ -150,7 +150,7 @@ struct BigStructApache {
 	address: AddressApache,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 #[allow(unused)]
 struct AddressApache {
 	street: String,

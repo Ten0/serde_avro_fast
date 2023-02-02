@@ -88,7 +88,7 @@ where
 			return Err(FailedToInitializeReader::NotAvroObjectContainerFile);
 		}
 
-		#[derive(serde::Deserialize)]
+		#[derive(serde_derive::Deserialize)]
 		struct Metadata {
 			#[serde(rename = "avro.schema")]
 			schema: String,

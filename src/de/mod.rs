@@ -32,7 +32,7 @@
 //! .parse()
 //! .expect("Failed to parse schema");
 //!
-//! #[derive(serde::Deserialize, Debug, PartialEq)]
+//! #[derive(serde_derive::Deserialize, Debug, PartialEq)]
 //! struct Test {
 //! 	field: String,
 //! }

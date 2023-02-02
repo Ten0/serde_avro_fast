@@ -13,6 +13,7 @@
 	integer-encoding = { default-features = false, version = "3" }
 	rust_decimal = { version = "1", default-features = false, features = ["std", "serde-with-str"] }
 	serde = "1"
+	serde_derive = "1"
 	serde_serializer_quick_unsupported = "0.1"
 	thiserror = "1"
 

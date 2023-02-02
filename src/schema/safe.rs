@@ -189,9 +189,15 @@ impl Schema {
 			enclosing_namespace: &Option<String>,
 		) -> Result<SchemaKey, BuildSchemaFromApacheSchemaError> {
 			fn from_apache_fqn(fully_qualified_name: &apache_avro::schema::Name) -> Name {
-				Name {
-					name: fully_qualified_name.name.to_owned(),
-					namespace: fully_qualified_name.namespace.to_owned(),
+				match fully_qualified_name.namespace {
+					None => Name {
+						fully_qualified_name: fully_qualified_name.name.clone(),
+						namespace_delimiter_idx: None,
+					},
+					Some(ref namespace) => Name {
+						fully_qualified_name: format!("{namespace}.{}", fully_qualified_name.name),
+						namespace_delimiter_idx: Some(namespace.len()),
+					},
 				}
 			}
 			let idx = schema.nodes.len();

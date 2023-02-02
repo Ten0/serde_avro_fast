@@ -44,6 +44,24 @@ pub struct Fixed {
 /// Schema component for named variants of a [`SchemaNode`]
 #[derive(Debug, Clone)]
 pub struct Name {
-	pub name: String,
-	pub namespace: Option<String>,
+	fully_qualified_name: String,
+	namespace_delimiter_idx: Option<usize>,
+}
+
+impl Name {
+	pub fn name(&self) -> &str {
+		match self.namespace_delimiter_idx {
+			None => &self.fully_qualified_name,
+			Some(delimiter_idx) => &self.fully_qualified_name[delimiter_idx + 1..],
+		}
+	}
+
+	pub fn namespace(&self) -> Option<&str> {
+		self.namespace_delimiter_idx
+			.map(|idx| &self.fully_qualified_name[..idx])
+	}
+
+	pub fn fully_qualified_name(&self) -> &str {
+		&self.fully_qualified_name
+	}
 }
