@@ -1,3 +1,5 @@
+//! Support for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
+
 mod compression_codec;
 
 use {
@@ -13,6 +15,11 @@ use {
 	serde::{de::DeserializeOwned, Deserialize},
 };
 
+/// Reader for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
+///
+/// Works from either slices or arbitrary `impl Read`s.
+///
+/// Slice version enables borrowing from the input if there is no compression involved.
 pub struct Reader<R: de::read::Take> {
 	// the 'static here is fake, it in fact is bound to `Schema` not being dropped
 	// struct fields are dropped in order of declaration, so this is dropped before schema
@@ -22,6 +29,7 @@ pub struct Reader<R: de::read::Take> {
 	_schema: Schema,
 }
 
+/// Errors that may happen when attempting to construct a [`Reader`]
 #[derive(Debug, thiserror::Error)]
 pub enum FailedToInitializeReader {
 	/// Does not begin by `Obj1` as per spec
@@ -34,7 +42,7 @@ pub enum FailedToInitializeReader {
 }
 
 impl<'a> Reader<de::read::SliceRead<'a>> {
-	/// Read from a slice
+	/// Initialize a `Reader` from a slice
 	///
 	/// Useful if the entire file has already been loaded in memory and you wish to deserialize borrowing
 	/// from this slice.
@@ -47,10 +55,12 @@ impl<'a> Reader<de::read::SliceRead<'a>> {
 }
 
 impl<R: std::io::BufRead> Reader<de::read::ReaderRead<R>> {
-	/// Read from any `impl BufRead`
+	/// Initialize a `Reader` from any `impl BufRead`
 	///
 	/// Note that if your reader has [`Read`](std::io::Read) but not [`BufRead`](std::io::BufRead), you may simply wrap
 	/// it into a [`std::io::BufReader`].
+	///
+	/// Note that this will start reading from the `reader` during initialization.
 	pub fn from_reader(reader: R) -> Result<Self, FailedToInitializeReader> {
 		Self::new(de::read::ReaderRead::new(reader))
 	}

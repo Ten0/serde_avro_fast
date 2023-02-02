@@ -16,7 +16,7 @@ use super::safe::SchemaNode as SafeSchemaNode;
 pub struct Schema {
 	// First node in the array is considered to be the root
 	//
-	// This lifetime is fake, but since all elements have to be accessed by the root
+	// This lifetime is fake, but since all elements have to be accessed by the `root` function
 	// which will downcast it and we never push anything more in there (which would cause
 	// reallocation and invalidate all nodes) this is correct.
 	nodes: Vec<SchemaNode<'static>>,
@@ -46,7 +46,7 @@ impl Schema {
 	}
 }
 
-/// Represents any valid Avro schema
+/// A node of an avro schema, borrowed from a [`Schema`].
 ///
 /// More information about Avro schemas can be found in the
 /// [Avro Specification](https://avro.apache.org/docs/current/specification/).
