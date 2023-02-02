@@ -79,7 +79,7 @@ impl<'de, R: ReadSlice<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 		if !self.block_reader.has_more()? {
 			return Ok(None);
 		}
-		Ok(Some(seed.deserialize(DatumDeserializer::<_, false> {
+		Ok(Some(seed.deserialize(DatumDeserializer {
 			schema_node: self.elements_schema,
 			state: self.block_reader.reader,
 		})?))
@@ -110,7 +110,7 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 	where
 		V: DeserializeSeed<'de>,
 	{
-		seed.deserialize(DatumDeserializer::<_, false> {
+		seed.deserialize(DatumDeserializer {
 			schema_node: self.element_schema,
 			state: self.block_reader.reader,
 		})

@@ -7,25 +7,12 @@ use super::*;
 
 /// Can't be instantiated directly - has to be constructed from a
 /// [`DeserializerState`]
-///
-/// `FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT` is set when
-/// encountering a `Union`, and it makes it so that
-/// `deserialize_enum` will always provide the schema type name
-/// as variant name. (so it can be deserialized into `enum X { String(s),
-/// Long(i64) }`).
-/// If it isn't set, it will favor providing the actual value
-/// as variant identifier if it makes sense (e.g. if `SchemaNode` is a `String`
-/// which you know may only value "A" or "B", you can deserialize into an `enum
-/// X {A, B}`. You can also deserialize an `Int` or `Long` into an enum,
-/// numbered from 0 to `n_variants`)
-pub struct DatumDeserializer<'r, 's, R, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool = false> {
+pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'de, R: ReadSlice<'de>, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool> Deserializer<'de>
-	for DatumDeserializer<'_, '_, R, FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT>
-{
+impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
 	type Error = DeError;
 
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -247,15 +234,19 @@ impl<'de, R: ReadSlice<'de>, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool> De
 								SchemaNode::Null
 							) =>
 					{
-						visitor.visit_some(DatumDeserializer::<_, false> {
+						visitor.visit_some(DatumDeserializer {
 							state: self.state,
 							schema_node: variant_schema,
 						})
 					}
-					Some(variant_schema) => visitor.visit_some(DatumDeserializer::<_, true> {
-						state: self.state,
-						schema_node: variant_schema,
-					}),
+					Some(variant_schema) => {
+						visitor.visit_some(FavorSchemaTypeNameIfEnumHintDatumDeserializer {
+							inner: DatumDeserializer {
+								state: self.state,
+								schema_node: variant_schema,
+							},
+						})
+					}
 				}
 			}
 			_ => self.deserialize_any(visitor),
@@ -337,45 +328,38 @@ impl<'de, R: ReadSlice<'de>, const FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT: bool> De
 	where
 		V: Visitor<'de>,
 	{
-		if FAVOR_SCHEMA_TYPE_NAME_IF_ENUM_HINT {
-			visitor.visit_enum(SchemaTypeNameEnumAccess {
+		match *self.schema_node {
+			SchemaNode::Union(ref union) => visitor.visit_enum(SchemaTypeNameEnumAccess {
+				variant_schema: read_union_discriminant(self.state, union)?,
 				state: self.state,
-				variant_schema: self.schema_node,
-			})
-		} else {
-			match *self.schema_node {
-				SchemaNode::Union(ref union) => visitor.visit_enum(SchemaTypeNameEnumAccess {
-					variant_schema: read_union_discriminant(self.state, union)?,
-					state: self.state,
-				}),
-				ref possible_unit_variant_identifier @ (SchemaNode::Int
-				| SchemaNode::Long
-				| SchemaNode::Bytes
-				| SchemaNode::String
-				| SchemaNode::Enum(_)
-				| SchemaNode::Fixed(_)) => visitor.visit_enum(UnitVariantEnumAccess {
-					state: self.state,
-					schema_node: possible_unit_variant_identifier,
-				}),
-				ref not_unit_variant_identifier @ (SchemaNode::Null
-				| SchemaNode::Boolean
-				| SchemaNode::Float
-				| SchemaNode::Double
-				| SchemaNode::Array(_)
-				| SchemaNode::Map(_)
-				| SchemaNode::Record(_)
-				| SchemaNode::Decimal(_)
-				| SchemaNode::Uuid
-				| SchemaNode::Date
-				| SchemaNode::TimeMillis
-				| SchemaNode::TimeMicros
-				| SchemaNode::TimestampMillis
-				| SchemaNode::TimestampMicros
-				| SchemaNode::Duration) => visitor.visit_enum(SchemaTypeNameEnumAccess {
-					state: self.state,
-					variant_schema: not_unit_variant_identifier,
-				}),
-			}
+			}),
+			ref possible_unit_variant_identifier @ (SchemaNode::Int
+			| SchemaNode::Long
+			| SchemaNode::Bytes
+			| SchemaNode::String
+			| SchemaNode::Enum(_)
+			| SchemaNode::Fixed(_)) => visitor.visit_enum(UnitVariantEnumAccess {
+				state: self.state,
+				schema_node: possible_unit_variant_identifier,
+			}),
+			ref not_unit_variant_identifier @ (SchemaNode::Null
+			| SchemaNode::Boolean
+			| SchemaNode::Float
+			| SchemaNode::Double
+			| SchemaNode::Array(_)
+			| SchemaNode::Map(_)
+			| SchemaNode::Record(_)
+			| SchemaNode::Decimal(_)
+			| SchemaNode::Uuid
+			| SchemaNode::Date
+			| SchemaNode::TimeMillis
+			| SchemaNode::TimeMicros
+			| SchemaNode::TimestampMillis
+			| SchemaNode::TimestampMicros
+			| SchemaNode::Duration) => visitor.visit_enum(SchemaTypeNameEnumAccess {
+				state: self.state,
+				variant_schema: not_unit_variant_identifier,
+			}),
 		}
 	}
 

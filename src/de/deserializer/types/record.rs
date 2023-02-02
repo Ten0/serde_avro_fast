@@ -21,7 +21,7 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 	where
 		V: DeserializeSeed<'de>,
 	{
-		seed.deserialize(DatumDeserializer::<_, false> {
+		seed.deserialize(DatumDeserializer {
 			schema_node: self
 				.record_fields
 				.next()

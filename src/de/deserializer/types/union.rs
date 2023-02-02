@@ -137,3 +137,80 @@ where
 		self.datum_deserializer.deserialize_map(visitor)
 	}
 }
+
+pub(in super::super) struct FavorSchemaTypeNameIfEnumHintDatumDeserializer<'r, 's, R> {
+	pub(in super::super) inner: DatumDeserializer<'r, 's, R>,
+}
+
+macro_rules! forward_to_inner_deserializer {
+	($($f: ident($($arg: ident: $ty: ty),*))*) => {
+		$(
+			#[inline]
+			fn $f<V>(self, $($arg: $ty,)* visitor: V) -> Result<V::Value, Self::Error>
+			where
+				V: Visitor<'de>,
+			{
+				self.inner.$f($($arg,)* visitor)
+			}
+		)*
+	};
+}
+
+impl<'de, R: ReadSlice<'de>> Deserializer<'de>
+	for FavorSchemaTypeNameIfEnumHintDatumDeserializer<'_, '_, R>
+{
+	type Error = DeError;
+
+	fn deserialize_enum<V>(
+		self,
+		_name: &'static str,
+		_variants: &'static [&'static str],
+		visitor: V,
+	) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		visitor.visit_enum(SchemaTypeNameEnumAccess {
+			state: self.inner.state,
+			variant_schema: self.inner.schema_node,
+		})
+	}
+
+	forward_to_inner_deserializer! {
+		deserialize_any()
+		deserialize_bool()
+		deserialize_i8()
+		deserialize_i16()
+		deserialize_i32()
+		deserialize_i64()
+		deserialize_i128()
+		deserialize_u8()
+		deserialize_u16()
+		deserialize_u32()
+		deserialize_u64()
+		deserialize_u128()
+		deserialize_f32()
+		deserialize_f64()
+		deserialize_char()
+		deserialize_str()
+		deserialize_string()
+		deserialize_bytes()
+		deserialize_byte_buf()
+		deserialize_option()
+		deserialize_unit()
+		deserialize_unit_struct(name: &'static str)
+		deserialize_newtype_struct(name: &'static str)
+		deserialize_seq()
+		deserialize_tuple(len: usize)
+		deserialize_tuple_struct(name: &'static str, len: usize)
+		deserialize_map()
+		deserialize_struct(name: &'static str, fields: &'static [&'static str])
+		deserialize_identifier()
+		deserialize_ignored_any()
+	}
+
+	#[inline]
+	fn is_human_readable(&self) -> bool {
+		self.inner.is_human_readable()
+	}
+}

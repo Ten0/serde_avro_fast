@@ -16,7 +16,7 @@ where
 	where
 		V: DeserializeSeed<'de>,
 	{
-		seed.deserialize(DatumDeserializer::<_, false> {
+		seed.deserialize(DatumDeserializer {
 			state: self.state,
 			schema_node: self.schema_node,
 		})
