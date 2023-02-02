@@ -26,3 +26,24 @@ impl Schema {
 		Ok(safe_schema.into())
 	}
 }
+
+/// Component of a [`SchemaNode`]
+#[derive(Clone, Debug)]
+pub struct Enum {
+	pub symbols: Vec<String>,
+	pub name: Name,
+}
+
+/// Component of a [`SchemaNode`]
+#[derive(Clone, Debug)]
+pub struct Fixed {
+	pub size: usize,
+	pub name: Name,
+}
+
+/// Schema component for named variants of a [`SchemaNode`]
+#[derive(Debug, Clone)]
+pub struct Name {
+	pub name: String,
+	pub namespace: Option<String>,
+}

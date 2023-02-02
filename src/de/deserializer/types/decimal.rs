@@ -19,7 +19,7 @@ where
 {
 	let size = match *inner {
 		SchemaNode::Bytes => read_len(state)?,
-		SchemaNode::Fixed { size } => size,
+		SchemaNode::Fixed(ref fixed) => fixed.size,
 		_ => {
 			return Err(DeError::new(
 				"Decimal should have Bytes or Fixed as its internal representation",

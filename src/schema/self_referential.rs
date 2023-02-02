@@ -1,4 +1,4 @@
-use super::safe::SchemaNode as SafeSchemaNode;
+use super::{safe::SchemaNode as SafeSchemaNode, Enum, Fixed, Name};
 
 /// The most performant and easiest to navigate version of an Avro schema
 ///
@@ -90,9 +90,9 @@ pub enum SchemaNode<'a> {
 	/// A `record` Avro schema.
 	Record(Record<'a>),
 	/// An `enum` Avro schema.
-	Enum { symbols: Vec<String> },
+	Enum(Enum),
 	/// A `fixed` Avro schema.
-	Fixed { size: usize },
+	Fixed(Fixed),
 	/// Logical type which represents `Decimal` values. The underlying type is
 	/// serialized and deserialized as `Schema::Bytes` or `Schema::Fixed`.
 	///
@@ -145,6 +145,7 @@ pub struct Union<'a> {
 #[derive(Debug)]
 pub struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
+	pub name: Name,
 }
 
 /// Component of a [`SchemaNode`]
@@ -221,9 +222,10 @@ impl From<super::safe::Schema> for Schema {
 								schema: key_to_node(f.schema),
 							})
 							.collect(),
+						name: record.name,
 					}),
-					SafeSchemaNode::Enum { symbols } => SchemaNode::Enum { symbols },
-					SafeSchemaNode::Fixed { size } => SchemaNode::Fixed { size },
+					SafeSchemaNode::Enum(enum_) => SchemaNode::Enum(enum_),
+					SafeSchemaNode::Fixed(fixed) => SchemaNode::Fixed(fixed),
 					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(Decimal {
 						precision: decimal.precision,
 						scale: decimal.scale,

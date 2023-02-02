@@ -1,5 +1,8 @@
 //! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is
 //! used for its initialization
+
+use super::{Enum, Fixed, Name};
+
 use std::collections::{hash_map, HashMap};
 
 /// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for
@@ -78,8 +81,8 @@ pub enum SchemaNode {
 	Map(SchemaKey),
 	Union(Union),
 	Record(Record),
-	Enum { symbols: Vec<String> },
-	Fixed { size: usize },
+	Enum(Enum),
+	Fixed(Fixed),
 	Decimal(Decimal),
 	Uuid,
 	Date,
@@ -100,6 +103,7 @@ pub struct Union {
 #[derive(Clone, Debug)]
 pub struct Record {
 	pub fields: Vec<RecordField>,
+	pub name: Name,
 }
 
 /// Component of a [`SchemaNode`]
@@ -184,6 +188,12 @@ impl Schema {
 			apache_schema: &'a apache_avro::Schema,
 			enclosing_namespace: &Option<String>,
 		) -> Result<SchemaKey, BuildSchemaFromApacheSchemaError> {
+			fn from_apache_fqn(fully_qualified_name: &apache_avro::schema::Name) -> Name {
+				Name {
+					name: fully_qualified_name.name.to_owned(),
+					namespace: fully_qualified_name.namespace.to_owned(),
+				}
+			}
 			let idx = schema.nodes.len();
 			schema.nodes.push(SchemaNode::Null);
 			let new_node = match apache_schema {
@@ -234,10 +244,12 @@ impl Schema {
 							))
 						}
 						hash_map::Entry::Vacant(vacant) => {
+							let name = from_apache_fqn(vacant.key());
 							vacant.insert(idx);
-							SchemaNode::Enum {
+							SchemaNode::Enum(Enum {
 								symbols: symbols.clone(),
-							}
+								name,
+							})
 						}
 					}
 				}
@@ -249,8 +261,9 @@ impl Schema {
 							))
 						}
 						hash_map::Entry::Vacant(vacant) => {
+							let name = from_apache_fqn(vacant.key());
 							vacant.insert(idx);
-							SchemaNode::Fixed { size: *size }
+							SchemaNode::Fixed(Fixed { size: *size, name })
 						}
 					}
 				}
@@ -272,6 +285,7 @@ impl Schema {
 								})
 							})
 							.collect::<Result<_, BuildSchemaFromApacheSchemaError>>()?,
+						name: from_apache_fqn(&fully_qualified_name),
 					};
 					match names.entry(fully_qualified_name) {
 						hash_map::Entry::Occupied(occ) => {
@@ -361,8 +375,11 @@ impl Schema {
 				| SchemaNode::Double
 				| SchemaNode::Bytes
 				| SchemaNode::String
-				| SchemaNode::Enum { symbols: _ }
-				| SchemaNode::Fixed { size: _ }
+				| SchemaNode::Enum(Enum {
+					symbols: _,
+					name: _,
+				})
+				| SchemaNode::Fixed(Fixed { size: _, name: _ })
 				| SchemaNode::Uuid
 				| SchemaNode::Date
 				| SchemaNode::TimeMillis

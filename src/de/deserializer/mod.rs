@@ -49,8 +49,10 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				record_fields: record.fields.iter(),
 				state: self.state,
 			}),
-			SchemaNode::Enum { ref symbols } => read_enum_as_str(self.state, symbols, visitor),
-			SchemaNode::Fixed { size } => self.state.read_slice(size, BytesVisitor(visitor)),
+			SchemaNode::Enum(ref enum_) => read_enum_as_str(self.state, &enum_.symbols, visitor),
+			SchemaNode::Fixed(ref fixed) => {
+				self.state.read_slice(fixed.size, BytesVisitor(visitor))
+			}
 			SchemaNode::Decimal(ref decimal) => read_decimal(
 				self.state,
 				decimal.scale,
@@ -81,7 +83,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	{
 		// Allow deserializing discriminants without making the string lookup for enums
 		match *self.schema_node {
-			SchemaNode::Enum { symbols: _ } => {
+			SchemaNode::Enum(_) => {
 				let discriminant: i64 = self.state.read_varint()?;
 				visitor.visit_u64(discriminant.try_into().map_err(|e| {
 					DeError::custom(format_args!("Got negative enum discriminant: {e}"))
@@ -175,7 +177,9 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Bytes => read_length_delimited(self.state, StringVisitor(visitor)),
-			SchemaNode::Fixed { size } => self.state.read_slice(size, StringVisitor(visitor)),
+			SchemaNode::Fixed(ref fixed) => {
+				self.state.read_slice(fixed.size, StringVisitor(visitor))
+			}
 			_ => self.deserialize_any(visitor),
 		}
 	}
