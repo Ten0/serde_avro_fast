@@ -20,6 +20,7 @@ const SCHEMA: &str = r#"[
 	},
 	{
 		"type":"record",
+		"namespace": "some_namespace",
 		"name":"Record2",
 		"fields":[
 			{
@@ -34,7 +35,10 @@ const SCHEMA: &str = r#"[
 enum Union<'a> {
 	Null,
 	Array(#[serde(borrow)] Vec<&'a str>),
-	Record1 { a: i64 },
+	Record1 {
+		a: i64,
+	},
+	#[serde(rename = "some_namespace.Record2")]
 	Record2(Record2),
 	String,
 	Long(u64),
