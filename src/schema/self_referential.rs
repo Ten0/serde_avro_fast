@@ -86,10 +86,22 @@ pub enum SchemaNode<'a> {
 	/// the same schema. `Map` keys are assumed to be `string`.
 	Map(&'a SchemaNode<'a>),
 	/// A `union` Avro schema.
+	///
+	/// These can be deserialized into rust enums, where the variant name
+	/// should match:
+	/// - If it's not a named type, the PascalCase of the type (e.g. `String`,
+	///   `Uuid`...)
+	/// - If it's a named type, the fully qualified name of the type (e.g for a
+	///   record `{"namespace": "foo", "name": "bar"}`, `foo.bar`)
+	///
+	/// See the `tests/unions.rs` file for more examples.
 	Union(Union<'a>),
 	/// A `record` Avro schema.
 	Record(Record<'a>),
 	/// An `enum` Avro schema.
+	///
+	/// These can be deserialized into rust enums, matching on the name
+	/// as defined in the schema.
 	Enum(Enum),
 	/// A `fixed` Avro schema.
 	Fixed(Fixed),
