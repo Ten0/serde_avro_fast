@@ -225,7 +225,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 					}
 				}
 			}
-			_ => self.deserialize_any(visitor),
+			_ => visitor.visit_some(self),
 		}
 	}
 
