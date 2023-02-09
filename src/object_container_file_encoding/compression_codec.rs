@@ -38,20 +38,20 @@ impl CompressionCodec {
 		block_size: usize,
 	) -> Result<CompressionCodecState<R::Take>, de::DeError>
 	where
-		R: de::read::Take,
-		<R as de::read::Take>::Take: de::read::ReadSlice<'de> + std::io::BufRead,
+		R: de::read::take::Take,
+		<R as de::read::take::Take>::Take: de::read::ReadSlice<'de> + std::io::BufRead,
 	{
 		Ok(match self {
 			CompressionCodec::Null => CompressionCodecState::Null {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::Take::take(reader, block_size)?,
+					de::read::take::Take::take(reader, block_size)?,
 					config,
 				),
 			},
 			CompressionCodec::Deflate => CompressionCodecState::Deflate {
 				deserializer_state: de::DeserializerState::with_config(
 					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
-						de::read::Take::take(reader, block_size)?,
+						de::read::take::Take::take(reader, block_size)?,
 					)),
 					config,
 				),

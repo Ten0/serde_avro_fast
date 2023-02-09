@@ -21,7 +21,7 @@ use {
 ///
 /// Slice version enables borrowing from the input if there is no compression
 /// involved.
-pub struct Reader<R: de::read::Take> {
+pub struct Reader<R: de::read::take::Take> {
 	// the 'static here is fake, it in fact is bound to `Schema` not being dropped
 	// struct fields are dropped in order of declaration, so this is dropped before schema
 	reader_state: ReaderState<'static, R>,
@@ -72,8 +72,8 @@ impl<R: std::io::BufRead> Reader<de::read::ReaderRead<R>> {
 
 impl<R> Reader<R>
 where
-	R: Read + de::read::Take + std::io::BufRead,
-	<R as de::read::Take>::Take: std::io::BufRead,
+	R: Read + de::read::take::Take + std::io::BufRead,
+	<R as de::read::take::Take>::Take: std::io::BufRead,
 {
 	/// You should typically use `from_slice` or `from_reader` instead
 	pub fn new<'de>(reader: R) -> Result<Self, FailedToInitializeReader>
@@ -161,7 +161,7 @@ where
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
-		<R as de::read::Take>::Take: ReadSlice<'rs>,
+		<R as de::read::take::Take>::Take: ReadSlice<'rs>,
 	{
 		self.deserialize_borrowed()
 	}
@@ -176,7 +176,7 @@ where
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
-		<R as de::read::Take>::Take: ReadSlice<'de>,
+		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
 		std::iter::from_fn(|| self.deserialize_next_borrowed().transpose())
 	}
@@ -184,7 +184,7 @@ where
 	/// Attempt to deserialize the next value
 	pub fn deserialize_next<'a, T: DeserializeOwned>(&mut self) -> Result<Option<T>, DeError>
 	where
-		<R as de::read::Take>::Take: ReadSlice<'a>,
+		<R as de::read::take::Take>::Take: ReadSlice<'a>,
 	{
 		self.deserialize_next_borrowed()
 	}
@@ -199,7 +199,7 @@ where
 		&mut self,
 	) -> Result<Option<T>, DeError>
 	where
-		<R as de::read::Take>::Take: ReadSlice<'de>,
+		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
 		loop {
 			match &mut self.reader_state {
@@ -248,7 +248,9 @@ where
 							} => {
 								let (reader, config) = codec_data.into_source_reader_and_config();
 								let mut reader =
-									de::read::IntoLeftAfterTake::into_left_after_take(reader)?;
+									de::read::take::IntoLeftAfterTake::into_left_after_take(
+										reader,
+									)?;
 								let sync_marker = reader.read_const_size_buf::<16>()?;
 								if sync_marker != self.sync_marker {
 									return Err(DeError::new(
@@ -279,7 +281,7 @@ where
 	}
 }
 
-enum ReaderState<'s, R: de::read::Take> {
+enum ReaderState<'s, R: de::read::take::Take> {
 	Broken,
 	NotInBlock {
 		reader: R,
