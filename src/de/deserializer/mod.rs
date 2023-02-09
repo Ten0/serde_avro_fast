@@ -234,6 +234,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		// TODO deserialize map as [(key,value)]
+		// Until then, this can be worked around using the `serde-tuple-vec-map` crate
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema,
