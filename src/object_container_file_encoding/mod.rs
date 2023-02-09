@@ -118,7 +118,7 @@ where
 		// Safety: we don't drop the schema until this is dropped
 		// This is useful to be able to store a DeserializerState directly in here,
 		// which will avoid additional &mut levels, allowing for highest performance and
-		// ergonomics TODO replace this with crate `ouroboros`
+		// ergonomics
 		let schema_root: &'static schema::SchemaNode<'static> = unsafe {
 			let schema = &*(&schema as *const Schema);
 			let a: *const schema::SchemaNode<'_> = schema.root() as *const schema::SchemaNode<'_>;
