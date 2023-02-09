@@ -4,6 +4,7 @@
 	edition = "2021"
 	license = "LGPL-3.0-only"
 	name = "serde_avro_fast"
+	repository = "https://github.com/Ten0/serde_avro_fast"
 	version = "0.1.0"
 
 [dependencies]
