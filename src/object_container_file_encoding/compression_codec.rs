@@ -27,6 +27,8 @@ pub enum CompressionCodec {
 	/// compression library.
 	Xz,
 }
+// TODO add support for these compression protocols below (and declare features
+// and relevant additional dependencies)
 
 impl CompressionCodec {
 	pub(super) fn state<'de, 's, R>(
