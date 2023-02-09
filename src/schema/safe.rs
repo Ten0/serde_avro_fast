@@ -309,7 +309,6 @@ impl Schema {
 							aliases: _,
 							doc: _,
 							size,
-							attributes: _,
 						} => DecimalRepr::Fixed(Fixed {
 							name: register_name(name)?,
 							size: *size,
