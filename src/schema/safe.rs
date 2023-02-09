@@ -1,7 +1,7 @@
 //! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is
 //! used for its initialization
 
-use super::{Enum, Fixed, Name};
+use super::{Decimal, DecimalRepr, Enum, Fixed, Name};
 
 use std::collections::{hash_map, HashMap};
 
@@ -113,14 +113,6 @@ pub struct RecordField {
 	pub schema: SchemaKey,
 }
 
-/// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
-pub struct Decimal {
-	pub precision: usize,
-	pub scale: u32,
-	pub inner: SchemaKey,
-}
-
 impl std::str::FromStr for Schema {
 	type Err = ParseSchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -153,6 +145,8 @@ pub enum BuildSchemaFromApacheSchemaError {
 	InvalidReference(apache_avro::schema::Name),
 	#[error("The apache_avro::Schema contains duplicate definitions for {0}")]
 	DuplicateName(apache_avro::schema::Name),
+	#[error("The apache_avro::Schema contains a Decimal whose representation is neither Bytes nor Fixed")]
+	IncorrectDecimalRepr,
 	#[error("The apache_avro::Schema contains an unreasonably large `scale` for a Decimal")]
 	DecimalScaleTooLarge { scale_value: usize },
 }
@@ -188,20 +182,34 @@ impl Schema {
 			apache_schema: &'a apache_avro::Schema,
 			enclosing_namespace: &Option<String>,
 		) -> Result<SchemaKey, BuildSchemaFromApacheSchemaError> {
-			fn from_apache_fqn(fully_qualified_name: &apache_avro::schema::Name) -> Name {
-				match fully_qualified_name.namespace {
-					None => Name {
-						fully_qualified_name: fully_qualified_name.name.clone(),
-						namespace_delimiter_idx: None,
-					},
-					Some(ref namespace) => Name {
-						fully_qualified_name: format!("{namespace}.{}", fully_qualified_name.name),
-						namespace_delimiter_idx: Some(namespace.len()),
-					},
-				}
-			}
 			let idx = schema.nodes.len();
 			schema.nodes.push(SchemaNode::Null);
+			let mut register_name = |name: &apache_avro::schema::Name|
+			 -> Result<Name, BuildSchemaFromApacheSchemaError> {
+				match names.entry(name.fully_qualified_name(enclosing_namespace)) {
+					hash_map::Entry::Occupied(occ) => Err(
+						BuildSchemaFromApacheSchemaError::DuplicateName(occ.remove_entry().0),
+					),
+					hash_map::Entry::Vacant(vacant) => {
+						let fully_qualified_name = vacant.key();
+						let name = match fully_qualified_name.namespace {
+							None => Name {
+								fully_qualified_name: fully_qualified_name.name.clone(),
+								namespace_delimiter_idx: None,
+							},
+							Some(ref namespace) => Name {
+								fully_qualified_name: format!(
+									"{namespace}.{}",
+									fully_qualified_name.name
+								),
+								namespace_delimiter_idx: Some(namespace.len()),
+							},
+						};
+						vacant.insert(idx);
+						Ok(name)
+					}
+				}
+			};
 			let new_node = match apache_schema {
 				apache_avro::Schema::Ref { name } => {
 					schema.nodes.pop().unwrap();
@@ -242,40 +250,21 @@ impl Schema {
 						})
 						.collect::<Result<_, _>>()?,
 				}),
-				apache_avro::Schema::Enum { name, symbols, .. } => {
-					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
-						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
-								occ.remove_entry().0,
-							))
-						}
-						hash_map::Entry::Vacant(vacant) => {
-							let name = from_apache_fqn(vacant.key());
-							vacant.insert(idx);
-							SchemaNode::Enum(Enum {
-								symbols: symbols.clone(),
-								name,
-							})
-						}
-					}
-				}
-				apache_avro::Schema::Fixed { name, size, .. } => {
-					match names.entry(name.fully_qualified_name(enclosing_namespace)) {
-						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
-								occ.remove_entry().0,
-							))
-						}
-						hash_map::Entry::Vacant(vacant) => {
-							let name = from_apache_fqn(vacant.key());
-							vacant.insert(idx);
-							SchemaNode::Fixed(Fixed { size: *size, name })
-						}
-					}
-				}
+				apache_avro::Schema::Enum { name, symbols, .. } => SchemaNode::Enum(Enum {
+					name: register_name(name)?,
+					symbols: symbols.clone(),
+				}),
+				apache_avro::Schema::Fixed { name, size, .. } => SchemaNode::Fixed(Fixed {
+					name: register_name(name)?,
+					size: *size,
+				}),
 				apache_avro::Schema::Record { name, fields, .. } => {
-					let fully_qualified_name = name.fully_qualified_name(enclosing_namespace);
-					let record = Record {
+					let namespace = match &name.namespace {
+						namespace @ Some(_) => namespace,
+						None => enclosing_namespace,
+					};
+					let name = register_name(name)?;
+					SchemaNode::Record(Record {
 						fields: fields
 							.iter()
 							.map(|field| {
@@ -286,24 +275,13 @@ impl Schema {
 										names,
 										unresolved_names,
 										&field.schema,
-										&fully_qualified_name.namespace,
+										namespace,
 									)?,
 								})
 							})
 							.collect::<Result<_, BuildSchemaFromApacheSchemaError>>()?,
-						name: from_apache_fqn(&fully_qualified_name),
-					};
-					match names.entry(fully_qualified_name) {
-						hash_map::Entry::Occupied(occ) => {
-							return Err(BuildSchemaFromApacheSchemaError::DuplicateName(
-								occ.remove_entry().0,
-							))
-						}
-						hash_map::Entry::Vacant(vacant) => {
-							vacant.insert(idx);
-							SchemaNode::Record(record)
-						}
-					}
+						name,
+					})
 				}
 				apache_avro::Schema::Decimal {
 					precision,
@@ -317,13 +295,20 @@ impl Schema {
 							BuildSchemaFromApacheSchemaError::DecimalScaleTooLarge { scale_value }
 						})?
 					},
-					inner: apache_schema_to_node(
-						schema,
-						names,
-						unresolved_names,
-						inner,
-						enclosing_namespace,
-					)?,
+					repr: match &**inner {
+						apache_avro::Schema::Bytes => DecimalRepr::Bytes,
+						apache_avro::Schema::Fixed {
+							name,
+							aliases: _,
+							doc: _,
+							size,
+							attributes: _,
+						} => DecimalRepr::Fixed(Fixed {
+							name: register_name(name)?,
+							size: *size,
+						}),
+						_ => return Err(BuildSchemaFromApacheSchemaError::IncorrectDecimalRepr),
+					},
 				}),
 				apache_avro::Schema::Null => SchemaNode::Null,
 				apache_avro::Schema::Boolean => SchemaNode::Boolean,
@@ -361,19 +346,18 @@ impl Schema {
 		};
 		for schema_node in &mut schema.nodes {
 			match schema_node {
-				SchemaNode::Array(key)
-				| SchemaNode::Map(key)
-				| SchemaNode::Decimal(Decimal {
-					inner: key,
-					precision: _,
-					scale: _,
-				}) => fix_key(key),
+				SchemaNode::Array(key) | SchemaNode::Map(key) => fix_key(key),
 				SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
 				SchemaNode::Record(record) => record
 					.fields
 					.iter_mut()
 					.for_each(|f| fix_key(&mut f.schema)),
-				SchemaNode::Null
+				SchemaNode::Decimal(Decimal {
+					repr: DecimalRepr::Bytes | DecimalRepr::Fixed(Fixed { size: _, name: _ }),
+					precision: _,
+					scale: _,
+				})
+				| SchemaNode::Null
 				| SchemaNode::Boolean
 				| SchemaNode::Int
 				| SchemaNode::Long

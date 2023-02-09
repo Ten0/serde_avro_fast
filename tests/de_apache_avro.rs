@@ -127,14 +127,14 @@ fn test_decimal() {
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();
-	use serde_avro_fast::schema::SchemaNode;
+	use serde_avro_fast::schema::{DecimalRepr, SchemaNode};
 	dbg!(schema.root());
 	assert!(matches!(
 		schema.root(),
 		SchemaNode::Decimal(serde_avro_fast::schema::Decimal {
 			precision: 4,
 			scale: 1,
-			inner: SchemaNode::Bytes
+			repr: DecimalRepr::Bytes
 		})
 	));
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();

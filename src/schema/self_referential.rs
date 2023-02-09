@@ -1,4 +1,4 @@
-use super::{safe::SchemaNode as SafeSchemaNode, Enum, Fixed, Name};
+use super::{safe::SchemaNode as SafeSchemaNode, Decimal, Enum, Fixed, Name};
 
 /// The most performant and easiest to navigate version of an Avro schema
 ///
@@ -112,7 +112,7 @@ pub enum SchemaNode<'a> {
 	/// `precision` is an integer greater than 0.
 	///
 	/// <https://avro.apache.org/docs/current/specification/#decimal>
-	Decimal(Decimal<'a>),
+	Decimal(Decimal),
 	/// A universally unique identifier, annotating a string.
 	Uuid,
 	/// Logical type which represents the number of days since the unix epoch.
@@ -165,14 +165,6 @@ pub struct Record<'a> {
 pub struct RecordField<'a> {
 	pub name: String,
 	pub schema: &'a SchemaNode<'a>,
-}
-
-/// Component of a [`SchemaNode`]
-#[derive(Debug)]
-pub struct Decimal<'a> {
-	pub precision: usize,
-	pub scale: u32,
-	pub inner: &'a SchemaNode<'a>,
 }
 
 impl From<super::safe::Schema> for Schema {
@@ -238,11 +230,7 @@ impl From<super::safe::Schema> for Schema {
 					}),
 					SafeSchemaNode::Enum(enum_) => SchemaNode::Enum(enum_),
 					SafeSchemaNode::Fixed(fixed) => SchemaNode::Fixed(fixed),
-					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(Decimal {
-						precision: decimal.precision,
-						scale: decimal.scale,
-						inner: key_to_node(decimal.inner),
-					}),
+					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(decimal),
 					SafeSchemaNode::Uuid => SchemaNode::Uuid,
 					SafeSchemaNode::Date => SchemaNode::Date,
 					SafeSchemaNode::TimeMillis => SchemaNode::TimeMillis,

@@ -41,6 +41,19 @@ pub struct Fixed {
 	pub name: Name,
 }
 
+/// Component of a [`SchemaNode`]
+#[derive(Clone, Debug)]
+pub struct Decimal {
+	pub precision: usize,
+	pub scale: u32,
+	pub repr: DecimalRepr,
+}
+#[derive(Clone, Debug)]
+pub enum DecimalRepr {
+	Bytes,
+	Fixed(Fixed),
+}
+
 /// Schema component for named variants of a [`SchemaNode`]
 #[derive(Debug, Clone)]
 pub struct Name {

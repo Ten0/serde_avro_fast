@@ -1,15 +1,15 @@
+use crate::schema::{Decimal, DecimalRepr};
+
 use super::*;
 
 use {
-	rust_decimal::{prelude::ToPrimitive as _, Decimal},
-	serde_serializer_quick_unsupported::serializer_unsupported,
-	std::marker::PhantomData,
+	rust_decimal::prelude::ToPrimitive as _,
+	serde_serializer_quick_unsupported::serializer_unsupported, std::marker::PhantomData,
 };
 
 pub(in super::super) fn read_decimal<'de, R, V>(
 	state: &mut DeserializerState<R>,
-	scale: u32,
-	inner: &SchemaNode,
+	decimal: &Decimal,
 	hint: VisitorHint,
 	visitor: V,
 ) -> Result<V::Value, DeError>
@@ -17,14 +17,9 @@ where
 	R: ReadSlice<'de>,
 	V: Visitor<'de>,
 {
-	let size = match *inner {
-		SchemaNode::Bytes => read_len(state)?,
-		SchemaNode::Fixed(ref fixed) => fixed.size,
-		_ => {
-			return Err(DeError::new(
-				"Decimal should have Bytes or Fixed as its internal representation",
-			))
-		}
+	let size = match decimal.repr {
+		DecimalRepr::Bytes => read_len(state)?,
+		DecimalRepr::Fixed(ref fixed) => fixed.size,
 	};
 	let mut buf = [0u8; 16];
 	let start = buf.len().checked_sub(size).ok_or_else(|| {
@@ -34,6 +29,7 @@ where
 	})?;
 	state.read_exact(&mut buf[start..]).map_err(DeError::io)?;
 	let unscaled = i128::from_be_bytes(buf);
+	let scale = decimal.scale;
 	if scale == 0 {
 		match hint {
 			VisitorHint::U64 => {
@@ -63,7 +59,7 @@ where
 			VisitorHint::Str | VisitorHint::F64 => {}
 		}
 	}
-	let decimal = Decimal::try_from_i128_with_scale(unscaled, scale)
+	let decimal = rust_decimal::Decimal::try_from_i128_with_scale(unscaled, scale)
 		.map_err(|e| DeError::custom(format_args!("Could not parse decimal from i128: {e}")))?;
 	if hint == VisitorHint::F64 {
 		if let Some(float) = decimal.to_f64() {
