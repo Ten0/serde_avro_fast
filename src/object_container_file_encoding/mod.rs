@@ -76,9 +76,23 @@ where
 	<R as de::read::Take>::Take: std::io::BufRead,
 {
 	/// You should typically use `from_slice` or `from_reader` instead
-	pub fn new<'de>(mut reader: R) -> Result<Self, FailedToInitializeReader>
+	pub fn new<'de>(reader: R) -> Result<Self, FailedToInitializeReader>
 	where
 		R: ReadSlice<'de>,
+	{
+		Self::new_and_metadata::<()>(reader).map(|(reader, ())| reader)
+	}
+
+	/// Build a `Reader`, also extracting custom metadata in addition to the
+	/// avro-reserved metadata
+	///
+	/// Note that if your reader is not a slice reader, you should provide a
+	/// type `M` that implements [`serde::de::DeserializeOwned`], otherwise
+	/// deserialization may fail.
+	pub fn new_and_metadata<'de, M>(mut reader: R) -> Result<(Self, M), FailedToInitializeReader>
+	where
+		R: ReadSlice<'de>,
+		M: Deserialize<'de>,
 	{
 		if reader
 			.read_const_size_buf::<4>()
@@ -89,11 +103,13 @@ where
 		}
 
 		#[derive(serde_derive::Deserialize)]
-		struct Metadata {
+		struct Metadata<M> {
 			#[serde(rename = "avro.schema")]
 			schema: String,
 			#[serde(rename = "avro.codec")]
 			codec: CompressionCodec,
+			#[serde(flatten)]
+			user_metadata: M,
 		}
 
 		let mut metadata_deserializer_config = de::DeserializerConfig::from_schema_node(
@@ -102,7 +118,7 @@ where
 		metadata_deserializer_config.max_seq_size = 1_000;
 		let mut metadata_deserializer_state =
 			de::DeserializerState::with_config(reader, metadata_deserializer_config);
-		let metadata: Metadata =
+		let metadata: Metadata<M> =
 			serde::Deserialize::deserialize(metadata_deserializer_state.deserializer())
 				.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?;
 		reader = metadata_deserializer_state.into_reader();
@@ -126,15 +142,18 @@ where
 			&*b
 		};
 
-		Ok(Self {
-			reader_state: ReaderState::NotInBlock {
-				reader,
-				config: de::DeserializerConfig::from_schema_node(schema_root),
+		Ok((
+			Self {
+				reader_state: ReaderState::NotInBlock {
+					reader,
+					config: de::DeserializerConfig::from_schema_node(schema_root),
+				},
+				compression_codec: metadata.codec,
+				sync_marker,
+				_schema: schema,
 			},
-			compression_codec: metadata.codec,
-			sync_marker,
-			_schema: schema,
-		})
+			metadata.user_metadata,
+		))
 	}
 
 	/// Iterator over the deserialized values
