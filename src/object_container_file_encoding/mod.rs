@@ -322,6 +322,7 @@ where
 							CompressionCodecState::Null {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
+							#[cfg(feature = "deflate")]
 							CompressionCodecState::Deflate {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),

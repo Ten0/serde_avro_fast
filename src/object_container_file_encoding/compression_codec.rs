@@ -6,6 +6,7 @@ use crate::de::{self, read::take::IntoLeftAfterTake, DeserializerConfig, Deseria
 pub enum CompressionCodec {
 	/// The `Null` codec simply passes through data uncompressed.
 	Null,
+	#[cfg(feature = "deflate")]
 	/// The `Deflate` codec writes the data block using the deflate algorithm
 	/// as specified in RFC 1951, and typically implemented using the zlib
 	/// library. Note that this format (unlike the "zlib format" in RFC 1950)
@@ -50,6 +51,7 @@ impl CompressionCodec {
 				),
 				decompression_buffer,
 			},
+			#[cfg(feature = "deflate")]
 			CompressionCodec::Deflate => CompressionCodecState::Deflate {
 				deserializer_state: de::DeserializerState::with_config(
 					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
@@ -123,6 +125,7 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 		deserializer_state: DeserializerState<'s, R::Take>,
 		decompression_buffer: Vec<u8>,
 	},
+	#[cfg(feature = "deflate")]
 	Deflate {
 		deserializer_state:
 			DeserializerState<'s, de::read::ReaderRead<flate2::bufread::DeflateDecoder<R::Take>>>,
@@ -147,6 +150,7 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 				let (reader, config) = deserializer_state.into_inner();
 				(reader.into_left_after_take()?, config, decompression_buffer)
 			}
+			#[cfg(feature = "deflate")]
 			CompressionCodecState::Deflate {
 				deserializer_state,
 				decompression_buffer,
