@@ -185,6 +185,7 @@ where
 				reader_state: ReaderState::NotInBlock {
 					reader,
 					config: de::DeserializerConfig::from_schema_node(schema_root),
+					decompression_buffer: Vec::new(),
 				},
 				compression_codec: metadata.codec,
 				sync_marker,
@@ -199,6 +200,7 @@ where
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
+		R: ReadSlice<'rs>,
 		<R as de::read::take::Take>::Take: ReadSlice<'rs>,
 	{
 		self.deserialize_borrowed()
@@ -214,6 +216,7 @@ where
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
+		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
 		std::iter::from_fn(|| self.deserialize_next_borrowed().transpose())
@@ -222,6 +225,7 @@ where
 	/// Attempt to deserialize the next value
 	pub fn deserialize_next<'a, T: DeserializeOwned>(&mut self) -> Result<Option<T>, DeError>
 	where
+		R: ReadSlice<'a>,
 		<R as de::read::take::Take>::Take: ReadSlice<'a>,
 	{
 		self.deserialize_next_borrowed()
@@ -237,6 +241,7 @@ where
 		&mut self,
 	) -> Result<Option<T>, DeError>
 	where
+		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
 		loop {
@@ -246,7 +251,7 @@ where
 						"Object container file reader is broken after error",
 					))
 				}
-				ReaderState::NotInBlock { reader, config: _ } => {
+				ReaderState::NotInBlock { reader, .. } => {
 					if reader
 						.fill_buf()
 						.map(|b| b.is_empty())
@@ -255,9 +260,13 @@ where
 						// Reader is empty, we're done reading
 						break Ok(None);
 					}
-					let (mut reader, config) =
+					let (mut reader, config, decompression_buffer) =
 						match std::mem::replace(&mut self.reader_state, ReaderState::Broken) {
-							ReaderState::NotInBlock { reader, config } => (reader, config),
+							ReaderState::NotInBlock {
+								reader,
+								config,
+								decompression_buffer,
+							} => (reader, config, decompression_buffer),
 							_ => unreachable!(),
 						};
 					let n_objects_in_block: i64 = reader.read_varint()?;
@@ -268,7 +277,12 @@ where
 					let block_size: usize = block_size
 						.try_into()
 						.map_err(|_| DeError::new("Invalid container file block size in bytes"))?;
-					let codec_data = self.compression_codec.state(reader, config, block_size)?;
+					let codec_data = self.compression_codec.state(
+						reader,
+						config,
+						decompression_buffer,
+						block_size,
+					)?;
 					self.reader_state = ReaderState::InBlock {
 						codec_data,
 						n_objects_in_block,
@@ -284,18 +298,19 @@ where
 								codec_data,
 								n_objects_in_block: _,
 							} => {
-								let (reader, config) = codec_data.into_source_reader_and_config();
-								let mut reader =
-									de::read::take::IntoLeftAfterTake::into_left_after_take(
-										reader,
-									)?;
+								let (mut reader, config, decompression_buffer) =
+									codec_data.into_source_reader_and_config()?;
 								let sync_marker = reader.read_const_size_buf::<16>()?;
 								if sync_marker != self.sync_marker {
 									return Err(DeError::new(
 										"Incorrect sync marker at end of block",
 									));
 								}
-								self.reader_state = ReaderState::NotInBlock { reader, config }
+								self.reader_state = ReaderState::NotInBlock {
+									reader,
+									config,
+									decompression_buffer,
+								}
 							}
 							_ => unreachable!(),
 						}
@@ -304,12 +319,16 @@ where
 					Some(next_n_in_block) => {
 						*n_objects_in_block = next_n_in_block;
 						break match codec_data {
-							CompressionCodecState::Null { deserializer_state } => {
-								T::deserialize(deserializer_state.deserializer())
-							}
-							CompressionCodecState::Deflate { deserializer_state } => {
-								T::deserialize(deserializer_state.deserializer())
-							}
+							CompressionCodecState::Null {
+								deserializer_state, ..
+							} => T::deserialize(deserializer_state.deserializer()),
+							CompressionCodecState::Deflate {
+								deserializer_state, ..
+							} => T::deserialize(deserializer_state.deserializer()),
+							#[cfg(feature = "snappy")]
+							CompressionCodecState::Snappy {
+								deserializer_state, ..
+							} => T::deserialize(deserializer_state.deserializer()),
 						}
 						.map(Some);
 					}
@@ -324,9 +343,10 @@ enum ReaderState<'s, R: de::read::take::Take> {
 	NotInBlock {
 		reader: R,
 		config: de::DeserializerConfig<'s>,
+		decompression_buffer: Vec<u8>,
 	},
 	InBlock {
-		codec_data: CompressionCodecState<'s, R::Take>,
+		codec_data: CompressionCodecState<'s, R>,
 		n_objects_in_block: usize,
 	},
 }
