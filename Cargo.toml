@@ -13,7 +13,7 @@
 	snappy = ["snap", "crc32fast"]
 
 [dependencies]
-	apache-avro = { git = "https://github.com/apache/avro.git" }
+	apache-avro = { git = "https://github.com/apache/avro.git", default-features = false }
 	crc32fast = { version = "1", optional = true }
 	digest = "0.10"
 	flate2 = { version = "1", optional = true }
