@@ -52,20 +52,20 @@ impl CompressionCodec {
 				),
 				decompression_buffer,
 			},
-			#[cfg(feature = "bzip2")]
-			CompressionCodec::Bzip2 => CompressionCodecState::Bzip2 {
+			#[cfg(feature = "deflate")]
+			CompressionCodec::Deflate => CompressionCodecState::Deflate {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(bzip2::bufread::BzDecoder::new(
+					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
 						de::read::take::Take::take(reader, block_size)?,
 					)),
 					config,
 				),
 				decompression_buffer,
 			},
-			#[cfg(feature = "deflate")]
-			CompressionCodec::Deflate => CompressionCodecState::Deflate {
+			#[cfg(feature = "bzip2")]
+			CompressionCodec::Bzip2 => CompressionCodecState::Bzip2 {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
+					de::read::ReaderRead::new(bzip2::bufread::BzDecoder::new(
 						de::read::take::Take::take(reader, block_size)?,
 					)),
 					config,
@@ -127,6 +127,16 @@ impl CompressionCodec {
 					source_reader: reader,
 				}
 			}
+			#[cfg(feature = "xz")]
+			CompressionCodec::Xz => CompressionCodecState::Xz {
+				deserializer_state: de::DeserializerState::with_config(
+					de::read::ReaderRead::new(xz2::bufread::XzDecoder::new(
+						de::read::take::Take::take(reader, block_size)?,
+					)),
+					config,
+				),
+				decompression_buffer,
+			},
 			#[cfg(feature = "zstandard")]
 			CompressionCodec::Zstandard => CompressionCodecState::Zstandard {
 				deserializer_state: de::DeserializerState::with_config(
@@ -165,6 +175,12 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 	Snappy {
 		deserializer_state: DeserializerState<'s, de::read::ReaderRead<std::io::Cursor<Vec<u8>>>>,
 		source_reader: R,
+	},
+	#[cfg(feature = "xz")]
+	Xz {
+		deserializer_state:
+			DeserializerState<'s, de::read::ReaderRead<xz2::bufread::XzDecoder<R::Take>>>,
+		decompression_buffer: Vec<u8>,
 	},
 	#[cfg(feature = "zstandard")]
 	Zstandard {
@@ -219,6 +235,18 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
 				(source_reader, config, reader.into_inner().into_inner())
+			}
+			#[cfg(feature = "xz2")]
+			CompressionCodecState::Xz {
+				deserializer_state,
+				decompression_buffer,
+			} => {
+				let (reader, config) = deserializer_state.into_inner();
+				(
+					reader.into_inner().into_inner().into_left_after_take()?,
+					config,
+					decompression_buffer,
+				)
 			}
 			#[cfg(feature = "zstandard")]
 			CompressionCodecState::Zstandard {

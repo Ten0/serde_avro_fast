@@ -11,6 +11,7 @@
 	default = ["deflate"]
 	deflate = ["flate2"]
 	snappy = ["snap", "crc32fast"]
+	xz = ["xz2"]
 	zstandard = ["zstd"]
 
 [dependencies]
@@ -26,6 +27,7 @@
 	serde_serializer_quick_unsupported = "0.1"
 	snap = { version = "1", optional = true }
 	thiserror = "1"
+	xz2 = { version = "0.1", optional = true }
 	zstd = { version = "0.12", optional = true }
 
 [dev-dependencies]
