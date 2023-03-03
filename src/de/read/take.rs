@@ -10,7 +10,7 @@ use super::*;
 ///
 /// Turn this into a reader that we can only read `block_size` bytes from.
 pub trait Take {
-	type Take: IntoLeftAfterTake<Original = Self>;
+	type Take: IntoLeftAfterTake<Original = Self> + std::io::BufRead;
 	fn take(self, block_size: usize) -> Result<Self::Take, DeError>;
 }
 /// Largely internal trait for `object_container_file` implementation

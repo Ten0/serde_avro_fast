@@ -330,6 +330,10 @@ where
 							CompressionCodecState::Snappy {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
+							#[cfg(feature = "zstandard")]
+							CompressionCodecState::Zstandard {
+								deserializer_state, ..
+							} => T::deserialize(deserializer_state.deserializer()),
 						}
 						.map(Some);
 					}

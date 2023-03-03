@@ -116,6 +116,19 @@ impl CompressionCodec {
 					source_reader: reader,
 				}
 			}
+			#[cfg(feature = "zstandard")]
+			CompressionCodec::Zstandard => CompressionCodecState::Zstandard {
+				deserializer_state: de::DeserializerState::with_config(
+					de::read::ReaderRead::new(
+						zstd::stream::read::Decoder::with_buffer(de::read::take::Take::take(
+							reader, block_size,
+						)?)
+						.map_err(de::DeError::io)?,
+					),
+					config,
+				),
+				decompression_buffer,
+			},
 		})
 	}
 }
@@ -135,6 +148,14 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 	Snappy {
 		deserializer_state: DeserializerState<'s, de::read::ReaderRead<std::io::Cursor<Vec<u8>>>>,
 		source_reader: R,
+	},
+	#[cfg(feature = "zstandard")]
+	Zstandard {
+		deserializer_state: DeserializerState<
+			's,
+			de::read::ReaderRead<zstd::stream::read::Decoder<'static, R::Take>>,
+		>,
+		decompression_buffer: Vec<u8>,
 	},
 }
 
@@ -169,6 +190,18 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
 				(source_reader, config, reader.into_inner().into_inner())
+			}
+			#[cfg(feature = "zstandard")]
+			CompressionCodecState::Zstandard {
+				deserializer_state,
+				decompression_buffer,
+			} => {
+				let (reader, config) = deserializer_state.into_inner();
+				(
+					reader.into_inner().finish().into_left_after_take()?,
+					config,
+					decompression_buffer,
+				)
 			}
 		})
 	}
