@@ -326,6 +326,10 @@ where
 							CompressionCodecState::Deflate {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
+							#[cfg(feature = "bzip2")]
+							CompressionCodecState::Bzip2 {
+								deserializer_state, ..
+							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "snappy")]
 							CompressionCodecState::Snappy {
 								deserializer_state, ..

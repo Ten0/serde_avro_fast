@@ -12,21 +12,22 @@ pub enum CompressionCodec {
 	/// library. Note that this format (unlike the "zlib format" in RFC 1950)
 	/// does not have a checksum.
 	Deflate,
+	#[cfg(feature = "bzip2")]
+	/// The `BZip2` codec uses [BZip2](https://sourceware.org/bzip2/)
+	/// compression library.
+	Bzip2,
 	#[cfg(feature = "snappy")]
 	/// The `Snappy` codec uses Google's [Snappy](http://google.github.io/snappy/)
 	/// compression algorithm. Each compressed block is followed by the 4-byte,
 	/// big-endian CRC32 checksum of the uncompressed data in the block.
 	Snappy,
-	#[cfg(feature = "zstandard")]
-	Zstandard,
-	#[cfg(feature = "bzip")]
-	/// The `BZip2` codec uses [BZip2](https://sourceware.org/bzip2/)
-	/// compression library.
-	Bzip2,
 	#[cfg(feature = "xz")]
 	/// The `Xz` codec uses [Xz utils](https://tukaani.org/xz/)
 	/// compression library.
 	Xz,
+	#[cfg(feature = "zstandard")]
+	// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
+	Zstandard,
 }
 // TODO add support for these compression protocols below (and declare features
 // and relevant additional dependencies)
@@ -47,6 +48,16 @@ impl CompressionCodec {
 			CompressionCodec::Null => CompressionCodecState::Null {
 				deserializer_state: de::DeserializerState::with_config(
 					de::read::take::Take::take(reader, block_size)?,
+					config,
+				),
+				decompression_buffer,
+			},
+			#[cfg(feature = "bzip2")]
+			CompressionCodec::Bzip2 => CompressionCodecState::Bzip2 {
+				deserializer_state: de::DeserializerState::with_config(
+					de::read::ReaderRead::new(bzip2::bufread::BzDecoder::new(
+						de::read::take::Take::take(reader, block_size)?,
+					)),
 					config,
 				),
 				decompression_buffer,
@@ -144,6 +155,12 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 			DeserializerState<'s, de::read::ReaderRead<flate2::bufread::DeflateDecoder<R::Take>>>,
 		decompression_buffer: Vec<u8>,
 	},
+	#[cfg(feature = "bzip2")]
+	Bzip2 {
+		deserializer_state:
+			DeserializerState<'s, de::read::ReaderRead<bzip2::bufread::BzDecoder<R::Take>>>,
+		decompression_buffer: Vec<u8>,
+	},
 	#[cfg(feature = "snappy")]
 	Snappy {
 		deserializer_state: DeserializerState<'s, de::read::ReaderRead<std::io::Cursor<Vec<u8>>>>,
@@ -173,6 +190,18 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			}
 			#[cfg(feature = "deflate")]
 			CompressionCodecState::Deflate {
+				deserializer_state,
+				decompression_buffer,
+			} => {
+				let (reader, config) = deserializer_state.into_inner();
+				(
+					reader.into_inner().into_inner().into_left_after_take()?,
+					config,
+					decompression_buffer,
+				)
+			}
+			#[cfg(feature = "bzip2")]
+			CompressionCodecState::Bzip2 {
 				deserializer_state,
 				decompression_buffer,
 			} => {
