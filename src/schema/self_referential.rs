@@ -15,7 +15,6 @@ use super::{safe::SchemaNode as SafeSchemaNode, Decimal, Enum, Fixed, Name};
 /// [Names](https://avro.apache.org/docs/current/specification/#names) work in Avro,
 /// the most performant representation of an Avro schema is not a tree but a
 /// possibly-cyclic general directed graph.
-#[derive(Debug)]
 pub struct Schema {
 	// First node in the array is considered to be the root
 	//
@@ -242,6 +241,12 @@ impl From<super::safe::Schema> for Schema {
 			};
 		}
 		ret
+	}
+}
+
+impl std::fmt::Debug for Schema {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		<SchemaNode<'_> as std::fmt::Debug>::fmt(self.root(), f)
 	}
 }
 
