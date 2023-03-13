@@ -57,7 +57,6 @@ impl Schema {
 /// [Avro Specification](https://avro.apache.org/docs/current/specification/).
 ///
 /// This enum is borrowed from a [`Schema`] and is used to navigate it.
-#[derive(Debug)]
 pub enum SchemaNode<'a> {
 	/// A `null` Avro schema.
 	Null,
@@ -243,5 +242,97 @@ impl From<super::safe::Schema> for Schema {
 			};
 		}
 		ret
+	}
+}
+
+impl<'a> std::fmt::Debug for SchemaNode<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
+		// Avoid going into stack overflow when rendering SchemaNode's debug impl, in
+		// case there are loops
+
+		use std::cell::Cell;
+		struct SchemaNodeRenderingDepthGuard;
+		thread_local! {
+			static DEPTH: Cell<u32> = Cell::new(0);
+		}
+		impl Drop for SchemaNodeRenderingDepthGuard {
+			fn drop(&mut self) {
+				DEPTH.with(|cell| cell.set(cell.get().checked_sub(1).unwrap()));
+			}
+		}
+		const MAX_DEPTH: u32 = 2;
+		let depth = DEPTH.with(|cell| {
+			let val = cell.get();
+			cell.set(val + 1);
+			val
+		});
+		let _decrement_depth_guard = SchemaNodeRenderingDepthGuard;
+
+		match *self {
+			SchemaNode::Null => f.debug_tuple("Null").finish(),
+			SchemaNode::Boolean => f.debug_tuple("Boolean").finish(),
+			SchemaNode::Int => f.debug_tuple("Int").finish(),
+			SchemaNode::Long => f.debug_tuple("Long").finish(),
+			SchemaNode::Float => f.debug_tuple("Float").finish(),
+			SchemaNode::Double => f.debug_tuple("Double").finish(),
+			SchemaNode::Bytes => f.debug_tuple("Bytes").finish(),
+			SchemaNode::String => f.debug_tuple("String").finish(),
+			SchemaNode::Array(inner) => {
+				let mut d = f.debug_tuple("Array");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Map(inner) => {
+				let mut d = f.debug_tuple("Map");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Union(ref inner) => {
+				let mut d = f.debug_tuple("Union");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Record(ref inner) => {
+				let mut d = f.debug_tuple("Record");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Enum(ref inner) => {
+				let mut d = f.debug_tuple("Enum");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Fixed(ref inner) => {
+				let mut d = f.debug_tuple("Fixed");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Decimal(ref inner) => {
+				let mut d = f.debug_tuple("Decimal");
+				if depth < MAX_DEPTH {
+					d.field(inner);
+				}
+				d.finish()
+			}
+			SchemaNode::Uuid => f.debug_tuple("Uuid").finish(),
+			SchemaNode::Date => f.debug_tuple("Date").finish(),
+			SchemaNode::TimeMillis => f.debug_tuple("TimeMillis").finish(),
+			SchemaNode::TimeMicros => f.debug_tuple("TimeMicros").finish(),
+			SchemaNode::TimestampMillis => f.debug_tuple("TimestampMillis").finish(),
+			SchemaNode::TimestampMicros => f.debug_tuple("TimestampMicros").finish(),
+			SchemaNode::Duration => f.debug_tuple("Duration").finish(),
+		}
 	}
 }
