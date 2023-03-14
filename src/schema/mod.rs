@@ -2,11 +2,14 @@
 
 pub mod safe;
 mod self_referential;
+mod union_variants_per_type_lookup;
 
 pub use {
 	safe::{BuildSchemaFromApacheSchemaError, ParseSchemaError},
 	self_referential::*,
 };
+
+pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 
 impl std::str::FromStr for Schema {
 	type Err = ParseSchemaError;
@@ -25,13 +28,6 @@ impl Schema {
 		let safe_schema = safe::Schema::from_apache_schema(apache_schema)?;
 		Ok(safe_schema.into())
 	}
-}
-
-/// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
-pub struct Enum {
-	pub symbols: Vec<String>,
-	pub name: Name,
 }
 
 /// Component of a [`SchemaNode`]

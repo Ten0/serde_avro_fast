@@ -1,7 +1,7 @@
 //! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is
 //! used for its initialization
 
-use super::{Decimal, DecimalRepr, Enum, Fixed, Name};
+use super::{Decimal, DecimalRepr, Fixed, Name};
 
 use std::collections::{hash_map, HashMap};
 
@@ -111,6 +111,13 @@ pub struct Record {
 pub struct RecordField {
 	pub name: String,
 	pub schema: SchemaKey,
+}
+
+/// Component of a [`SchemaNode`]
+#[derive(Clone, Debug)]
+pub struct Enum {
+	pub symbols: Vec<String>,
+	pub name: Name,
 }
 
 impl std::str::FromStr for Schema {

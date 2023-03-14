@@ -54,6 +54,7 @@
 
 pub mod de;
 pub mod schema;
+pub mod ser;
 
 pub use schema::Schema;
 

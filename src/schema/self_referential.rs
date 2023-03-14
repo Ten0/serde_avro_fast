@@ -1,4 +1,10 @@
-use super::{safe::SchemaNode as SafeSchemaNode, Decimal, Enum, Fixed, Name};
+use super::{
+	safe::SchemaNode as SafeSchemaNode,
+	union_variants_per_type_lookup::PerTypeLookup as UnionVariantsPerTypeLookup, Decimal, Fixed,
+	Name,
+};
+
+use std::collections::HashMap;
 
 /// The most performant and easiest to navigate version of an Avro schema
 ///
@@ -146,9 +152,18 @@ pub enum SchemaNode<'a> {
 }
 
 /// Component of a [`SchemaNode`]
-#[derive(Debug)]
 pub struct Union<'a> {
 	pub variants: Vec<&'a SchemaNode<'a>>,
+	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
+}
+
+impl std::fmt::Debug for Union<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Skip per_type_lookup for readability
+		f.debug_struct("Union")
+			.field("variants", &self.variants)
+			.finish()
+	}
 }
 
 /// Component of a [`SchemaNode`]
@@ -163,6 +178,24 @@ pub struct Record<'a> {
 pub struct RecordField<'a> {
 	pub name: String,
 	pub schema: &'a SchemaNode<'a>,
+}
+
+/// Component of a [`SchemaNode`]
+#[derive(Clone)]
+pub struct Enum {
+	pub symbols: Vec<String>,
+	pub name: Name,
+	pub per_name_lookup: HashMap<String, usize>,
+}
+
+impl std::fmt::Debug for Enum {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Skip per_type_lookup for readability
+		f.debug_struct("Enum")
+			.field("name", &self.name)
+			.field("symbols", &self.symbols)
+			.finish()
+	}
 }
 
 impl From<super::safe::Schema> for Schema {
@@ -208,12 +241,16 @@ impl From<super::safe::Schema> for Schema {
 					SafeSchemaNode::String => SchemaNode::String,
 					SafeSchemaNode::Array(schema_key) => SchemaNode::Array(key_to_node(schema_key)),
 					SafeSchemaNode::Map(schema_key) => SchemaNode::Map(key_to_node(schema_key)),
-					SafeSchemaNode::Union(union) => SchemaNode::Union(Union {
-						variants: union
+					SafeSchemaNode::Union(union) => SchemaNode::Union({
+						let variants: Vec<&SchemaNode> = union
 							.variants
 							.into_iter()
 							.map(|schema_key| key_to_node(schema_key))
-							.collect(),
+							.collect();
+						Union {
+							per_type_lookup: UnionVariantsPerTypeLookup::new(&variants),
+							variants,
+						}
 					}),
 					SafeSchemaNode::Record(record) => SchemaNode::Record(Record {
 						fields: record
@@ -226,7 +263,16 @@ impl From<super::safe::Schema> for Schema {
 							.collect(),
 						name: record.name,
 					}),
-					SafeSchemaNode::Enum(enum_) => SchemaNode::Enum(enum_),
+					SafeSchemaNode::Enum(enum_) => SchemaNode::Enum(Enum {
+						per_name_lookup: enum_
+							.symbols
+							.iter()
+							.enumerate()
+							.map(|(i, v)| (v.clone(), i))
+							.collect(),
+						symbols: enum_.symbols,
+						name: enum_.name,
+					}),
 					SafeSchemaNode::Fixed(fixed) => SchemaNode::Fixed(fixed),
 					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(decimal),
 					SafeSchemaNode::Uuid => SchemaNode::Uuid,
