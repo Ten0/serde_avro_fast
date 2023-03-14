@@ -70,18 +70,12 @@ fn test_no_cyclic_debug_on_schema() {
                                 schema: Record,
                             },
                         ],
-                        name: Name {
-                            fully_qualified_name: "test",
-                            namespace_delimiter_idx: None,
-                        },
+                        name: "test",
                     },
                 ),
             },
         ],
-        name: Name {
-            fully_qualified_name: "test",
-            namespace_delimiter_idx: None,
-        },
+        name: "test",
     },
 )"#
 	);

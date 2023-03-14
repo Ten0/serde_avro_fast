@@ -55,10 +55,16 @@ pub enum DecimalRepr {
 }
 
 /// Schema component for named variants of a [`SchemaNode`]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Name {
 	fully_qualified_name: String,
 	namespace_delimiter_idx: Option<usize>,
+}
+
+impl std::fmt::Debug for Name {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Debug::fmt(&self.fully_qualified_name, f)
+	}
 }
 
 impl Name {
