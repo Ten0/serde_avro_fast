@@ -61,10 +61,10 @@ lazy_static! {
 
 pub fn from_avro_datum_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	schema: &Schema,
+	fast_schema: &serde_avro_fast::Schema,
 	slice: &[u8],
 ) -> Value {
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(schema).unwrap();
-	let sjv: T = serde_avro_fast::from_datum_slice(slice, &fast_schema).unwrap();
+	let sjv: T = serde_avro_fast::from_datum_slice(slice, fast_schema).unwrap();
 	println!("{}", serde_json::to_string_pretty(&sjv).unwrap());
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	dbg!(&avro_value);
@@ -83,9 +83,42 @@ fn test_round_trip_apache_fast<T: serde::de::DeserializeOwned + serde::Serialize
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
+	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
 
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
-	let decoded = from_avro_datum_fast::<T>(&schema, &encoded);
+	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
+	assert_eq!(*value, decoded);
+}
+
+fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize>(
+	&(raw_schema, ref value): &(&str, Value),
+) {
+	println!("{raw_schema}");
+	let schema = Schema::parse_str(raw_schema).unwrap();
+	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+
+	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
+	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
+
+	let mut encoded = Vec::new();
+	serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+	let decoded = apache_avro::from_avro_datum(&schema, &mut encoded.as_slice(), None).unwrap();
+	assert_eq!(*value, decoded);
+}
+
+fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
+	&(raw_schema, ref value): &(&str, Value),
+) {
+	println!("{raw_schema}");
+	let schema = Schema::parse_str(raw_schema).unwrap();
+	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+
+	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
+	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
+
+	let mut encoded = Vec::new();
+	serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
 	assert_eq!(*value, decoded);
 }
 
@@ -111,6 +144,20 @@ macro_rules! tests {
 					#[test]
 					fn [<test_round_trip_apache_fast_ $idx>]() {
 						test_round_trip_apache_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+					}
+				)*
+
+				$(
+					#[test]
+					fn [<test_round_trip_fast_apache_ $idx>]() {
+						test_round_trip_fast_apache::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+					}
+				)*
+
+				$(
+					#[test]
+					fn [<test_round_trip_fast_fast_ $idx>]() {
+						test_round_trip_fast_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
 			)*
