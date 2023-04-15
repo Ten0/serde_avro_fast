@@ -5,6 +5,7 @@ use {
 	apache_avro::{types::Value, Schema},
 	lazy_static::lazy_static,
 	pretty_assertions::assert_eq,
+	rand::prelude::*,
 };
 
 lazy_static! {
@@ -56,6 +57,14 @@ lazy_static! {
 			r#"{"type": "record", "name": "Test", "fields": [{"name": "f", "type": "long"}]}"#,
 			Value::Record(vec![("f".to_string(), Value::Long(1))])
 		),
+		(
+			r#"{"type": "record", "name": "LongerRecord", "fields": [{"name": "f", "type": "long"}, {"name": "g", "type": "long"}, {"name": "h", "type": "string"}]}"#,
+			Value::Record(vec![
+				("f".to_string(), Value::Long(1)),
+				("g".to_string(), Value::Long(2)),
+				("h".to_string(), Value::String("Abc".to_owned())),
+			])
+		),
 	];
 }
 
@@ -101,7 +110,30 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
 
 	let mut encoded = Vec::new();
-	serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+	match serde_json::to_value(&json_for_value) {
+		Ok(serde_json::Value::Object(obj)) => {
+			// Test that it works with random ordering
+			let mut keys: Vec<(_, _)> = obj.into_iter().collect();
+			let mut prev = None;
+			for _ in 0..10 {
+				encoded.clear();
+				keys.shuffle(&mut rand::thread_rng());
+				tuple_vec_map::serialize(
+					&keys,
+					serde_avro_fast::ser::SerializerState::from_writer(&mut encoded, &fast_schema)
+						.serializer(),
+				)
+				.unwrap();
+				if let Some(prevv) = prev {
+					assert_eq!(encoded, prevv);
+				}
+				prev = Some(encoded.clone());
+			}
+		}
+		_ => {
+			serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+		}
+	}
 	let decoded = apache_avro::from_avro_datum(&schema, &mut encoded.as_slice(), None).unwrap();
 	assert_eq!(*value, decoded);
 }
@@ -172,7 +204,7 @@ macro_rules! tests {
 	};
 }
 tests! {
-	serde_json::Value => 00 01 02 04 05 06 07 09 10 11 12 13,
+	serde_json::Value => 00 01 02 04 05 06 07 09 10 11 12 13 14,
 	serde_bytes::ByteBuf => 03 08,
 }
 
