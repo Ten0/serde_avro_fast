@@ -19,7 +19,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {
 		err = (<Self::Error as serde::ser::Error>::custom("Unexpected input"));
-		unit_variant newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
+		newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant
 	}
 
@@ -99,7 +99,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize f32 to {:?}",
 				self.schema_node
 			))),
 		}
@@ -123,7 +123,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize f64 to {:?}",
 				self.schema_node
 			))),
 		}
@@ -174,7 +174,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize str to {:?}",
 				self.schema_node
 			))),
 		}
@@ -198,7 +198,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize bytes to {:?}",
 				self.schema_node
 			))),
 		}
@@ -224,7 +224,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Null, |_| Ok(()))
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize unit to {:?}",
 				self.schema_node
 			))),
 		}
@@ -240,22 +240,34 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize bool to {:?}",
+				"Could not serialize unit struct to {:?}",
 				self.schema_node
 			))),
 		}
 	}
 
-	/*fn serialize_unit_variant(
+	fn serialize_unit_variant(
 		self,
 		name: &'static str,
 		variant_index: u32,
 		variant: &'static str,
 	) -> Result<Self::Ok, Self::Error> {
-		todo!()
+		match self.schema_node {
+			SchemaNode::Null if variant == "Null" => Ok(()),
+			SchemaNode::String | SchemaNode::Enum(_) => self.serialize_str(variant),
+			SchemaNode::Union(union) => {
+				self.serialize_union_unnamed(union, UnionVariantLookupKey::UnitVariant, |ser| {
+					ser.serialize_unit_variant(name, variant_index, variant)
+				})
+			}
+			_ => Err(SerError::custom(format_args!(
+				"Could not serialize unit variant to {:?}",
+				self.schema_node
+			))),
+		}
 	}
 
-	fn serialize_newtype_struct<T: ?Sized>(
+	/*fn serialize_newtype_struct<T: ?Sized>(
 		self,
 		name: &'static str,
 		value: &T,

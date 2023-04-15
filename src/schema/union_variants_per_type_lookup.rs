@@ -25,6 +25,7 @@ pub(crate) enum UnionVariantLookupKey {
 	Float8,
 	Str,
 	SliceU8,
+	UnitVariant,
 }
 const N_VARIANTS: usize = 20;
 
@@ -110,6 +111,7 @@ impl<'a> PerTypeLookup<'a> {
 				SchemaNode::Null => {
 					register(UnionVariantLookupKey::Null, 0);
 					register(UnionVariantLookupKey::UnitStruct, 0);
+					register(UnionVariantLookupKey::UnitVariant, 2);
 				}
 				SchemaNode::Boolean => register(UnionVariantLookupKey::Boolean, 0),
 				SchemaNode::Int => {
@@ -138,6 +140,7 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Str, 0);
 					register(UnionVariantLookupKey::UnitStruct, 0);
 					register(UnionVariantLookupKey::SliceU8, 1);
+					register(UnionVariantLookupKey::UnitVariant, 1);
 				}
 				SchemaNode::Array(_) => {}
 				SchemaNode::Map(_) => {}
@@ -152,6 +155,7 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Integer8, 10);
 					register(UnionVariantLookupKey::UnitStruct, 0);
 					register(UnionVariantLookupKey::Str, 5);
+					register(UnionVariantLookupKey::UnitVariant, 0);
 				}
 				SchemaNode::Record(Record { name, .. }) => {
 					register_name(name);
