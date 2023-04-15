@@ -119,7 +119,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 			SchemaNode::Float => self
 				.state
 				.writer
-				.write_all(&(v as f64).to_le_bytes())
+				.write_all(&(v as f32).to_le_bytes())
 				.map_err(SerError::io),
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Float8, |ser| {
