@@ -68,8 +68,16 @@ pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(
 		serde_avro_fast::de::DeserializerState::from_slice(slice, &fast_schema).deserializer(),
 	)
 	.unwrap();
+	println!("{}", serde_json::to_string_pretty(&sjv).unwrap());
 	let avro_value = apache_avro::to_value(sjv).unwrap();
-	let avro_value_reinterpreted = avro_value.resolve(schema).unwrap();
+	dbg!(&avro_value);
+	let avro_value_reinterpreted = match (avro_value, schema) {
+		(Value::Bytes(v), Schema::Fixed { size, .. }) => {
+			assert_eq!(*size, v.len());
+			Value::Fixed(*size, v)
+		}
+		(avro_value, schema) => avro_value.resolve(schema).unwrap(),
+	};
 	avro_value_reinterpreted
 }
 
@@ -118,7 +126,7 @@ fn test_round_trip_03() {
 
 #[test]
 fn test_round_trip_08() {
-	test_round_trip::<serde_bytes::ByteBuf>(&SCHEMAS_TO_VALIDATE[3]);
+	test_round_trip::<serde_bytes::ByteBuf>(&SCHEMAS_TO_VALIDATE[8]);
 }
 
 #[test]
