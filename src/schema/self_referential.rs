@@ -167,11 +167,20 @@ impl std::fmt::Debug for Union<'_> {
 }
 
 /// Component of a [`SchemaNode`]
-#[derive(Debug)]
 pub struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 	pub name: Name,
 	pub per_name_lookup: HashMap<String, usize>,
+}
+
+impl<'a> std::fmt::Debug for Record<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Skip per_type_lookup for readability
+		f.debug_struct("Record")
+			.field("fields", &self.fields)
+			.field("name", &self.name)
+			.finish()
+	}
 }
 
 /// Component of a [`SchemaNode`]
