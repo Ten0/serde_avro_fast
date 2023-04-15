@@ -1,4 +1,8 @@
+mod record_or_map;
+
 use super::*;
+
+use record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap};
 
 pub struct DatumSerializer<'r, 's, W> {
 	pub(super) state: &'r mut SerializerState<'s, W>,
@@ -13,13 +17,13 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	//type SerializeTuple;
 	//type SerializeTupleStruct;
 	//type SerializeTupleVariant;
-	//type SerializeMap;
-	//type SerializeStruct;
+	type SerializeMap = SerializeMapAsRecordOrMap<'r, 's, W>;
+	type SerializeStruct = SerializeStructAsRecordOrMap<'r, 's, W>;
 	//type SerializeStructVariant;
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {
 		err = (<Self::Error as serde::ser::Error>::custom("Unexpected input"));
-		newtype_variant seq tuple tuple_struct tuple_variant map struct
+		newtype_variant seq tuple tuple_struct tuple_variant
 		struct_variant
 	}
 
@@ -315,10 +319,28 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		len: usize,
 	) -> Result<Self::SerializeTupleVariant, Self::Error> {
 		todo!()
-	}
+	}*/
 
 	fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-		todo!()
+		match *self.schema_node {
+			SchemaNode::Record(ref record) => {
+				Ok(SerializeMapAsRecordOrMap::record(self.state, record))
+			}
+			SchemaNode::Map(map) => Ok(SerializeMapAsRecordOrMap::map(
+				self.state,
+				map,
+				len.unwrap_or(0),
+			)),
+			SchemaNode::Union(ref union) => {
+				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
+					ser.serialize_map(len)
+				})
+			}
+			_ => Err(SerError::custom(format_args!(
+				"Could not serialize map to {:?}",
+				self.schema_node
+			))),
+		}
 	}
 
 	fn serialize_struct(
@@ -326,10 +348,24 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		name: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeStruct, Self::Error> {
-		todo!()
+		match *self.schema_node {
+			SchemaNode::Record(ref record) => {
+				Ok(SerializeStructAsRecordOrMap::record(self.state, record))
+			}
+			SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(self.state, map, len)),
+			SchemaNode::Union(ref union) => {
+				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
+					ser.serialize_struct(name, len)
+				})
+			}
+			_ => Err(SerError::custom(format_args!(
+				"Could not serialize struct to {:?}",
+				self.schema_node
+			))),
+		}
 	}
 
-	fn serialize_struct_variant(
+	/*fn serialize_struct_variant(
 		self,
 		name: &'static str,
 		variant_index: u32,
@@ -341,12 +377,12 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 }
 
 impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
-	fn serialize_union_unnamed(
+	fn serialize_union_unnamed<O>(
 		self,
 		union: &'s Union<'s>,
 		variant_lookup: UnionVariantLookupKey,
-		with_serializer: impl FnOnce(Self) -> Result<(), SerError>,
-	) -> Result<(), SerError> {
+		with_serializer: impl FnOnce(Self) -> Result<O, SerError>,
+	) -> Result<O, SerError> {
 		match union.per_type_lookup.unnamed(variant_lookup) {
 			None => Err(SerError::custom(format_args!(
 				"Could not serialize {:?} to {:?} - \

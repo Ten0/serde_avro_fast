@@ -26,6 +26,7 @@ pub(crate) enum UnionVariantLookupKey {
 	Str,
 	SliceU8,
 	UnitVariant,
+	StructOrMap,
 }
 const N_VARIANTS: usize = 20;
 
@@ -143,7 +144,9 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::UnitVariant, 1);
 				}
 				SchemaNode::Array(_) => {}
-				SchemaNode::Map(_) => {}
+				SchemaNode::Map(_) => {
+					register(UnionVariantLookupKey::StructOrMap, 0);
+				}
 				SchemaNode::Union(_) => {
 					// Union in union is supposedly not allowed so you'd better
 					// not rely on looking up through nested unions
@@ -159,6 +162,7 @@ impl<'a> PerTypeLookup<'a> {
 				}
 				SchemaNode::Record(Record { name, .. }) => {
 					register_name(name);
+					register(UnionVariantLookupKey::StructOrMap, 0);
 				}
 				SchemaNode::Fixed(Fixed { name, .. }) => {
 					register_name(name);

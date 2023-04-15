@@ -171,6 +171,7 @@ impl std::fmt::Debug for Union<'_> {
 pub struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 	pub name: Name,
+	pub per_name_lookup: HashMap<String, usize>,
 }
 
 /// Component of a [`SchemaNode`]
@@ -253,6 +254,12 @@ impl From<super::safe::Schema> for Schema {
 						}
 					}),
 					SafeSchemaNode::Record(record) => SchemaNode::Record(Record {
+						per_name_lookup: record
+							.fields
+							.iter()
+							.enumerate()
+							.map(|(i, v)| (v.name.clone(), i))
+							.collect(),
 						fields: record
 							.fields
 							.into_iter()
