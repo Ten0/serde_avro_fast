@@ -2,7 +2,7 @@
 //! https://github.com/apache/avro/blob/5016cd5c3f2054ebacce7983785c228798e47f59/lang/rust/avro/tests/io.rs
 
 use {
-	apache_avro::{to_avro_datum, types::Value, Schema},
+	apache_avro::{types::Value, Schema},
 	lazy_static::lazy_static,
 	pretty_assertions::assert_eq,
 };
@@ -59,66 +59,66 @@ lazy_static! {
 	];
 }
 
-pub fn from_avro_datum<T: serde::de::DeserializeOwned + serde::Serialize>(
+pub fn from_avro_datum_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	schema: &Schema,
 	slice: &[u8],
 ) -> Value {
 	let fast_schema = serde_avro_fast::Schema::from_apache_schema(schema).unwrap();
-	let sjv: T = serde::Deserialize::deserialize(
-		serde_avro_fast::de::DeserializerState::from_slice(slice, &fast_schema).deserializer(),
-	)
-	.unwrap();
+	let sjv: T = serde_avro_fast::from_datum_slice(slice, &fast_schema).unwrap();
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	let avro_value_reinterpreted = avro_value.resolve(schema).unwrap();
 	avro_value_reinterpreted
 }
 
-fn test_round_trip<T: serde::de::DeserializeOwned + serde::Serialize>(
+fn test_round_trip_apache_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	&(raw_schema, ref value): &(&str, Value),
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let encoded = to_avro_datum(&schema, value.clone()).unwrap();
-	let decoded = from_avro_datum::<T>(&schema, &encoded);
+
+	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
+	let decoded = from_avro_datum_fast::<T>(&schema, &encoded);
 	assert_eq!(*value, decoded);
 }
 
 macro_rules! tests {
-	($($idx: tt)*) => {
+	($($type_: ty => $($idx: expr)+,)+) => {
 		paste::paste! {
 			$(
-				#[test]
-				fn [<test_validate_ $idx>]() {
-					let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[$idx];
-					let schema = Schema::parse_str(raw_schema).unwrap();
-					assert!(
-						value.validate(&schema),
-						"value {:?} does not validate schema: {}",
-						value,
-						raw_schema
-					);
-				}
-			)*
+				$(
+					#[test]
+					fn [<test_validate_ $idx>]() {
+						let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[$idx];
+						let schema = Schema::parse_str(raw_schema).unwrap();
+						assert!(
+							value.validate(&schema),
+							"value {:?} does not validate schema: {}",
+							value,
+							raw_schema
+						);
+					}
+				)*
 
-			$(
-				#[test]
-				fn [<test_round_trip_ $idx>]() {
-					test_round_trip::<serde_json::Value>(&SCHEMAS_TO_VALIDATE[$idx]);
-				}
+				$(
+					#[test]
+					fn [<test_round_trip_apache_fast_ $idx>]() {
+						test_round_trip_apache_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+					}
+				)*
 			)*
+		}
+
+		#[test]
+		fn all_tested() {
+			let mut tested = vec![$($($idx,)*)*];
+			tested.sort();
+			assert_eq!(tested, (0..SCHEMAS_TO_VALIDATE.len()).collect::<Vec<_>>());
 		}
 	};
 }
-tests! { 00 01 02 04 05 06 07 09 10 11 12 13 }
-
-#[test]
-fn test_round_trip_03() {
-	test_round_trip::<serde_bytes::ByteBuf>(&SCHEMAS_TO_VALIDATE[3]);
-}
-
-#[test]
-fn test_round_trip_08() {
-	test_round_trip::<serde_bytes::ByteBuf>(&SCHEMAS_TO_VALIDATE[3]);
+tests! {
+	serde_json::Value => 00 01 02 04 05 06 07 09 10 11 12 13,
+	serde_bytes::ByteBuf => 03 08,
 }
 
 #[test]

@@ -96,3 +96,17 @@ where
 		de::DeserializerState::from_reader(reader, &schema).deserializer(),
 	)
 }
+
+/// Serialize an avro "datum" (raw data, no headers...)
+///
+/// to the provided writer
+pub fn to_datum<T, W>(value: &T, writer: W, schema: &Schema) -> Result<(), ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+	W: std::io::Write,
+{
+	serde::Serialize::serialize(
+		value,
+		ser::SerializerState::from_writer(writer, schema).serializer(),
+	)
+}
