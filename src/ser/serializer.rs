@@ -19,7 +19,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {
 		err = (<Self::Error as serde::ser::Error>::custom("Unexpected input"));
-		newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
+		newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant
 	}
 
@@ -267,18 +267,18 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		}
 	}
 
-	/*fn serialize_newtype_struct<T: ?Sized>(
+	fn serialize_newtype_struct<T: ?Sized>(
 		self,
-		name: &'static str,
+		_name: &'static str,
 		value: &T,
 	) -> Result<Self::Ok, Self::Error>
 	where
 		T: Serialize,
 	{
-		todo!()
+		value.serialize(self)
 	}
 
-	fn serialize_newtype_variant<T: ?Sized>(
+	/*fn serialize_newtype_variant<T: ?Sized>(
 		self,
 		name: &'static str,
 		variant_index: u32,
