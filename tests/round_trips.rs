@@ -201,14 +201,21 @@ macro_rules! tests {
 		#[test]
 		fn all_tested() {
 			let mut tested = vec![$($($idx,)*)*];
-			tested.sort();
+			tested.sort_unstable();
+			tested.dedup();
 			assert_eq!(tested, (0..SCHEMAS_TO_VALIDATE.len()).collect::<Vec<_>>());
 		}
 	};
 }
 tests! {
-	serde_json::Value => 00 01 02 04 05 06 07 09 10 11 12 13 14,
+	serde_json::Value => 00 01 02 04 05 06 07 10 11 12 13 14,
 	serde_bytes::ByteBuf => 03 08,
+	AB => 09,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+enum AB {
+	A,
+	B,
 }
 
 #[test]
