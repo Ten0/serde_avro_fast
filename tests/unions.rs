@@ -1,4 +1,4 @@
-use serde_avro_fast::{from_datum_slice, Schema};
+use serde_avro_fast::{from_datum_slice, to_datum_vec, Schema};
 
 const SCHEMA: &str = r#"[
 	"string",
@@ -31,7 +31,7 @@ const SCHEMA: &str = r#"[
 	}
 ]"#;
 
-#[derive(serde_derive::Deserialize, Debug, PartialEq)]
+#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, PartialEq)]
 enum Union<'a> {
 	Null,
 	Array(#[serde(borrow)] Vec<&'a str>),
@@ -44,24 +44,36 @@ enum Union<'a> {
 	Long(u64),
 }
 
-#[derive(serde_derive::Deserialize, Debug, PartialEq)]
+#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, PartialEq)]
 struct Record2 {
 	b: i64,
+}
+
+fn test<'de, T: serde::Serialize + serde::Deserialize<'de> + PartialEq + std::fmt::Debug>(
+	datum: &'de [u8],
+	rust_value: T,
+	schema: &Schema,
+) {
+	assert_eq!(from_datum_slice::<T>(datum, schema).unwrap(), rust_value);
+	assert_eq!(to_datum_vec(&rust_value, schema).unwrap(), datum);
 }
 
 #[test]
 fn union_as_enum() {
 	let schema: Schema = SCHEMA.parse().unwrap();
-	let fds = |s: &'static [u8]| from_datum_slice::<Union<'static>>(s, &schema).unwrap();
-	assert_eq!(fds(&[0, 2, b'a']), Union::String);
-	assert_eq!(fds(&[2]), Union::Null);
-	assert_eq!(fds(&[4, 2]), Union::Long(1));
+	let test = |s: &'static [u8], value: Union<'static>| test::<Union<'static>>(s, value, &schema);
 	assert_eq!(
-		fds(&[6, 4, 2, b'a', 2, b'b', 0]),
-		Union::Array(vec!["a", "b"])
+		from_datum_slice::<Union>(&[0, 2, b'a'], &schema).unwrap(),
+		Union::String
 	);
-	assert_eq!(fds(&[8, 1]), Union::Record1 { a: -1 });
-	assert_eq!(fds(&[10, 3]), Union::Record2(Record2 { b: -2 }));
+	assert_eq!(
+		from_datum_slice::<Union>(&[2], &schema).unwrap(),
+		Union::Null
+	);
+	test(&[4, 2], Union::Long(1));
+	test(&[6, 4, 2, b'a', 2, b'b', 0], Union::Array(vec!["a", "b"]));
+	test(&[8, 1], Union::Record1 { a: -1 });
+	test(&[10, 3], Union::Record2(Record2 { b: -2 }));
 }
 
 #[test]
@@ -86,9 +98,14 @@ fn union_straight_to_actual_type() {
 #[test]
 fn option_complex() {
 	let schema: Schema = SCHEMA.parse().unwrap();
-	let fds = |s: &'static [u8]| from_datum_slice::<Option<Union<'static>>>(s, &schema).unwrap();
-	assert_eq!(fds(&[0, 2, b'a']), Some(Union::String));
-	assert_eq!(fds(&[2]), None);
+	let test = |s: &'static [u8], value: Option<Union<'static>>| {
+		test::<Option<Union<'static>>>(s, value, &schema)
+	};
+	assert_eq!(
+		from_datum_slice::<Option<Union>>(&[0, 2, b'a'], &schema).unwrap(),
+		Some(Union::String)
+	);
+	test(&[2], None);
 }
 
 #[test]

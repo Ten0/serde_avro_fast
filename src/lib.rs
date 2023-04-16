@@ -110,3 +110,18 @@ where
 		ser::SerializerState::from_writer(writer, schema).serializer(),
 	)
 }
+
+/// Serialize an avro "datum" (raw data, no headers...)
+///
+/// to a newly allocated Vec
+///
+/// Note that unless you would otherwise allocate a `Vec` anyway, it will be
+/// more efficient to use [`to_datum`] instead.
+pub fn to_datum_vec<T>(value: &T, schema: &Schema) -> Result<Vec<u8>, ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+{
+	let mut buf = Vec::new();
+	to_datum(value, &mut buf, schema)?;
+	Ok(buf)
+}
