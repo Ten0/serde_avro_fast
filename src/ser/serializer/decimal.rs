@@ -56,7 +56,7 @@ where
 			match buf.len().checked_sub(size) {
 				Some(start) => start,
 				None => {
-					let byte: u8 = if buf[0] & 0x80 == 0 { 0x00 } else { 0x80 };
+					let byte: u8 = if buf[0] & 0x80 == 0 { 0x00 } else { 0xFF };
 					for _ in buf.len()..size {
 						state.writer.write_all(&[byte]).map_err(SerError::io)?;
 					}
