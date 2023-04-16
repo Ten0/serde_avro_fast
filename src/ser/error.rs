@@ -18,7 +18,7 @@ struct ErrorInner {
 }
 
 impl SerError {
-	/// If you need a dynamic string use `DeError::custom(format_args!(...))`
+	/// If you need a dynamic string use `SerError::custom(format_args!(...))`
 	pub(crate) fn new(s: &'static str) -> Self {
 		Self {
 			inner: Box::new(ErrorInner {
@@ -28,7 +28,7 @@ impl SerError {
 	}
 	pub(crate) fn io(io_error: std::io::Error) -> Self {
 		Self::custom(format_args!(
-			"Encountered IO error when attempting to read for deserialization: {io_error}"
+			"Encountered IO error when attempting to write for serialization: {io_error}"
 		))
 	}
 }
