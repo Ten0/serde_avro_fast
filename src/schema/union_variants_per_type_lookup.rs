@@ -27,6 +27,7 @@ pub(crate) enum UnionVariantLookupKey {
 	SliceU8,
 	UnitVariant,
 	StructOrMap,
+	SeqOrTupleOrTupleStruct,
 }
 const N_VARIANTS: usize = 20;
 
@@ -156,7 +157,9 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::SliceU8, 1);
 					register(UnionVariantLookupKey::UnitVariant, 1);
 				}
-				SchemaNode::Array(_) => {}
+				SchemaNode::Array(_) => {
+					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 0);
+				}
 				SchemaNode::Map(_) => {
 					register(UnionVariantLookupKey::StructOrMap, 0);
 				}

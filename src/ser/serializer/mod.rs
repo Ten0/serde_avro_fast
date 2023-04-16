@@ -1,11 +1,13 @@
 mod blocks;
 mod record_or_map;
+mod seq_or_tuple;
 
 use super::*;
 
 use {
 	blocks::BlockWriter,
 	record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap},
+	seq_or_tuple::SerializeAsArray,
 };
 
 pub struct DatumSerializer<'r, 's, W> {
@@ -17,9 +19,9 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
-	//type SerializeSeq;
-	//type SerializeTuple;
-	//type SerializeTupleStruct;
+	type SerializeSeq = SerializeAsArray<'r, 's, W>;
+	type SerializeTuple = SerializeAsArray<'r, 's, W>;
+	type SerializeTupleStruct = SerializeAsArray<'r, 's, W>;
 	//type SerializeTupleVariant;
 	type SerializeMap = SerializeMapAsRecordOrMap<'r, 's, W>;
 	type SerializeStruct = SerializeStructAsRecordOrMap<'r, 's, W>;
@@ -27,7 +29,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {
 		err = (<Self::Error as serde::ser::Error>::custom("Unexpected input"));
-		newtype_variant seq tuple tuple_struct tuple_variant
+		newtype_variant tuple_variant
 		struct_variant
 	}
 
@@ -297,25 +299,39 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		T: Serialize,
 	{
 		todo!()
-	}
+	}*/
 
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-		todo!()
+		match self.schema_node {
+			SchemaNode::Array(elements_schema) => Ok(SerializeAsArray {
+				block_writer: BlockWriter::new(self.state, len.unwrap_or(0))?,
+				elements_schema,
+			}),
+			SchemaNode::Union(union) => self.serialize_union_unnamed(
+				union,
+				UnionVariantLookupKey::SeqOrTupleOrTupleStruct,
+				|ser| ser.serialize_seq(len),
+			),
+			_ => Err(SerError::custom(format_args!(
+				"Could not serialize sequence, tuple or tuple struct to {:?}",
+				self.schema_node
+			))),
+		}
 	}
 
 	fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-		todo!()
+		self.serialize_seq(Some(len))
 	}
 
 	fn serialize_tuple_struct(
 		self,
-		name: &'static str,
+		_name: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeTupleStruct, Self::Error> {
-		todo!()
+		self.serialize_seq(Some(len))
 	}
 
-	fn serialize_tuple_variant(
+	/*fn serialize_tuple_variant(
 		self,
 		name: &'static str,
 		variant_index: u32,
