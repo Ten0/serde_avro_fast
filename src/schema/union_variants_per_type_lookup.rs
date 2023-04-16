@@ -32,7 +32,7 @@ pub(crate) enum UnionVariantLookupKey {
 const N_VARIANTS: usize = 20;
 
 pub(crate) struct PerTypeLookup<'a> {
-	per_name: HashMap<Cow<'static, str>, &'a SchemaNode<'a>>,
+	per_name: HashMap<Cow<'static, str>, (i64, &'a SchemaNode<'a>)>,
 	per_direct_union_variant: [Option<(i64, &'a SchemaNode<'a>)>; N_VARIANTS],
 }
 impl<'a> PerTypeLookup<'a> {
@@ -49,7 +49,7 @@ impl<'a> PerTypeLookup<'a> {
 	) -> Option<(i64, &'a SchemaNode<'a>)> {
 		self.per_direct_union_variant[variant as usize]
 	}
-	pub(crate) fn named(&self, name: &str) -> Option<&'a SchemaNode<'a>> {
+	pub(crate) fn named(&self, name: &str) -> Option<(i64, &'a SchemaNode<'a>)> {
 		self.per_name.get(name).copied()
 	}
 
@@ -120,16 +120,19 @@ impl<'a> PerTypeLookup<'a> {
 			};
 			let register_name = |name: &Name| {
 				let mut per_name = per_name.borrow_mut();
-				per_name.insert(Cow::Owned(name.name().to_owned()), schema_node);
+				per_name.insert(
+					Cow::Owned(name.name().to_owned()),
+					(discriminant, schema_node),
+				);
 				per_name.insert(
 					Cow::Owned(name.fully_qualified_name().to_owned()),
-					schema_node,
+					(discriminant, schema_node),
 				);
 			};
 			let register_type_name = |type_name: &'static str| {
 				per_name
 					.borrow_mut()
-					.insert(Cow::Borrowed(type_name), schema_node);
+					.insert(Cow::Borrowed(type_name), (discriminant, schema_node));
 			};
 			match schema_node {
 				SchemaNode::Null => {

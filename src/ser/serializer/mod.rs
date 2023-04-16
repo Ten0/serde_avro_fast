@@ -538,10 +538,16 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 					// type
 					f(self)
 				}
-				Some(schema_node) => f(DatumSerializer {
-					state: self.state,
-					schema_node,
-				}),
+				Some((discriminant, schema_node)) => {
+					self.state
+						.writer
+						.write_varint(discriminant)
+						.map_err(SerError::io)?;
+					f(DatumSerializer {
+						state: self.state,
+						schema_node,
+					})
+				}
 			},
 			_ => f(self),
 		}
