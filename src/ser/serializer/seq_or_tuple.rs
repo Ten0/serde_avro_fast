@@ -43,4 +43,5 @@ impl_serialize_seq_or_tuple! {
 	SerializeSeq serialize_element,
 	SerializeTuple serialize_element,
 	SerializeTupleStruct serialize_field,
+	SerializeTupleVariant serialize_field,
 }
