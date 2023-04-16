@@ -12,6 +12,8 @@ use {
 	struct_or_map::{SerializeMapAsRecordOrMapOrDuration, SerializeStructAsRecordOrMapOrDuration},
 };
 
+/// Can't be instantiated directly - has to be constructed from a
+/// [`SerializerState`]
 pub struct DatumSerializer<'r, 's, W> {
 	pub(super) state: &'r mut SerializerState<'s, W>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
