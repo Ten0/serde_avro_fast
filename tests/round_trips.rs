@@ -234,6 +234,8 @@ fn test_decimal() {
 			repr: DecimalRepr::Bytes
 		})
 	));
+
+	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, 0.2);
 	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
@@ -241,4 +243,21 @@ fn test_decimal() {
 	let deserialized: rust_decimal::Decimal =
 		serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, &schema).unwrap(),
+		[2, 2]
+	);
+
+	// - 0.2
+	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
+	assert_eq!(deserialized, -0.2);
+	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2");
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, &schema).unwrap(),
+		[2, 0xFE]
+	);
 }

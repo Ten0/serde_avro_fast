@@ -134,6 +134,10 @@ impl<'a> PerTypeLookup<'a> {
 					.borrow_mut()
 					.insert(Cow::Borrowed(type_name), (discriminant, schema_node));
 			};
+			// Note that the following list is very coupled with the serializer:
+			// every `UnionVariantLookupKey` corresponds to one (or more) function
+			// of `Serializer`, and every `register` call corresponds to a capability
+			// of that function to serialize that type.
 			match schema_node {
 				SchemaNode::Null => {
 					register_type_name("Null");
@@ -221,6 +225,8 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Integer, 5);
 					register(UnionVariantLookupKey::Integer4, 5);
 					register(UnionVariantLookupKey::Integer8, 5);
+					register(UnionVariantLookupKey::Float8, 2);
+					register(UnionVariantLookupKey::Str, 20);
 				}
 				SchemaNode::Uuid => {
 					register_type_name("Uuid");
