@@ -2,7 +2,7 @@ use crate::schema::Record;
 
 use super::*;
 
-pub struct SerializeStructAsRecordOrMap<'r, 's, W> {
+pub struct SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 	kind: Kind<'r, 's, W>,
 }
 
@@ -15,6 +15,11 @@ enum Kind<'r, 's, W> {
 		block_writer: BlockWriter<'r, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 	},
+	Duration {
+		serializer_state: &'r mut SerializerState<'s, W>,
+		values: [u32; 3],
+		gotten_values: u8,
+	},
 }
 
 struct RecordState<'s> {
@@ -24,7 +29,7 @@ struct RecordState<'s> {
 	record: &'s Record<'s>,
 }
 
-impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
+impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
 		Self {
 			kind: Kind::Record {
@@ -47,6 +52,15 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 			kind: Kind::Map {
 				block_writer: BlockWriter::new(state, min_len)?,
 				elements_schema,
+			},
+		})
+	}
+	pub(super) fn duration(state: &'r mut SerializerState<'s, W>) -> Result<Self, SerError> {
+		Ok(Self {
+			kind: Kind::Duration {
+				serializer_state: state,
+				values: [0; 3],
+				gotten_values: 0,
 			},
 		})
 	}
@@ -115,6 +129,28 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 			Kind::Map { block_writer, .. } => {
 				block_writer.end()?;
 			}
+			Kind::Duration {
+				serializer_state,
+				values,
+				gotten_values,
+			} => {
+				if gotten_values != 0b111 {
+					return Err(duration_fields_incorrect());
+				} else {
+					// This section should be noop after optimizer
+					let [a, b, c] = values;
+					let [a3, a2, a1, a0] = a.to_le_bytes();
+					let [b3, b2, b1, b0] = b.to_le_bytes();
+					let [c3, c2, c1, c0] = c.to_le_bytes();
+					let values = [a3, a2, a1, a0, b3, b2, b1, b0, c3, c2, c1, c0];
+
+					// Now we serialize
+					serializer_state
+						.writer
+						.write_all(&values)
+						.map_err(SerError::io)?;
+				}
+			}
 		}
 		Ok(())
 	}
@@ -162,7 +198,8 @@ fn field_idx<'s>(
 fn serialize_record_value<'r, 's, W: Write, T: ?Sized>(
 	serializer_state: &'r mut SerializerState<'s, W>,
 	record_state: &mut RecordState<'s>,
-	(field_idx, schema_node): (usize, &'s SchemaNode<'s>),
+	field_idx: usize,
+	schema_node: &'s SchemaNode<'s>,
 	value: &T,
 ) -> Result<(), SerError>
 where
@@ -218,6 +255,27 @@ where
 	}
 }
 
+fn serialize_duration_field<T>(
+	values: &mut [u32; 3],
+	gotten_values: &mut u8,
+	duration_field: extract_for_duration::DurationFieldName,
+	value: &T,
+) -> Result<(), SerError>
+where
+	T: Serialize + ?Sized,
+{
+	let bit = 1u8 << (duration_field as u8);
+	if *gotten_values & bit != 0 {
+		return Err(SerError::custom(format_args!(
+			"{duration_field} is getting serialized twice for serialization as Duration",
+		)));
+	}
+	values[duration_field as usize] =
+		value.serialize(extract_for_duration::ExtractU32ForDuration)?;
+	*gotten_values |= bit;
+	Ok(())
+}
+
 fn serializing_same_field_name_twice(field_name: &str) -> SerError {
 	SerError::custom(format_args!(
 		"Attempting to serialize field with same field_name \
@@ -225,7 +283,14 @@ fn serializing_same_field_name_twice(field_name: &str) -> SerError {
 	))
 }
 
-impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, W> {
+pub(super) fn duration_fields_incorrect() -> SerError {
+	SerError::new(
+		"A struct can indeed be serialized as Duration, but only if its fields are \
+			months/days/milliseconds",
+	)
+}
+
+impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 	type Ok = ();
 
 	type Error = SerError;
@@ -243,8 +308,14 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, 
 				serializer_state,
 				record_state,
 			} => {
-				let field_idx = field_idx(record_state, key)?;
-				serialize_record_value(serializer_state, record_state, field_idx, value)
+				let (field_idx, schema_node) = field_idx(record_state, key)?;
+				serialize_record_value(
+					serializer_state,
+					record_state,
+					field_idx,
+					schema_node,
+					value,
+				)
 			}
 			Kind::Map {
 				elements_schema,
@@ -260,6 +331,14 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, 
 					schema_node: *elements_schema,
 				})
 			}
+			Kind::Duration {
+				values,
+				gotten_values,
+				..
+			} => {
+				let duration_field = extract_for_duration::DurationFieldName::from_str(key)?;
+				serialize_duration_field(values, gotten_values, duration_field, value)
+			}
 		}
 	}
 
@@ -268,7 +347,9 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, 
 	}
 }
 
-impl<'r, 's, W: Write> SerializeStructVariant for SerializeStructAsRecordOrMap<'r, 's, W> {
+impl<'r, 's, W: Write> SerializeStructVariant
+	for SerializeStructAsRecordOrMapOrDuration<'r, 's, W>
+{
 	type Ok = ();
 
 	type Error = SerError;
@@ -289,16 +370,25 @@ impl<'r, 's, W: Write> SerializeStructVariant for SerializeStructAsRecordOrMap<'
 	}
 }
 
-pub struct SerializeMapAsRecordOrMap<'r, 's, W> {
-	inner: SerializeStructAsRecordOrMap<'r, 's, W>,
-	key_location: Option<(usize, &'s SchemaNode<'s>)>,
+pub struct SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
+	inner: SerializeStructAsRecordOrMapOrDuration<'r, 's, W>,
+	key_hint: KeyHint<'s>,
 }
 
-impl<'r, 's, W: Write> SerializeMapAsRecordOrMap<'r, 's, W> {
+enum KeyHint<'s> {
+	None,
+	KeyLocation {
+		field_idx: usize,
+		schema_node: &'s SchemaNode<'s>,
+	},
+	DurationField(extract_for_duration::DurationFieldName),
+}
+
+impl<'r, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
 	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
 		Self {
-			inner: SerializeStructAsRecordOrMap::record(state, record),
-			key_location: None,
+			inner: SerializeStructAsRecordOrMapOrDuration::record(state, record),
+			key_hint: KeyHint::None,
 		}
 	}
 	pub(super) fn map(
@@ -307,13 +397,20 @@ impl<'r, 's, W: Write> SerializeMapAsRecordOrMap<'r, 's, W> {
 		min_len: usize,
 	) -> Result<Self, SerError> {
 		Ok(Self {
-			inner: SerializeStructAsRecordOrMap::map(state, elements_schema, min_len)?,
-			key_location: None,
+			inner: SerializeStructAsRecordOrMapOrDuration::map(state, elements_schema, min_len)?,
+			key_hint: KeyHint::None,
+		})
+	}
+
+	pub(super) fn duration(state: &'r mut SerializerState<'s, W>) -> Result<Self, SerError> {
+		Ok(Self {
+			inner: SerializeStructAsRecordOrMapOrDuration::duration(state)?,
+			key_hint: KeyHint::None,
 		})
 	}
 }
 
-impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
+impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
@@ -323,8 +420,12 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 	{
 		match &mut self.inner.kind {
 			Kind::Record { record_state, .. } => {
-				let field_idx = key.serialize(FindFieldIndexSerializer { record_state })?;
-				self.key_location = Some(field_idx);
+				let (field_idx, schema_node) =
+					key.serialize(FindFieldIndexSerializer { record_state })?;
+				self.key_hint = KeyHint::KeyLocation {
+					field_idx,
+					schema_node,
+				};
 				Ok(())
 			}
 			Kind::Map { block_writer, .. } => {
@@ -333,6 +434,12 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 					state: block_writer.state,
 					schema_node: &SchemaNode::String,
 				})
+			}
+			Kind::Duration { .. } => {
+				self.key_hint = KeyHint::DurationField(
+					key.serialize(extract_for_duration::ExtractFieldNameForDuration)?,
+				);
+				Ok(())
 			}
 		}
 	}
@@ -345,13 +452,19 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 			Kind::Record {
 				serializer_state,
 				record_state,
-			} => {
-				let field_idx = self
-					.key_location
-					.take()
-					.expect("serialize_key should have been called before serialize_value");
-				serialize_record_value(serializer_state, record_state, field_idx, value)
-			}
+			} => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
+				KeyHint::KeyLocation {
+					field_idx,
+					schema_node,
+				} => serialize_record_value(
+					serializer_state,
+					record_state,
+					field_idx,
+					schema_node,
+					value,
+				),
+				_ => panic!("serialize_key should have been called before serialize_value"),
+			},
 			Kind::Map {
 				elements_schema,
 				block_writer,
@@ -359,6 +472,16 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 				state: block_writer.state,
 				schema_node: *elements_schema,
 			}),
+			Kind::Duration {
+				values,
+				gotten_values,
+				..
+			} => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
+				KeyHint::DurationField(duration_field) => {
+					serialize_duration_field(values, gotten_values, duration_field, value)
+				}
+				_ => panic!("serialize_key should have been called before serialize_value"),
+			},
 		}
 	}
 
@@ -376,8 +499,15 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 				serializer_state,
 				record_state,
 			} => {
-				let field_idx = key.serialize(FindFieldIndexSerializer { record_state })?;
-				serialize_record_value(serializer_state, record_state, field_idx, value)
+				let (field_idx, schema_node) =
+					key.serialize(FindFieldIndexSerializer { record_state })?;
+				serialize_record_value(
+					serializer_state,
+					record_state,
+					field_idx,
+					schema_node,
+					value,
+				)
 			}
 			Kind::Map {
 				elements_schema,
@@ -392,6 +522,15 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 					state: block_writer.state,
 					schema_node: *elements_schema,
 				})
+			}
+			Kind::Duration {
+				values,
+				gotten_values,
+				..
+			} => {
+				let duration_field =
+					key.serialize(extract_for_duration::ExtractFieldNameForDuration)?;
+				serialize_duration_field(values, gotten_values, duration_field, value)
 			}
 		}
 	}

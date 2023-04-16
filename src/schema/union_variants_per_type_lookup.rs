@@ -268,6 +268,7 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Integer8, 0);
 				}
 				SchemaNode::Duration => {
+					register(UnionVariantLookupKey::StructOrMap, 5);
 					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 5);
 					register(UnionVariantLookupKey::SliceU8, 5);
 				}

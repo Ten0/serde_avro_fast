@@ -1,15 +1,15 @@
 mod blocks;
 mod decimal;
 mod extract_for_duration;
-mod record_or_map;
 mod seq_or_tuple;
+mod struct_or_map;
 
 use super::*;
 
 use {
 	blocks::BlockWriter,
-	record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap},
 	seq_or_tuple::SerializeAsArrayOrDuration,
+	struct_or_map::{SerializeMapAsRecordOrMapOrDuration, SerializeStructAsRecordOrMapOrDuration},
 };
 
 pub struct DatumSerializer<'r, 's, W> {
@@ -25,9 +25,9 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	type SerializeTuple = SerializeAsArrayOrDuration<'r, 's, W>;
 	type SerializeTupleStruct = SerializeAsArrayOrDuration<'r, 's, W>;
 	type SerializeTupleVariant = SerializeAsArrayOrDuration<'r, 's, W>;
-	type SerializeMap = SerializeMapAsRecordOrMap<'r, 's, W>;
-	type SerializeStruct = SerializeStructAsRecordOrMap<'r, 's, W>;
-	type SerializeStructVariant = SerializeStructAsRecordOrMap<'r, 's, W>;
+	type SerializeMap = SerializeMapAsRecordOrMapOrDuration<'r, 's, W>;
+	type SerializeStruct = SerializeStructAsRecordOrMapOrDuration<'r, 's, W>;
+	type SerializeStructVariant = SerializeStructAsRecordOrMapOrDuration<'r, 's, W>;
 
 	fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
@@ -381,14 +381,18 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
 		match *self.schema_node {
-			SchemaNode::Record(ref record) => {
-				Ok(SerializeMapAsRecordOrMap::record(self.state, record))
+			SchemaNode::Record(ref record) => Ok(SerializeMapAsRecordOrMapOrDuration::record(
+				self.state, record,
+			)),
+			SchemaNode::Map(map) => {
+				SerializeMapAsRecordOrMapOrDuration::map(self.state, map, len.unwrap_or(0))
 			}
-			SchemaNode::Map(map) => Ok(SerializeMapAsRecordOrMap::map(
-				self.state,
-				map,
-				len.unwrap_or(0),
-			)?),
+			SchemaNode::Duration => {
+				if len.map_or(false, |l| l != 3) {
+					return Err(struct_or_map::duration_fields_incorrect());
+				}
+				SerializeMapAsRecordOrMapOrDuration::duration(self.state)
+			}
 			SchemaNode::Union(ref union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
 					ser.serialize_map(len)
@@ -582,18 +586,23 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 		self,
 		variant_or_struct_name: &str,
 		len: usize,
-	) -> Result<SerializeStructAsRecordOrMap<'r, 's, W>, SerError> {
+	) -> Result<SerializeStructAsRecordOrMapOrDuration<'r, 's, W>, SerError> {
 		self.serialize_lookup_union_variant_by_name(variant_or_struct_name, |serializer| {
 			match *serializer.schema_node {
-				SchemaNode::Record(ref record) => Ok(SerializeStructAsRecordOrMap::record(
-					serializer.state,
-					record,
-				)),
-				SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(
+				SchemaNode::Record(ref record) => Ok(
+					SerializeStructAsRecordOrMapOrDuration::record(serializer.state, record),
+				),
+				SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMapOrDuration::map(
 					serializer.state,
 					map,
 					len,
 				)?),
+				SchemaNode::Duration => {
+					if len != 3 {
+						return Err(struct_or_map::duration_fields_incorrect());
+					}
+					SerializeStructAsRecordOrMapOrDuration::duration(serializer.state)
+				}
 				SchemaNode::Union(ref union) => serializer.serialize_union_unnamed(
 					union,
 					UnionVariantLookupKey::StructOrMap,
