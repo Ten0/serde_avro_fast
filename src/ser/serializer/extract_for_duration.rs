@@ -19,6 +19,7 @@ impl serde::Serializer for ExtractU32ForDuration {
 
 pub(super) struct ExtractFieldNameForDuration;
 #[derive(Copy, Clone)]
+/// Order of the enum variants matters because repr is used for indexing
 pub(super) enum DurationFieldName {
 	Months,
 	Days,
