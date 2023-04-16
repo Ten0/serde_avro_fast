@@ -5,7 +5,7 @@
 //!
 //! The contents of this module are very tied to the serializer's behavior
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
 use super::*;
 
@@ -32,7 +32,7 @@ pub(crate) enum UnionVariantLookupKey {
 const N_VARIANTS: usize = 20;
 
 pub(crate) struct PerTypeLookup<'a> {
-	per_name: HashMap<String, &'a SchemaNode<'a>>,
+	per_name: HashMap<Cow<'static, str>, &'a SchemaNode<'a>>,
 	per_direct_union_variant: [Option<(i64, &'a SchemaNode<'a>)>; N_VARIANTS],
 }
 impl<'a> PerTypeLookup<'a> {
@@ -72,7 +72,7 @@ impl<'a> PerTypeLookup<'a> {
 			},
 		}
 		let mut per_direct_union_variant = [NoneSomeOrConflict::None; N_VARIANTS];
-		let mut per_name = HashMap::new();
+		let per_name = std::cell::RefCell::new(HashMap::new());
 		for (discriminant, &schema_node) in variants.iter().enumerate() {
 			let discriminant: i64 = discriminant
 				.try_into()
@@ -118,54 +118,76 @@ impl<'a> PerTypeLookup<'a> {
 					}
 				}
 			};
-			let mut register_name = |name: &Name| {
-				per_name.insert(name.name().to_owned(), schema_node);
-				per_name.insert(name.fully_qualified_name().to_owned(), schema_node);
+			let register_name = |name: &Name| {
+				let mut per_name = per_name.borrow_mut();
+				per_name.insert(Cow::Owned(name.name().to_owned()), schema_node);
+				per_name.insert(
+					Cow::Owned(name.fully_qualified_name().to_owned()),
+					schema_node,
+				);
+			};
+			let register_type_name = |type_name: &'static str| {
+				per_name
+					.borrow_mut()
+					.insert(Cow::Borrowed(type_name), schema_node);
 			};
 			match schema_node {
 				SchemaNode::Null => {
+					register_type_name("Null");
 					register(UnionVariantLookupKey::Null, 0);
 					register(UnionVariantLookupKey::UnitStruct, 0);
 					register(UnionVariantLookupKey::UnitVariant, 2);
 				}
-				SchemaNode::Boolean => register(UnionVariantLookupKey::Boolean, 0),
+				SchemaNode::Boolean => {
+					register_type_name("Boolean");
+					register(UnionVariantLookupKey::Boolean, 0)
+				}
 				SchemaNode::Int => {
+					register_type_name("Int");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 0);
 					register(UnionVariantLookupKey::Integer8, 1);
 				}
 				SchemaNode::Long => {
+					register_type_name("Long");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 1);
 					register(UnionVariantLookupKey::Integer8, 0);
 				}
 				SchemaNode::Float => {
+					register_type_name("Float");
 					register(UnionVariantLookupKey::Float4, 0);
 					register(UnionVariantLookupKey::Float8, 1);
 				}
 				SchemaNode::Double => {
+					register_type_name("Double");
 					register(UnionVariantLookupKey::Float8, 0);
 					register(UnionVariantLookupKey::Float4, 1); // Just for better error
 				}
 				SchemaNode::Bytes => {
+					register_type_name("Bytes");
 					register(UnionVariantLookupKey::Str, 10);
 					register(UnionVariantLookupKey::SliceU8, 0);
 				}
 				SchemaNode::String => {
+					register_type_name("String");
 					register(UnionVariantLookupKey::Str, 0);
 					register(UnionVariantLookupKey::UnitStruct, 0);
 					register(UnionVariantLookupKey::SliceU8, 1);
 					register(UnionVariantLookupKey::UnitVariant, 1);
 				}
 				SchemaNode::Array(_) => {
+					register_type_name("Array");
 					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 0);
 				}
 				SchemaNode::Map(_) => {
+					register_type_name("Map");
 					register(UnionVariantLookupKey::StructOrMap, 0);
 				}
 				SchemaNode::Union(_) => {
 					// Union in union is supposedly not allowed so you'd better
 					// not rely on looking up through nested unions
+					register_type_name("Union");
 				}
 				SchemaNode::Enum(Enum { name, .. }) => {
 					register_name(name);
@@ -186,6 +208,7 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::SliceU8, 0);
 				}
 				SchemaNode::Decimal(Decimal { repr, .. }) => {
+					register_type_name("Decimal");
 					match repr {
 						DecimalRepr::Fixed(Fixed { name, .. }) => {
 							register_name(name);
@@ -197,6 +220,7 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Integer8, 5);
 				}
 				SchemaNode::Uuid => {
+					register_type_name("Uuid");
 					// A user may assume that uuid::Uuid will serialize to Uuid by default,
 					// but since it serializes as &str by default, we in fact can't distinguish
 					// between that and &str, so we'll error in case union has both Uuid and String
@@ -205,26 +229,31 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Str, 0);
 				}
 				SchemaNode::Date => {
+					register_type_name("Date");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 0);
 					register(UnionVariantLookupKey::Integer8, 1);
 				}
 				SchemaNode::TimeMillis => {
+					register_type_name("TimeMillis");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 0);
 					register(UnionVariantLookupKey::Integer8, 1);
 				}
 				SchemaNode::TimeMicros => {
+					register_type_name("TimeMicros");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 1);
 					register(UnionVariantLookupKey::Integer8, 0);
 				}
 				SchemaNode::TimestampMillis => {
+					register_type_name("TimestampMillis");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 1);
 					register(UnionVariantLookupKey::Integer8, 0);
 				}
 				SchemaNode::TimestampMicros => {
+					register_type_name("TimestampMicros");
 					register(UnionVariantLookupKey::Integer, 0);
 					register(UnionVariantLookupKey::Integer4, 1);
 					register(UnionVariantLookupKey::Integer8, 0);
@@ -241,7 +270,7 @@ impl<'a> PerTypeLookup<'a> {
 			NoneSomeOrConflict::Conflict { .. } => None,
 		});
 		PerTypeLookup {
-			per_name,
+			per_name: per_name.into_inner(),
 			per_direct_union_variant,
 		}
 	}

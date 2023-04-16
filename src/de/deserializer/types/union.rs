@@ -1,3 +1,5 @@
+use crate::schema::{Decimal, DecimalRepr};
+
 use super::*;
 
 pub(in super::super) fn read_union_discriminant<'de, 's, R>(
@@ -78,7 +80,14 @@ impl<'de> Deserializer<'de> for SchemaTypeNameDeserializer<'_> {
 			SchemaNode::Record(record) => record.name.fully_qualified_name(),
 			SchemaNode::Enum(enum_) => enum_.name.fully_qualified_name(),
 			SchemaNode::Fixed(fixed) => fixed.name.fully_qualified_name(),
-			SchemaNode::Decimal(_) => "Decimal",
+			SchemaNode::Decimal(Decimal {
+				repr: DecimalRepr::Fixed(fixed),
+				..
+			}) => fixed.name.fully_qualified_name(),
+			SchemaNode::Decimal(Decimal {
+				repr: DecimalRepr::Bytes,
+				..
+			}) => "Decimal",
 			SchemaNode::Uuid => "Uuid",
 			SchemaNode::Date => "Date",
 			SchemaNode::TimeMillis => "TimeMillis",
