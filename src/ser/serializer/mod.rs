@@ -25,12 +25,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	type SerializeTupleVariant = SerializeAsArray<'r, 's, W>;
 	type SerializeMap = SerializeMapAsRecordOrMap<'r, 's, W>;
 	type SerializeStruct = SerializeStructAsRecordOrMap<'r, 's, W>;
-	//type SerializeStructVariant;
-
-	serde_serializer_quick_unsupported::serializer_unsupported! {
-		err = (<Self::Error as serde::ser::Error>::custom("Unexpected input"));
-		struct_variant
-	}
+	type SerializeStructVariant = SerializeStructAsRecordOrMap<'r, 's, W>;
 
 	fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
@@ -284,6 +279,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	where
 		T: Serialize,
 	{
+		// TODO serialize_lookup_by_variant_name
 		value.serialize(self)
 	}
 
@@ -297,20 +293,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	where
 		T: Serialize,
 	{
-		match self.schema_node {
-			SchemaNode::Union(union) => match union.per_type_lookup.named(variant) {
-				None => {
-					// Variant name doesn't hint us, fallback to trying to deduce from serialized
-					// type
-					value.serialize(self)
-				}
-				Some(schema_node) => value.serialize(DatumSerializer {
-					state: self.state,
-					schema_node,
-				}),
-			},
-			_ => value.serialize(self),
-		}
+		self.serialize_lookup_by_variant_name(variant, |serializer| value.serialize(serializer))
 	}
 
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -350,21 +333,9 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		variant: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeTupleVariant, Self::Error> {
-		match self.schema_node {
-			SchemaNode::Union(union) => match union.per_type_lookup.named(variant) {
-				None => {
-					// Variant name doesn't hint us, fallback to trying to deduce from serialized
-					// type
-					self.serialize_seq(Some(len))
-				}
-				Some(schema_node) => DatumSerializer {
-					state: self.state,
-					schema_node,
-				}
-				.serialize_seq(Some(len)),
-			},
-			_ => self.serialize_seq(Some(len)),
-		}
+		self.serialize_lookup_by_variant_name(variant, |serializer| {
+			serializer.serialize_seq(Some(len))
+		})
 	}
 
 	fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -411,15 +382,17 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		}
 	}
 
-	/*fn serialize_struct_variant(
+	fn serialize_struct_variant(
 		self,
-		name: &'static str,
-		variant_index: u32,
+		_name: &'static str,
+		_variant_index: u32,
 		variant: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeStructVariant, Self::Error> {
-		todo!()
-	}*/
+		self.serialize_lookup_by_variant_name(variant, |serializer| {
+			serializer.serialize_struct(variant, len)
+		})
+	}
 }
 
 impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
@@ -551,5 +524,26 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 			})?)
 			.map_err(SerError::io)?;
 		self.state.writer.write_all(data).map_err(SerError::io)
+	}
+
+	fn serialize_lookup_by_variant_name<O>(
+		self,
+		variant_name: &str,
+		f: impl FnOnce(DatumSerializer<'r, 's, W>) -> Result<O, SerError>,
+	) -> Result<O, SerError> {
+		match self.schema_node {
+			SchemaNode::Union(union) => match union.per_type_lookup.named(variant_name) {
+				None => {
+					// Variant name doesn't hint us, fallback to trying to deduce from serialized
+					// type
+					f(self)
+				}
+				Some(schema_node) => f(DatumSerializer {
+					state: self.state,
+					schema_node,
+				}),
+			},
+			_ => f(self),
+		}
 	}
 }

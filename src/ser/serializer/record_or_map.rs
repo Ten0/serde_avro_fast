@@ -270,6 +270,27 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, 
 	}
 }
 
+impl<'r, 's, W: Write> SerializeStructVariant for SerializeStructAsRecordOrMap<'r, 's, W> {
+	type Ok = ();
+
+	type Error = SerError;
+
+	fn serialize_field<T: ?Sized>(
+		&mut self,
+		key: &'static str,
+		value: &T,
+	) -> Result<(), Self::Error>
+	where
+		T: Serialize,
+	{
+		<Self as SerializeStruct>::serialize_field(self, key, value)
+	}
+
+	fn end(self) -> Result<Self::Ok, Self::Error> {
+		<Self as SerializeStruct>::end(self)
+	}
+}
+
 pub struct SerializeMapAsRecordOrMap<'r, 's, W> {
 	inner: SerializeStructAsRecordOrMap<'r, 's, W>,
 	key_location: Option<(usize, &'s SchemaNode<'s>)>,
