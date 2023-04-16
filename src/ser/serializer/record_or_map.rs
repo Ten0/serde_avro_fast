@@ -1,5 +1,3 @@
-use serde_serializer_quick_unsupported::serializer_unsupported;
-
 use crate::schema::Record;
 
 use super::*;
@@ -414,8 +412,8 @@ impl<'s> serde::Serializer for FindFieldIndexSerializer<'_, 's> {
 		field_idx(self.record_state, v)
 	}
 
-	serializer_unsupported! {
-		err = (<Self::Error as serde::ser::Error>::custom("Key of map being serialized as record should have been an str"));
+	serde_serializer_quick_unsupported::serializer_unsupported! {
+		err = (SerError::new("Key of map being serialized as record should have been an str"));
 		bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char bytes none some unit unit_struct
 		unit_variant newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant i128 u128

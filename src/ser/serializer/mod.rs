@@ -1,5 +1,6 @@
 mod blocks;
 mod decimal;
+mod extract_for_duration;
 mod record_or_map;
 mod seq_or_tuple;
 
@@ -8,7 +9,7 @@ use super::*;
 use {
 	blocks::BlockWriter,
 	record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap},
-	seq_or_tuple::SerializeAsArray,
+	seq_or_tuple::SerializeAsArrayOrDuration,
 };
 
 pub struct DatumSerializer<'r, 's, W> {
@@ -20,10 +21,10 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
-	type SerializeSeq = SerializeAsArray<'r, 's, W>;
-	type SerializeTuple = SerializeAsArray<'r, 's, W>;
-	type SerializeTupleStruct = SerializeAsArray<'r, 's, W>;
-	type SerializeTupleVariant = SerializeAsArray<'r, 's, W>;
+	type SerializeSeq = SerializeAsArrayOrDuration<'r, 's, W>;
+	type SerializeTuple = SerializeAsArrayOrDuration<'r, 's, W>;
+	type SerializeTupleStruct = SerializeAsArrayOrDuration<'r, 's, W>;
+	type SerializeTupleVariant = SerializeAsArrayOrDuration<'r, 's, W>;
 	type SerializeMap = SerializeMapAsRecordOrMap<'r, 's, W>;
 	type SerializeStruct = SerializeStructAsRecordOrMap<'r, 's, W>;
 	type SerializeStructVariant = SerializeStructAsRecordOrMap<'r, 's, W>;
@@ -331,10 +332,17 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Array(elements_schema) => Ok(SerializeAsArray {
-				block_writer: BlockWriter::new(self.state, len.unwrap_or(0))?,
+			SchemaNode::Array(elements_schema) => Ok(SerializeAsArrayOrDuration::array(
+				BlockWriter::new(self.state, len.unwrap_or(0))?,
 				elements_schema,
-			}),
+			)),
+			SchemaNode::Duration => {
+				if len.map_or(false, |l| l != 3) {
+					Err(seq_or_tuple::duration_seq_len_incorrect())
+				} else {
+					Ok(SerializeAsArrayOrDuration::duration(self.state))
+				}
+			}
 			SchemaNode::Union(union) => self.serialize_union_unnamed(
 				union,
 				UnionVariantLookupKey::SeqOrTupleOrTupleStruct,
