@@ -59,7 +59,9 @@ pub mod ser;
 pub use schema::Schema;
 
 mod single_object_encoding;
-pub use single_object_encoding::{from_single_object_reader, from_single_object_slice};
+pub use single_object_encoding::{
+	from_single_object_reader, from_single_object_slice, to_single_object, to_single_object_vec,
+};
 
 pub mod object_container_file_encoding;
 
