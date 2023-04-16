@@ -215,6 +215,19 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 					self.state.writer.write_all(v).map_err(SerError::io)
 				}
 			}
+			SchemaNode::Duration => {
+				// In that case we assume that it's the raw value.
+				// This is the most efficient way to deserialize it then
+				// re-serialize it if you're not doing anything else with it
+				if v.len() != 12 {
+					Err(SerError::new(
+						"&[u8] can be serialized as Duration, but only if it's of length 12. \
+							We got a too long slice here.",
+					))
+				} else {
+					self.state.writer.write_all(v).map_err(SerError::io)
+				}
+			}
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::SliceU8, |ser| {
 					ser.serialize_bytes(v)

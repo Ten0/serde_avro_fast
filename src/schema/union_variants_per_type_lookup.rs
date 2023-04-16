@@ -267,7 +267,9 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Integer4, 1);
 					register(UnionVariantLookupKey::Integer8, 0);
 				}
-				SchemaNode::Duration => {}
+				SchemaNode::Duration => {
+					register(UnionVariantLookupKey::SliceU8, 5);
+				}
 			}
 		}
 		let per_direct_union_variant = per_direct_union_variant.map(|v| match v {
