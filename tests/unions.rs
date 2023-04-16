@@ -79,20 +79,11 @@ fn union_as_enum() {
 #[test]
 fn union_straight_to_actual_type() {
 	let schema: Schema = SCHEMA.parse().unwrap();
-	assert_eq!(
-		from_datum_slice::<&str>(&[0, 2, b'a'], &schema).unwrap(),
-		"a"
-	);
-	assert_eq!(from_datum_slice::<()>(&[2], &schema).unwrap(), ());
-	assert_eq!(from_datum_slice::<i64>(&[4, 2], &schema).unwrap(), 1);
-	assert_eq!(
-		from_datum_slice::<Vec<&str>>(&[6, 4, 2, b'a', 2, b'b', 0], &schema).unwrap(),
-		vec!["a", "b"]
-	);
-	assert_eq!(
-		from_datum_slice::<Record2>(&[10, 3], &schema).unwrap(),
-		Record2 { b: -2 }
-	);
+	test::<&str>(&[0, 2, b'a'], "a", &schema);
+	test::<()>(&[2], (), &schema);
+	test::<i64>(&[4, 2], 1, &schema);
+	test::<Vec<&str>>(&[6, 4, 2, b'a', 2, b'b', 0], vec!["a", "b"], &schema);
+	test::<Record2>(&[10, 3], Record2 { b: -2 }, &schema);
 }
 
 #[test]
@@ -111,27 +102,18 @@ fn option_complex() {
 #[test]
 fn option_simple() {
 	let schema: Schema = r#"["string", "null"]"#.parse().unwrap();
-	assert_eq!(
-		from_datum_slice::<Option<&str>>(&[2], &schema).unwrap(),
-		None
-	);
-	assert_eq!(
-		from_datum_slice::<Option<&str>>(&[0, 2, b'a'], &schema).unwrap(),
-		Some("a")
-	);
+	test::<Option<&str>>(&[2], None, &schema);
+	test::<Option<&str>>(&[0, 2, b'a'], Some("a"), &schema);
 }
 
 #[test]
 fn option_of_enum_union_single() {
 	let schema: Schema = r#"["string", "null"]"#.parse().unwrap();
-	#[derive(serde_derive::Deserialize, PartialEq, Debug)]
+	#[derive(serde_derive::Deserialize, serde_derive::Serialize, PartialEq, Debug)]
 	enum WhatDoWeDoHere {
 		A,
 	}
-	assert_eq!(
-		from_datum_slice::<Option<WhatDoWeDoHere>>(&[0, 2, b'A'], &schema).unwrap(),
-		Some(WhatDoWeDoHere::A),
-	);
+	test::<Option<WhatDoWeDoHere>>(&[0, 2, b'A'], Some(WhatDoWeDoHere::A), &schema);
 }
 
 #[test]
@@ -140,21 +122,23 @@ fn option_of_enum_union_multi() {
 		r#"["string", "null", {"name":"AnEnum", "type": "enum", "symbols": ["A", "B"]}]"#
 			.parse()
 			.unwrap();
-	#[derive(serde_derive::Deserialize, PartialEq, Debug)]
+	#[derive(serde_derive::Deserialize, serde_derive::Serialize, PartialEq, Debug)]
 	enum WhatDoWeDoHere {
 		A,
 	}
-	#[derive(serde_derive::Deserialize, PartialEq, Debug)]
+	#[derive(serde_derive::Deserialize, serde_derive::Serialize, PartialEq, Debug)]
 	enum StringOrAnEnum {
 		String(WhatDoWeDoHere),
 		AnEnum(WhatDoWeDoHere),
 	}
-	assert_eq!(
-		from_datum_slice::<Option<StringOrAnEnum>>(&[0, 2, b'A'], &schema).unwrap(),
+	test::<Option<StringOrAnEnum>>(
+		&[0, 2, b'A'],
 		Some(StringOrAnEnum::String(WhatDoWeDoHere::A)),
+		&schema,
 	);
-	assert_eq!(
-		from_datum_slice::<Option<StringOrAnEnum>>(&[4, 0], &schema).unwrap(),
+	test::<Option<StringOrAnEnum>>(
+		&[4, 0],
 		Some(StringOrAnEnum::AnEnum(WhatDoWeDoHere::A)),
+		&schema,
 	);
 }
