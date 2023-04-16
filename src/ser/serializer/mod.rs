@@ -273,14 +273,13 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 
 	fn serialize_newtype_struct<T: ?Sized>(
 		self,
-		_name: &'static str,
+		name: &'static str,
 		value: &T,
 	) -> Result<Self::Ok, Self::Error>
 	where
 		T: Serialize,
 	{
-		// TODO serialize_lookup_by_variant_name
-		value.serialize(self)
+		self.serialize_lookup_union_variant_by_name(name, |serializer| value.serialize(serializer))
 	}
 
 	fn serialize_newtype_variant<T: ?Sized>(
@@ -293,7 +292,9 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	where
 		T: Serialize,
 	{
-		self.serialize_lookup_by_variant_name(variant, |serializer| value.serialize(serializer))
+		self.serialize_lookup_union_variant_by_name(variant, |serializer| {
+			value.serialize(serializer)
+		})
 	}
 
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -333,7 +334,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		variant: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeTupleVariant, Self::Error> {
-		self.serialize_lookup_by_variant_name(variant, |serializer| {
+		self.serialize_lookup_union_variant_by_name(variant, |serializer| {
 			serializer.serialize_seq(Some(len))
 		})
 	}
@@ -365,21 +366,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		name: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeStruct, Self::Error> {
-		match *self.schema_node {
-			SchemaNode::Record(ref record) => {
-				Ok(SerializeStructAsRecordOrMap::record(self.state, record))
-			}
-			SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(self.state, map, len)?),
-			SchemaNode::Union(ref union) => {
-				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
-					ser.serialize_struct(name, len)
-				})
-			}
-			_ => Err(SerError::custom(format_args!(
-				"Could not serialize struct to {:?}",
-				self.schema_node
-			))),
-		}
+		self.serialize_struct_or_struct_variant(name, len)
 	}
 
 	fn serialize_struct_variant(
@@ -389,9 +376,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 		variant: &'static str,
 		len: usize,
 	) -> Result<Self::SerializeStructVariant, Self::Error> {
-		self.serialize_lookup_by_variant_name(variant, |serializer| {
-			serializer.serialize_struct(variant, len)
-		})
+		self.serialize_struct_or_struct_variant(variant, len)
 	}
 }
 
@@ -406,7 +391,7 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 			None => Err(SerError::custom(format_args!(
 				"Could not serialize {:?} to {:?} - \
 					if you need to explicit a variant because it can't be figured out \
-					automatically, consider using a (maybe single-variant) enum to \
+					automatically, consider using an enum or newtype struct to \
 					serialize this field",
 				variant_lookup, self.schema_node
 			))),
@@ -526,7 +511,7 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 		self.state.writer.write_all(data).map_err(SerError::io)
 	}
 
-	fn serialize_lookup_by_variant_name<O>(
+	fn serialize_lookup_union_variant_by_name<O>(
 		self,
 		variant_name: &str,
 		f: impl FnOnce(DatumSerializer<'r, 's, W>) -> Result<O, SerError>,
@@ -551,5 +536,34 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 			},
 			_ => f(self),
 		}
+	}
+
+	fn serialize_struct_or_struct_variant(
+		self,
+		variant_or_struct_name: &str,
+		len: usize,
+	) -> Result<SerializeStructAsRecordOrMap<'r, 's, W>, SerError> {
+		self.serialize_lookup_union_variant_by_name(variant_or_struct_name, |serializer| {
+			match *serializer.schema_node {
+				SchemaNode::Record(ref record) => Ok(SerializeStructAsRecordOrMap::record(
+					serializer.state,
+					record,
+				)),
+				SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(
+					serializer.state,
+					map,
+					len,
+				)?),
+				SchemaNode::Union(ref union) => serializer.serialize_union_unnamed(
+					union,
+					UnionVariantLookupKey::StructOrMap,
+					|ser| ser.serialize_struct_or_struct_variant(variant_or_struct_name, len),
+				),
+				_ => Err(SerError::custom(format_args!(
+					"Could not serialize struct to {:?}",
+					serializer.schema_node
+				))),
+			}
+		})
 	}
 }
