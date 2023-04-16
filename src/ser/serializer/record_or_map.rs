@@ -5,15 +5,17 @@ use crate::schema::Record;
 use super::*;
 
 pub struct SerializeStructAsRecordOrMap<'r, 's, W> {
-	state: &'r mut SerializerState<'s, W>,
-	kind: Kind<'s>,
+	kind: Kind<'r, 's, W>,
 }
 
-enum Kind<'s> {
-	Record(RecordState<'s>),
+enum Kind<'r, 's, W> {
+	Record {
+		serializer_state: &'r mut SerializerState<'s, W>,
+		record_state: RecordState<'s>,
+	},
 	Map {
+		block_writer: BlockWriter<'r, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
-		current_block_len: usize,
 	},
 }
 
@@ -27,40 +29,42 @@ struct RecordState<'s> {
 impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
 		Self {
-			state,
-			kind: Kind::Record(RecordState {
-				expected_fields: record.fields.iter(),
-				current_idx: 0,
-				buffers: Default::default(),
-				record,
-			}),
+			kind: Kind::Record {
+				serializer_state: state,
+				record_state: RecordState {
+					expected_fields: record.fields.iter(),
+					current_idx: 0,
+					buffers: Default::default(),
+					record,
+				},
+			},
 		}
 	}
 	pub(super) fn map(
 		state: &'r mut SerializerState<'s, W>,
 		elements_schema: &'s SchemaNode<'s>,
 		min_len: usize,
-	) -> Self {
-		if min_len > 0 {
-			todo!("Start block");
-		}
-		Self {
-			state,
+	) -> Result<Self, SerError> {
+		Ok(Self {
 			kind: Kind::Map {
+				block_writer: BlockWriter::new(state, min_len)?,
 				elements_schema,
-				current_block_len: min_len,
 			},
-		}
+		})
 	}
 
 	fn end(self) -> Result<(), SerError> {
 		match self.kind {
-			Kind::Record(RecordState {
-				expected_fields: _,
-				mut current_idx,
-				mut buffers,
-				record,
-			}) => {
+			Kind::Record {
+				serializer_state,
+				record_state:
+					RecordState {
+						expected_fields: _,
+						mut current_idx,
+						mut buffers,
+						record,
+					},
+			} => {
 				loop {
 					if current_idx < record.fields.len() {
 						let missing_field = || {
@@ -83,7 +87,7 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 										// without erroring (although providing it with type `()`
 										// will result in better perf because we won't need to
 										// buffer)
-										self.state
+										serializer_state
 											.writer
 											.write_varint(discriminant)
 											.map_err(SerError::io)?;
@@ -100,7 +104,7 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 					while let Some(already_serialized) =
 						buffers.get(current_idx).and_then(|opt| opt.as_deref())
 					{
-						self.state
+						serializer_state
 							.writer
 							.write_all(already_serialized)
 							.map_err(SerError::io)?;
@@ -110,10 +114,9 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMap<'r, 's, W> {
 				}
 				debug_assert!(buffers.iter().all(|opt| opt.is_none()));
 			}
-			Kind::Map {
-				elements_schema,
-				current_block_len,
-			} => todo!(),
+			Kind::Map { block_writer, .. } => {
+				block_writer.end()?;
+			}
 		}
 		Ok(())
 	}
@@ -238,14 +241,27 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMap<'r, 's, 
 		T: Serialize,
 	{
 		match &mut self.kind {
-			Kind::Record(record_state) => {
+			Kind::Record {
+				serializer_state,
+				record_state,
+			} => {
 				let field_idx = field_idx(record_state, key)?;
-				serialize_record_value(self.state, record_state, field_idx, value)
+				serialize_record_value(serializer_state, record_state, field_idx, value)
 			}
 			Kind::Map {
 				elements_schema,
-				current_block_len,
-			} => todo!(),
+				block_writer,
+			} => {
+				block_writer.signal_next_record()?;
+				key.serialize(DatumSerializer {
+					state: block_writer.state,
+					schema_node: &SchemaNode::String,
+				})?;
+				value.serialize(DatumSerializer {
+					state: block_writer.state,
+					schema_node: *elements_schema,
+				})
+			}
 		}
 	}
 
@@ -263,18 +279,18 @@ impl<'r, 's, W: Write> SerializeMapAsRecordOrMap<'r, 's, W> {
 	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
 		Self {
 			inner: SerializeStructAsRecordOrMap::record(state, record),
-			key_location: Default::default(),
+			key_location: None,
 		}
 	}
 	pub(super) fn map(
 		state: &'r mut SerializerState<'s, W>,
 		elements_schema: &'s SchemaNode<'s>,
 		min_len: usize,
-	) -> Self {
-		Self {
-			inner: SerializeStructAsRecordOrMap::map(state, elements_schema, min_len),
-			key_location: Default::default(),
-		}
+	) -> Result<Self, SerError> {
+		Ok(Self {
+			inner: SerializeStructAsRecordOrMap::map(state, elements_schema, min_len)?,
+			key_location: None,
+		})
 	}
 }
 
@@ -287,15 +303,18 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 		T: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record(record_state) => {
+			Kind::Record { record_state, .. } => {
 				let field_idx = key.serialize(FindFieldIndexSerializer { record_state })?;
 				self.key_location = Some(field_idx);
 				Ok(())
 			}
-			Kind::Map {
-				elements_schema,
-				current_block_len,
-			} => todo!(),
+			Kind::Map { block_writer, .. } => {
+				block_writer.signal_next_record()?;
+				key.serialize(DatumSerializer {
+					state: block_writer.state,
+					schema_node: &SchemaNode::String,
+				})
+			}
 		}
 	}
 
@@ -304,17 +323,23 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 		T: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record(record_state) => {
+			Kind::Record {
+				serializer_state,
+				record_state,
+			} => {
 				let field_idx = self
 					.key_location
 					.take()
 					.expect("serialize_key should have been called before serialize_value");
-				serialize_record_value(self.inner.state, record_state, field_idx, value)
+				serialize_record_value(serializer_state, record_state, field_idx, value)
 			}
 			Kind::Map {
 				elements_schema,
-				current_block_len,
-			} => todo!(),
+				block_writer,
+			} => value.serialize(DatumSerializer {
+				state: block_writer.state,
+				schema_node: *elements_schema,
+			}),
 		}
 	}
 
@@ -328,14 +353,27 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMap<'r, 's, W> {
 		V: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record(record_state) => {
+			Kind::Record {
+				serializer_state,
+				record_state,
+			} => {
 				let field_idx = key.serialize(FindFieldIndexSerializer { record_state })?;
-				serialize_record_value(self.inner.state, record_state, field_idx, value)
+				serialize_record_value(serializer_state, record_state, field_idx, value)
 			}
 			Kind::Map {
 				elements_schema,
-				current_block_len,
-			} => todo!(),
+				block_writer,
+			} => {
+				block_writer.signal_next_record()?;
+				key.serialize(DatumSerializer {
+					state: block_writer.state,
+					schema_node: &SchemaNode::String,
+				})?;
+				value.serialize(DatumSerializer {
+					state: block_writer.state,
+					schema_node: *elements_schema,
+				})
+			}
 		}
 	}
 

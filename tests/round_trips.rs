@@ -110,8 +110,11 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
 
 	let mut encoded = Vec::new();
-	match serde_json::to_value(&json_for_value) {
-		Ok(serde_json::Value::Object(obj)) => {
+	match (serde_json::to_value(&json_for_value), &fast_schema.root()) {
+		(
+			Ok(serde_json::Value::Object(obj)),
+			serde_avro_fast::schema::SchemaNode::Record { .. },
+		) => {
 			// Test that it works with random ordering
 			let mut keys: Vec<(_, _)> = obj.into_iter().collect();
 			let mut prev = None;

@@ -1,8 +1,12 @@
+mod blocks;
 mod record_or_map;
 
 use super::*;
 
-use record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap};
+use {
+	blocks::BlockWriter,
+	record_or_map::{SerializeMapAsRecordOrMap, SerializeStructAsRecordOrMap},
+};
 
 pub struct DatumSerializer<'r, 's, W> {
 	pub(super) state: &'r mut SerializerState<'s, W>,
@@ -330,7 +334,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 				self.state,
 				map,
 				len.unwrap_or(0),
-			)),
+			)?),
 			SchemaNode::Union(ref union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
 					ser.serialize_map(len)
@@ -352,7 +356,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 			SchemaNode::Record(ref record) => {
 				Ok(SerializeStructAsRecordOrMap::record(self.state, record))
 			}
-			SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(self.state, map, len)),
+			SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMap::map(self.state, map, len)?),
 			SchemaNode::Union(ref union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::StructOrMap, |ser| {
 					ser.serialize_struct(name, len)
