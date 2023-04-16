@@ -35,6 +35,13 @@ pub(crate) struct PerTypeLookup<'a> {
 	per_direct_union_variant: [Option<(i64, &'a SchemaNode<'a>)>; N_VARIANTS],
 }
 impl<'a> PerTypeLookup<'a> {
+	pub(crate) fn placeholder() -> Self {
+		Self {
+			per_name: Default::default(),
+			per_direct_union_variant: Default::default(),
+		}
+	}
+
 	pub(crate) fn unnamed(
 		&self,
 		variant: UnionVariantLookupKey,
@@ -45,6 +52,12 @@ impl<'a> PerTypeLookup<'a> {
 		self.per_name.get(name).copied()
 	}
 
+	/// Constructs the lookup table
+	///
+	/// Note that the safety/correctness of the self-referential construction
+	/// relies on that this function:
+	/// - Does not read `per_type_lookup` of the other nodes (doesn't need to do
+	///   so anyway)
 	pub(crate) fn new(variants: &[&'a SchemaNode<'a>]) -> PerTypeLookup<'a> {
 		#[derive(Clone, Copy)]
 		enum NoneSomeOrConflict<'a> {

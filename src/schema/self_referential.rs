@@ -236,9 +236,8 @@ impl From<super::safe::Schema> for Schema {
 			//   available.
 			// - We only use pointers from the point at which we call `as_mut_ptr` so the
 			//   compiler will not have aliasing constraints.
-			// - We don't dereference the references we create in key_to_node until the
-			//   original &mut is released and well out of scope (we don't dereference them
-			//   at all in this function).
+			// - We don't dereference the references we create in key_to_node until they
+			//   they are all initialized.
 			unsafe {
 				*curr_storage_node_ptr = match safe_node {
 					SafeSchemaNode::Null => SchemaNode::Null,
@@ -252,14 +251,17 @@ impl From<super::safe::Schema> for Schema {
 					SafeSchemaNode::Array(schema_key) => SchemaNode::Array(key_to_node(schema_key)),
 					SafeSchemaNode::Map(schema_key) => SchemaNode::Map(key_to_node(schema_key)),
 					SafeSchemaNode::Union(union) => SchemaNode::Union({
-						let variants: Vec<&SchemaNode> = union
-							.variants
-							.into_iter()
-							.map(|schema_key| key_to_node(schema_key))
-							.collect();
 						Union {
-							per_type_lookup: UnionVariantsPerTypeLookup::new(&variants),
-							variants,
+							variants: union
+								.variants
+								.into_iter()
+								.map(|schema_key| key_to_node(schema_key))
+								.collect(),
+							per_type_lookup: {
+								// Can't be initialized just yet because other nodes
+								// may not have been initialized
+								UnionVariantsPerTypeLookup::placeholder()
+							},
 						}
 					}),
 					SafeSchemaNode::Record(record) => SchemaNode::Record(Record {
@@ -301,6 +303,28 @@ impl From<super::safe::Schema> for Schema {
 				};
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			};
+		}
+		// Now that all the nodes have been initialized (except their `per_type_lookup`
+		// tables) we can initialize the `per_type_lookup` tables
+		curr_storage_node_ptr = storage_start_ptr;
+		for _ in 0..len {
+			// Safety:
+			// - UnionVariantsPerTypeLookup won't ever read `per_type_lookup` of the other
+			//   nodes, so there are no aliasing issues. (Tbh I'm not even sure that would
+			//   really be an issue because we'd have `& &mut` anyway but with that I'm sure
+			//   there isn't an issue)
+			unsafe {
+				match *curr_storage_node_ptr {
+					SchemaNode::Union(Union {
+						ref variants,
+						ref mut per_type_lookup,
+					}) => {
+						*per_type_lookup = UnionVariantsPerTypeLookup::new(variants);
+					}
+					_ => {}
+				}
+				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
+			}
 		}
 		ret
 	}
