@@ -109,7 +109,7 @@ impl<'a> PerTypeLookup<'a> {
 					NoneSomeOrConflict::Conflict {
 						priority: old_priority,
 					} => {
-						if priority > old_priority {
+						if priority < old_priority {
 							*val = NoneSomeOrConflict::Some {
 								priority,
 								discriminant_and_schema_node: (discriminant, schema_node),
