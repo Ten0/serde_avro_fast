@@ -54,11 +54,14 @@
 
 pub mod de;
 pub mod schema;
+pub mod ser;
 
 pub use schema::Schema;
 
 mod single_object_encoding;
-pub use single_object_encoding::{from_single_object_reader, from_single_object_slice};
+pub use single_object_encoding::{
+	from_single_object_reader, from_single_object_slice, to_single_object, to_single_object_vec,
+};
 
 pub mod object_container_file_encoding;
 
@@ -94,4 +97,33 @@ where
 	serde::Deserialize::deserialize(
 		de::DeserializerState::from_reader(reader, &schema).deserializer(),
 	)
+}
+
+/// Serialize an avro "datum" (raw data, no headers...)
+///
+/// to the provided writer
+pub fn to_datum<T, W>(value: &T, writer: W, schema: &Schema) -> Result<(), ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+	W: std::io::Write,
+{
+	serde::Serialize::serialize(
+		value,
+		ser::SerializerState::from_writer(writer, schema).serializer(),
+	)
+}
+
+/// Serialize an avro "datum" (raw data, no headers...)
+///
+/// to a newly allocated Vec
+///
+/// Note that unless you would otherwise allocate a `Vec` anyway, it will be
+/// more efficient to use [`to_datum`] instead.
+pub fn to_datum_vec<T>(value: &T, schema: &Schema) -> Result<Vec<u8>, ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+{
+	let mut buf = Vec::new();
+	to_datum(value, &mut buf, schema)?;
+	Ok(buf)
 }

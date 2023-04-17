@@ -2,10 +2,7 @@ use crate::schema::{Decimal, DecimalRepr};
 
 use super::*;
 
-use {
-	rust_decimal::prelude::ToPrimitive as _,
-	serde_serializer_quick_unsupported::serializer_unsupported, std::marker::PhantomData,
-};
+use {rust_decimal::prelude::ToPrimitive as _, std::marker::PhantomData};
 
 pub(in super::super) fn read_decimal<'de, R, V>(
 	state: &mut DeserializerState<R>,
@@ -78,7 +75,6 @@ where
 		SerializeToVisitorStr {
 			visitor,
 			_lifetime: PhantomData,
-			_error: PhantomData,
 		},
 	)
 }
@@ -97,25 +93,21 @@ pub(in super::super) enum VisitorHint {
 /// that does not allocate so we can benefit from that by providing it with a
 /// serializer that actually just visits the `Visitor` provided by the the
 /// original `Deserialize` impl
-struct SerializeToVisitorStr<'de, V, E> {
+struct SerializeToVisitorStr<'de, V> {
 	visitor: V,
 	_lifetime: PhantomData<&'de ()>,
-	_error: PhantomData<E>,
 }
 
-impl<'de, V: Visitor<'de>, E> serde::Serializer for SerializeToVisitorStr<'de, V, E>
-where
-	E: serde::ser::Error + serde::de::Error,
-{
+impl<'de, V: Visitor<'de>> serde::Serializer for SerializeToVisitorStr<'de, V> {
 	type Ok = V::Value;
-	type Error = E;
+	type Error = DeError;
 
 	fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
 		self.visitor.visit_str(v)
 	}
 
-	serializer_unsupported! {
-		err = (<Self::Error as serde::ser::Error>::custom("rust_decimal::Decimal should only serialize as str"));
+	serde_serializer_quick_unsupported::serializer_unsupported! {
+		err = (DeError::new("rust_decimal::Decimal should only serialize as str"));
 		bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char bytes none some unit unit_struct
 		unit_variant newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant i128 u128

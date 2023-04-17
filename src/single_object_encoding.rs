@@ -52,3 +52,39 @@ fn check_header(slice: &[u8; 10], schema: &Schema) -> Result<(), de::DeError> {
 	}
 	Ok(())
 }
+
+/// Serialize to an avro
+/// [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding)
+///
+/// to the provided writer
+pub fn to_single_object<T, W>(
+	value: &T,
+	mut writer: W,
+	schema: &Schema,
+) -> Result<(), ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+	W: std::io::Write,
+{
+	writer.write_all(&[0xC3, 0x01]).map_err(ser::SerError::io)?;
+	writer
+		.write_all(schema.rabin_fingerprint())
+		.map_err(ser::SerError::io)?;
+	to_datum(value, writer, schema)
+}
+
+/// Serialize to an avro
+/// [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding)
+///
+/// to a newly allocated Vec
+///
+/// Note that unless you would otherwise allocate a `Vec` anyway, it will be
+/// more efficient to use [`to_single_object`] instead.
+pub fn to_single_object_vec<T>(value: &T, schema: &Schema) -> Result<Vec<u8>, ser::SerError>
+where
+	T: serde::Serialize + ?Sized,
+{
+	let mut buf = Vec::new();
+	to_single_object(value, &mut buf, schema)?;
+	Ok(buf)
+}

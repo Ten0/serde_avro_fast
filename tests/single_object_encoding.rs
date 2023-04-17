@@ -7,7 +7,7 @@ use {lazy_static::lazy_static, pretty_assertions::assert_eq, serde::Deserialize}
 const SCHEMA_STR: &str = r#"
 	{
 		"type":"record",
-		"name":"TestSingleObjectWrtierSerialize",
+		"name":"TestSingleObjectWriterSerialize",
 		"fields":[
 			{
 				"name":"a",

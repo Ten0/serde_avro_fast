@@ -120,7 +120,7 @@ fn make_big_record() -> anyhow::Result<(apache_avro::Schema, apache_avro::types:
 	Ok((big_schema, big_record))
 }
 
-#[derive(serde_derive::Deserialize)]
+#[derive(serde_derive::Deserialize, serde_derive::Serialize)]
 #[allow(unused)]
 struct BigStruct<'a> {
 	username: &'a str,
@@ -130,7 +130,7 @@ struct BigStruct<'a> {
 	address: Address<'a>,
 }
 
-#[derive(serde_derive::Deserialize)]
+#[derive(serde_derive::Deserialize, serde_derive::Serialize)]
 #[allow(unused)]
 struct Address<'a> {
 	street: &'a str,
@@ -169,4 +169,10 @@ fn big_record() {
 	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
 	let my_big: BigStruct = serde_avro_fast::from_datum_slice(&datum, &fast_schema).unwrap();
 	assert_eq!(my_big.address.state_prov, "state_prov");
+	// This is fine notably because there are no uknown-size-block-encoded values in
+	// here nor randomly ordered maps - generally however there are several valid
+	// ways to encode stuff
+	let mut fast_serialized = Vec::new();
+	serde_avro_fast::to_datum(&my_big, &mut fast_serialized, &fast_schema).unwrap();
+	assert_eq!(datum, fast_serialized)
 }
