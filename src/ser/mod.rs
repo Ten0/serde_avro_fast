@@ -1,4 +1,60 @@
 //! Defines everything necessary for avro serialization
+//!
+//! # For advanced usage
+//!
+//! You typically want to use top-level functions such as
+//! [`to_datum`](crate::to_datum) but access to this may be
+//! necessary for more advanced usage.
+//!
+//! This gives manual access to the type that implements
+//! [`serde::Serializer`], as well as its building blocks in order to set
+//! configuration parameters that may enable you to increase performance
+//!
+//! Such usage would go as follows:
+//! ```
+//! let schema: serde_avro_fast::Schema = r#"
+//! {
+//! 	"namespace": "test",
+//! 	"type": "record",
+//! 	"name": "Test",
+//! 	"fields": [
+//! 		{
+//! 			"type": {
+//! 				"type": "string"
+//! 			},
+//! 			"name": "field"
+//! 		}
+//! 	]
+//! }
+//! "#
+//! .parse()
+//! .expect("Failed to parse schema");
+//!
+//! #[derive(serde_derive::Serialize, Debug, PartialEq)]
+//! struct Test<'a> {
+//! 	field: &'a str,
+//! }
+//!
+//! // Build the struct that will generally serve through serialization
+//! let mut serializer_state =
+//! 	serde_avro_fast::ser::SerializerState::from_writer(Vec::new(), &schema);
+//!
+//! // Provide buffers from previous serialization to avoid allocating if field reordering
+//! // is necessary
+//! # let buffers_from_previous_serialization = serde_avro_fast::ser::Buffers::default();
+//! serializer_state.add_buffers(buffers_from_previous_serialization);
+//!
+//! // It's not the `&mut SerializerState` that implements `serde::Serializer` directly, instead
+//! // it is `DatumSerializer` (which is essentially an `&mut SerializerState` but not exactly
+//! // because it also keeps track of the current schema node)
+//! // We build it through `SerializerState::serializer`
+//! serde::Serialize::serialize(&Test { field: "foo" }, serializer_state.serializer())
+//! 	.expect("Failed to serialize");
+//!
+//! let (serialized, buffers_for_next_serialization) = serializer_state.into_writer_and_buffers();
+//!
+//! assert_eq!(serialized, &[6, 102, 111, 111]);
+//! ```
 
 mod error;
 mod serializer;
