@@ -7,10 +7,7 @@ pub struct SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 }
 
 enum Kind<'r, 's, W> {
-	Record {
-		serializer_state: &'r mut SerializerState<'s, W>,
-		record_state: RecordState<'s>,
-	},
+	Record(KindRecord<'r, 's, W>),
 	Map {
 		block_writer: BlockWriter<'r, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
@@ -22,6 +19,11 @@ enum Kind<'r, 's, W> {
 	},
 }
 
+struct KindRecord<'r, 's, W> {
+	serializer_state: &'r mut SerializerState<'s, W>,
+	record_state: RecordState<'s>,
+}
+
 struct RecordState<'s> {
 	expected_fields: std::slice::Iter<'s, RecordField<'s>>,
 	current_idx: usize,
@@ -29,18 +31,58 @@ struct RecordState<'s> {
 	record: &'s Record<'s>,
 }
 
+impl<'r, 's, W> Drop for KindRecord<'r, 's, W> {
+	fn drop(&mut self) {
+		// In order to avoid allocating even when field reordering is necessary we can
+		// preserve the necessary allocations from one record to another (even across
+		// deserializations).
+		// This brings ~40% perf improvement
+		if self.record_state.buffers.capacity() > 0 {
+			self.serializer_state
+				.buffers
+				.field_reordering_buffers
+				.extend(
+					self.record_state
+						.buffers
+						.drain(..)
+						.filter_map(std::convert::identity)
+						.map(|mut v| {
+							v.clear();
+							v
+						}),
+				);
+			self.serializer_state
+				.buffers
+				.field_reordering_super_buffers
+				.push(std::mem::replace(
+					&mut self.record_state.buffers,
+					Vec::new(),
+				));
+		}
+	}
+}
+
 impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
 		Self {
-			kind: Kind::Record {
-				serializer_state: state,
+			kind: Kind::Record(KindRecord {
 				record_state: RecordState {
 					expected_fields: record.fields.iter(),
 					current_idx: 0,
-					buffers: Default::default(),
+					buffers: state
+						.buffers
+						.field_reordering_super_buffers
+						.pop()
+						.map(|v| {
+							// To be replaced with `Option::inspect` once that is stabilized
+							assert!(v.is_empty());
+							v
+						})
+						.unwrap_or_else(Vec::new),
 					record,
 				},
-			},
+				serializer_state: state,
+			}),
 		}
 	}
 	pub(super) fn map(
@@ -65,18 +107,19 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 		})
 	}
 
-	fn end(self) -> Result<(), SerError> {
+	fn end(mut self) -> Result<(), SerError> {
 		match self.kind {
-			Kind::Record {
-				serializer_state,
+			Kind::Record(KindRecord {
+				ref mut serializer_state,
 				record_state:
 					RecordState {
 						expected_fields: _,
 						mut current_idx,
-						mut buffers,
+						ref mut buffers,
 						record,
 					},
-			} => {
+			}) => {
+				let serializer_state = &mut **serializer_state;
 				loop {
 					if current_idx < record.fields.len() {
 						let missing_field = || {
@@ -113,18 +156,26 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 					} else {
 						break;
 					}
-					while let Some(already_serialized) =
-						buffers.get(current_idx).and_then(|opt| opt.as_deref())
+					while let Some(mut already_serialized) =
+						buffers.get_mut(current_idx).and_then(|opt| opt.take())
 					{
 						serializer_state
 							.writer
-							.write_all(already_serialized)
+							.write_all(&already_serialized)
 							.map_err(SerError::io)?;
-						buffers[current_idx] = None;
+
+						already_serialized.clear();
+						serializer_state
+							.buffers
+							.field_reordering_buffers
+							.push(already_serialized);
+
 						current_idx += 1;
 					}
 				}
 				debug_assert!(buffers.iter().all(|opt| opt.is_none()));
+				// We have emptied them all so no need for the drop impl to re-check that
+				buffers.clear();
 			}
 			Kind::Map { block_writer, .. } => {
 				block_writer.end()?;
@@ -214,16 +265,22 @@ where
 		})?;
 		record_state.expected_fields.next().unwrap();
 		record_state.current_idx += 1;
-		while let Some(already_serialized) = record_state
+		while let Some(mut already_serialized) = record_state
 			.buffers
-			.get(record_state.current_idx)
-			.and_then(|opt| opt.as_deref())
+			.get_mut(record_state.current_idx)
+			.and_then(|opt| opt.take())
 		{
 			serializer_state
 				.writer
-				.write_all(already_serialized)
+				.write_all(&already_serialized)
 				.map_err(SerError::io)?;
-			record_state.buffers[record_state.current_idx] = None;
+
+			already_serialized.clear();
+			serializer_state
+				.buffers
+				.field_reordering_buffers
+				.push(already_serialized);
+
 			record_state.current_idx += 1;
 			record_state.expected_fields.next().unwrap();
 		}
@@ -232,26 +289,39 @@ where
 		if record_state.buffers.len() <= field_idx {
 			record_state.buffers.resize(field_idx + 1, None);
 		}
-		let buf: &mut Vec<u8> = match &mut record_state.buffers[field_idx] {
+		let field_buf: &mut Option<Vec<u8>> = match &mut record_state.buffers[field_idx] {
 			Some(_) => {
 				return Err(serializing_same_field_name_twice(
 					&record_state.record.fields[field_idx].name,
 				))
 			}
-			buf @ None => {
-				*buf = Some(Vec::new());
-				buf.as_mut().unwrap()
-			}
+			field_buf @ None => field_buf,
 		};
-		value.serialize(DatumSerializer {
-			state: &mut SerializerState {
-				writer: buf,
-				config: SerializerConfig {
-					schema_root: serializer_state.config.schema_root,
-				},
+		// Temporarily steal the buffers of this SerializerState
+		let mut buf_serializer_state = SerializerState {
+			writer: serializer_state
+				.buffers
+				.field_reordering_buffers
+				.pop()
+				.map(|v| {
+					// To be replaced with `Option::inspect` once that is stabilized
+					assert!(v.is_empty());
+					v
+				})
+				.unwrap_or_else(Vec::new),
+			buffers: std::mem::replace(&mut serializer_state.buffers, Buffers::default()),
+			config: SerializerConfig {
+				schema_root: serializer_state.config.schema_root,
 			},
+		};
+		let res = value.serialize(DatumSerializer {
+			state: &mut buf_serializer_state,
 			schema_node,
-		})
+		});
+		// Put buffers back in their proper place
+		*field_buf = Some(buf_serializer_state.writer);
+		serializer_state.buffers = buf_serializer_state.buffers;
+		res
 	}
 }
 
@@ -304,10 +374,10 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMapOrDuratio
 		T: Serialize,
 	{
 		match &mut self.kind {
-			Kind::Record {
+			Kind::Record(KindRecord {
 				serializer_state,
 				record_state,
-			} => {
+			}) => {
 				let (field_idx, schema_node) = field_idx(record_state, key)?;
 				serialize_record_value(
 					serializer_state,
@@ -419,7 +489,7 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 
 		T: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record { record_state, .. } => {
+			Kind::Record(KindRecord { record_state, .. }) => {
 				let (field_idx, schema_node) =
 					key.serialize(FindFieldIndexSerializer { record_state })?;
 				self.key_hint = KeyHint::KeyLocation {
@@ -449,10 +519,10 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 
 		T: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record {
+			Kind::Record(KindRecord {
 				serializer_state,
 				record_state,
-			} => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
+			}) => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
 				KeyHint::KeyLocation {
 					field_idx,
 					schema_node,
@@ -495,10 +565,10 @@ impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 
 		V: Serialize,
 	{
 		match &mut self.inner.kind {
-			Kind::Record {
+			Kind::Record(KindRecord {
 				serializer_state,
 				record_state,
-			} => {
+			}) => {
 				let (field_idx, schema_node) =
 					key.serialize(FindFieldIndexSerializer { record_state })?;
 				serialize_record_value(
