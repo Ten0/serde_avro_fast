@@ -123,7 +123,7 @@ pub fn to_datum_vec<T>(value: &T, schema: &Schema) -> Result<Vec<u8>, ser::SerEr
 where
 	T: serde::Serialize + ?Sized,
 {
-	let mut buf = Vec::new();
-	to_datum(value, &mut buf, schema)?;
-	Ok(buf)
+	let mut serializer_state = ser::SerializerState::from_writer(Vec::new(), schema);
+	serde::Serialize::serialize(value, serializer_state.serializer())?;
+	Ok(serializer_state.into_writer())
 }
