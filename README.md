@@ -56,7 +56,7 @@ apache_avro/big         time:   [1.8618 µs 1.8652 µs 1.8701 µs]
 serde_avro_fast/big     time:   [165.87 ns 166.92 ns 168.09 ns] <- x11 improvement
 ```
 
-It supports any schema/deserialization target type combination I could think of, including advanced union usage with (or without) enums, as well as proper Option support. I would encourage you to test any exotic use-case you have in mind and see if that works.
+It supports any schema/deserialization target type combination that came to mind, including advanced union usage with (or without) enums, as well as proper Option support. If you have an exotic use-case in mind, it typically should be supported (if it isn't, feel free to open an issue).
 
 # Comparison with apache-avro
 
