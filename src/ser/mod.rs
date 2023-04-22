@@ -7,8 +7,7 @@
 //! necessary for more advanced usage.
 //!
 //! This gives manual access to the type that implements
-//! [`serde::Serializer`], as well as its building blocks in order to set
-//! configuration parameters that may enable you to increase performance
+//! [`serde::Serializer`]
 //!
 //! Such usage would go as follows:
 //! ```
@@ -36,13 +35,9 @@
 //! }
 //!
 //! // Build the struct that will generally serve through serialization
+//! let serializer_config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
 //! let mut serializer_state =
-//! 	serde_avro_fast::ser::SerializerState::from_writer(Vec::new(), &schema);
-//!
-//! // Provide buffers from previous serialization to avoid allocating if field reordering
-//! // is necessary
-//! # let buffers_from_previous_serialization = serde_avro_fast::ser::Buffers::default();
-//! serializer_state.add_buffers(buffers_from_previous_serialization);
+//! 	serde_avro_fast::ser::SerializerState::from_writer(Vec::new(), serializer_config);
 //!
 //! // It's not the `&mut SerializerState` that implements `serde::Serializer` directly, instead
 //! // it is `DatumSerializer` (which is essentially an `&mut SerializerState` but not exactly
@@ -50,10 +45,25 @@
 //! // We build it through `SerializerState::serializer`
 //! serde::Serialize::serialize(&Test { field: "foo" }, serializer_state.serializer())
 //! 	.expect("Failed to serialize");
-//!
-//! let (serialized, buffers_for_next_serialization) = serializer_state.into_writer_and_buffers();
+//! let serialized = serializer_state.into_writer();
 //!
 //! assert_eq!(serialized, &[6, 102, 111, 111]);
+//!
+//! // reuse config & output buffer across serializations for ideal performance (~40% perf gain)
+//! let mut serializer_state = serde_avro_fast::ser::SerializerState::from_writer(
+//! 	{
+//! 		let mut buf = serialized;
+//! 		buf.clear();
+//! 		buf
+//! 	},
+//! 	serializer_config,
+//! );
+//!
+//! serde::Serialize::serialize(&Test { field: "bar" }, serializer_state.serializer())
+//! 	.expect("Failed to serialize");
+//! let serialized = serializer_state.into_writer();
+//!
+//! assert_eq!(serialized, &[6, b'b', b'a', b'r']);
 //! ```
 
 mod error;
@@ -69,103 +79,72 @@ use {integer_encoding::VarIntWriter, serde::ser::*, std::io::Write};
 
 /// All configuration and state necessary for the serialization to run
 ///
-/// Notably holds the writer and a [`SerializerConfig`].
+/// Notably holds the writer and a `&mut` [`SerializerConfig`].
 ///
 /// Does not implement [`Serializer`] directly (use
 /// [`.serializer`](Self::serializer) to obtain that).
-pub struct SerializerState<'s, W> {
+pub struct SerializerState<'c, 's, W> {
 	pub(crate) writer: W,
 	/// Storing these here for reuse so that we can bypass the allocation,
 	/// and statistically obtain buffers that are already the proper length
 	/// (since we have used them for previous records)
-	buffers: Buffers,
-	config: SerializerConfig<'s>,
+	config: &'c mut SerializerConfig<'s>,
 }
-/// Schema + other configs for serialization
-#[derive(Clone)]
+
+/// Schema + serialization buffers
+///
+/// It can be built from a schema:
+/// ```
+/// # use serde_avro_fast::{ser, Schema};
+/// let schema: Schema = r#""int""#.parse().unwrap();
+/// let serializer_config = &mut ser::SerializerConfig::new(&schema);
+///
+/// let mut serialized: Vec<u8> = serde_avro_fast::to_datum_vec(&3, serializer_config).unwrap();
+/// assert_eq!(serialized, &[6]);
+///
+/// // reuse config & output buffer across serializations for ideal performance (~40% perf gain)
+/// serialized.clear();
+/// let serialized = serde_avro_fast::to_datum(&4, serialized, serializer_config).unwrap();
+/// assert_eq!(serialized, &[8]);
+/// ```
 pub struct SerializerConfig<'s> {
-	schema_root: &'s SchemaNode<'s>,
+	buffers: Buffers,
+	schema: &'s Schema,
 }
 
 impl<'s> SerializerConfig<'s> {
 	pub fn new(schema: &'s Schema) -> Self {
-		Self::from_schema_node(schema.root())
+		Self {
+			schema,
+			buffers: Buffers::default(),
+		}
 	}
-	pub fn from_schema_node(schema_root: &'s SchemaNode<'s>) -> Self {
-		Self { schema_root }
+
+	pub fn schema(&self) -> &'s Schema {
+		self.schema
 	}
 }
 
-impl<'s, W: std::io::Write> SerializerState<'s, W> {
-	pub fn from_writer(writer: W, schema: &'s Schema) -> Self {
+impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
+	pub fn from_writer(writer: W, serializer_config: &'c mut SerializerConfig<'s>) -> Self {
 		Self {
 			writer,
-			config: SerializerConfig {
-				schema_root: schema.root(),
-			},
-			buffers: Buffers::default(),
+			config: serializer_config,
 		}
 	}
 
-	pub fn with_config(writer: W, config: SerializerConfig<'s>) -> Self {
-		SerializerState {
-			writer,
-			config,
-			buffers: Buffers::default(),
-		}
-	}
-
-	pub fn serializer<'r>(&'r mut self) -> DatumSerializer<'r, 's, W> {
+	pub fn serializer<'r>(&'r mut self) -> DatumSerializer<'r, 'c, 's, W> {
 		DatumSerializer {
-			schema_node: self.config.schema_root,
+			schema_node: self.config.schema.root(),
 			state: self,
 		}
 	}
-
-	/// Reuse buffers from a previous serializer
-	///
-	/// In order to avoid allocating even when field reordering is necessary we
-	/// can preserve the necessary allocations from one record to another (even
-	/// across deserializations).
-	///
-	/// This brings ~40% perf improvement
-	pub fn add_buffers(&mut self, buffers: Buffers) {
-		if self.buffers.field_reordering_buffers.is_empty() {
-			self.buffers.field_reordering_buffers = buffers.field_reordering_buffers;
-		} else {
-			self.buffers
-				.field_reordering_buffers
-				.extend(buffers.field_reordering_buffers);
-		}
-		if self.buffers.field_reordering_super_buffers.is_empty() {
-			self.buffers.field_reordering_super_buffers = buffers.field_reordering_super_buffers;
-		} else {
-			self.buffers
-				.field_reordering_super_buffers
-				.extend(buffers.field_reordering_super_buffers);
-		}
-	}
 }
 
-impl<W> SerializerState<'_, W> {
+impl<W> SerializerState<'_, '_, W> {
 	/// Get writer back
 	pub fn into_writer(self) -> W {
 		self.writer
-	}
-
-	/// Get writer back, as well as buffers
-	///
-	/// You may reuse these buffers with another serializer for increased
-	/// performance
-	///
-	/// These are used when it is required to buffer for field reordering
-	/// (when the fields of a record are provided by serde not in the same order
-	/// as they have to be serialized according to the schema)
-	///
-	/// If you are in a such scenario, reusing those should lead to about ~40%
-	/// perf improvement.
-	pub fn into_writer_and_buffers(self) -> (W, Buffers) {
-		(self.writer, self.buffers)
 	}
 }
 
@@ -177,7 +156,7 @@ impl<W> SerializerState<'_, W> {
 ///
 /// This brings ~40% perf improvement
 #[derive(Default)]
-pub struct Buffers {
+struct Buffers {
 	field_reordering_buffers: Vec<Vec<u8>>,
 	field_reordering_super_buffers: Vec<Vec<Option<Vec<u8>>>>,
 }

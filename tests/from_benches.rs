@@ -1,3 +1,5 @@
+use serde_avro_fast::ser::SerializerConfig;
+
 const RAW_BIG_SCHEMA: &str = r#"
 {
 	"namespace": "my.example",
@@ -173,6 +175,11 @@ fn big_record() {
 	// here nor randomly ordered maps - generally however there are several valid
 	// ways to encode stuff
 	let mut fast_serialized = Vec::new();
-	serde_avro_fast::to_datum(&my_big, &mut fast_serialized, &fast_schema).unwrap();
+	serde_avro_fast::to_datum(
+		&my_big,
+		&mut fast_serialized,
+		&mut SerializerConfig::new(&fast_schema),
+	)
+	.unwrap();
 	assert_eq!(datum, fast_serialized)
 }

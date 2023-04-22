@@ -1,16 +1,16 @@
 use super::*;
 
-pub(super) struct BlockWriter<'r, 's, W> {
-	pub(super) state: &'r mut SerializerState<'s, W>,
+pub(super) struct BlockWriter<'r, 'c, 's, W> {
+	pub(super) state: &'r mut SerializerState<'c, 's, W>,
 	current_block_len: usize,
 }
 
-impl<'r, 's, W> BlockWriter<'r, 's, W>
+impl<'r, 'c, 's, W> BlockWriter<'r, 'c, 's, W>
 where
 	W: std::io::Write,
 {
 	pub(super) fn new(
-		state: &'r mut SerializerState<'s, W>,
+		state: &'r mut SerializerState<'c, 's, W>,
 		min_len: usize,
 	) -> Result<Self, SerError> {
 		if min_len > 0 {

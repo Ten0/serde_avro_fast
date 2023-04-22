@@ -2,8 +2,8 @@ use crate::schema::Decimal;
 
 use super::*;
 
-pub(super) fn serialize<'r, 's, W>(
-	state: &'r mut SerializerState<'s, W>,
+pub(super) fn serialize<'r, 'c, 's, W>(
+	state: &'r mut SerializerState<'c, 's, W>,
 	decimal: &'s Decimal,
 	mut rust_decimal: rust_decimal::Decimal,
 ) -> Result<(), SerError>

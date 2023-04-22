@@ -1,23 +1,23 @@
 use super::*;
 
-pub struct SerializeAsArrayOrDuration<'r, 's, W> {
-	kind: Kind<'r, 's, W>,
+pub struct SerializeAsArrayOrDuration<'r, 'c, 's, W> {
+	kind: Kind<'r, 'c, 's, W>,
 }
 
-enum Kind<'r, 's, W> {
+enum Kind<'r, 'c, 's, W> {
 	Array {
-		block_writer: BlockWriter<'r, 's, W>,
+		block_writer: BlockWriter<'r, 'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 	},
 	Duration {
-		serializer_state: &'r mut SerializerState<'s, W>,
+		serializer_state: &'r mut SerializerState<'c, 's, W>,
 		n_values: u8,
 	},
 }
 
-impl<'r, 's, W: Write> SerializeAsArrayOrDuration<'r, 's, W> {
+impl<'r, 'c, 's, W: Write> SerializeAsArrayOrDuration<'r, 'c, 's, W> {
 	pub(super) fn array(
-		block_writer: BlockWriter<'r, 's, W>,
+		block_writer: BlockWriter<'r, 'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 	) -> Self {
 		Self {
@@ -28,7 +28,7 @@ impl<'r, 's, W: Write> SerializeAsArrayOrDuration<'r, 's, W> {
 		}
 	}
 
-	pub(super) fn duration(serializer_state: &'r mut SerializerState<'s, W>) -> Self {
+	pub(super) fn duration(serializer_state: &'r mut SerializerState<'c, 's, W>) -> Self {
 		Self {
 			kind: Kind::Duration {
 				serializer_state,
@@ -93,7 +93,7 @@ pub(super) fn duration_seq_len_incorrect() -> SerError {
 macro_rules! impl_serialize_seq_or_tuple {
 	($($trait_: ident $f: ident,)+) => {
 		$(
-			impl<'r, 's, W: Write> $trait_ for SerializeAsArrayOrDuration<'r, 's, W> {
+			impl<'r, 'c, 's, W: Write> $trait_ for SerializeAsArrayOrDuration<'r, 'c, 's, W> {
 				type Ok = ();
 				type Error = SerError;
 

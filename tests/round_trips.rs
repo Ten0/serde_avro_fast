@@ -6,6 +6,7 @@ use {
 	lazy_static::lazy_static,
 	pretty_assertions::assert_eq,
 	rand::prelude::*,
+	serde_avro_fast::ser::SerializerConfig,
 };
 
 lazy_static! {
@@ -105,6 +106,7 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
 	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
@@ -123,8 +125,11 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 				keys.shuffle(&mut rand::thread_rng());
 				tuple_vec_map::serialize(
 					&keys,
-					serde_avro_fast::ser::SerializerState::from_writer(&mut encoded, &fast_schema)
-						.serializer(),
+					serde_avro_fast::ser::SerializerState::from_writer(
+						&mut encoded,
+						serializer_config,
+					)
+					.serializer(),
 				)
 				.unwrap();
 				if let Some(prevv) = prev {
@@ -134,7 +139,7 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 			}
 		}
 		_ => {
-			serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+			serde_avro_fast::to_datum(&json_for_value, &mut encoded, serializer_config).unwrap();
 		}
 	}
 	let decoded = apache_avro::from_avro_datum(&schema, &mut encoded.as_slice(), None).unwrap();
@@ -147,12 +152,13 @@ fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
 	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
 
 	let mut encoded = Vec::new();
-	serde_avro_fast::to_datum(&json_for_value, &mut encoded, &fast_schema).unwrap();
+	serde_avro_fast::to_datum(&json_for_value, &mut encoded, serializer_config).unwrap();
 	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
 	assert_eq!(*value, decoded);
 }
@@ -224,6 +230,7 @@ fn test_decimal() {
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();
+	let serializer_config = &mut SerializerConfig::new(&schema);
 	use serde_avro_fast::schema::{DecimalRepr, SchemaNode};
 	dbg!(schema.root());
 	assert!(matches!(
@@ -244,7 +251,7 @@ fn test_decimal() {
 		serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2".parse().unwrap());
 	assert_eq!(
-		serde_avro_fast::to_datum_vec(&deserialized, &schema).unwrap(),
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
 		[2, 2]
 	);
 
@@ -257,7 +264,7 @@ fn test_decimal() {
 		serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
 	assert_eq!(deserialized, "-0.2".parse().unwrap());
 	assert_eq!(
-		serde_avro_fast::to_datum_vec(&deserialized, &schema).unwrap(),
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
 		[2, 0xFE]
 	);
 }

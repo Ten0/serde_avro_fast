@@ -1,4 +1,4 @@
-use serde_avro_fast::{from_datum_slice, to_datum_vec, Schema};
+use serde_avro_fast::{from_datum_slice, ser::SerializerConfig, to_datum_vec, Schema};
 
 fn test<'de, T: serde::Serialize + serde::Deserialize<'de> + PartialEq + std::fmt::Debug>(
 	datum: &'de [u8],
@@ -8,7 +8,10 @@ fn test<'de, T: serde::Serialize + serde::Deserialize<'de> + PartialEq + std::fm
 	apache_schema: &apache_avro::Schema,
 ) {
 	assert_eq!(from_datum_slice::<T>(datum, schema).unwrap(), rust_value);
-	assert_eq!(to_datum_vec(&rust_value, schema).unwrap(), datum);
+	assert_eq!(
+		to_datum_vec(&rust_value, &mut SerializerConfig::new(schema)).unwrap(),
+		datum
+	);
 	let avro_value = apache_avro::types::Value::Duration(avro_value.clone());
 	assert_eq!(
 		apache_avro::from_avro_datum(apache_schema, &mut &*datum, None).unwrap(),

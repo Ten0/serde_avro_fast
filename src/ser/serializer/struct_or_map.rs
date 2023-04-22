@@ -2,25 +2,25 @@ use crate::schema::Record;
 
 use super::*;
 
-pub struct SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
-	kind: Kind<'r, 's, W>,
+pub struct SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+	kind: Kind<'r, 'c, 's, W>,
 }
 
-enum Kind<'r, 's, W> {
-	Record(KindRecord<'r, 's, W>),
+enum Kind<'r, 'c, 's, W> {
+	Record(KindRecord<'r, 'c, 's, W>),
 	Map {
-		block_writer: BlockWriter<'r, 's, W>,
+		block_writer: BlockWriter<'r, 'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 	},
 	Duration {
-		serializer_state: &'r mut SerializerState<'s, W>,
+		serializer_state: &'r mut SerializerState<'c, 's, W>,
 		values: [u32; 3],
 		gotten_values: u8,
 	},
 }
 
-struct KindRecord<'r, 's, W> {
-	serializer_state: &'r mut SerializerState<'s, W>,
+struct KindRecord<'r, 'c, 's, W> {
+	serializer_state: &'r mut SerializerState<'c, 's, W>,
 	record_state: RecordState<'s>,
 }
 
@@ -31,7 +31,7 @@ struct RecordState<'s> {
 	record: &'s Record<'s>,
 }
 
-impl<'r, 's, W> Drop for KindRecord<'r, 's, W> {
+impl<'r, 'c, 's, W> Drop for KindRecord<'r, 'c, 's, W> {
 	fn drop(&mut self) {
 		// In order to avoid allocating even when field reordering is necessary we can
 		// preserve the necessary allocations from one record to another (even across
@@ -39,6 +39,7 @@ impl<'r, 's, W> Drop for KindRecord<'r, 's, W> {
 		// This brings ~40% perf improvement
 		if self.record_state.buffers.capacity() > 0 {
 			self.serializer_state
+				.config
 				.buffers
 				.field_reordering_buffers
 				.extend(
@@ -52,6 +53,7 @@ impl<'r, 's, W> Drop for KindRecord<'r, 's, W> {
 						}),
 				);
 			self.serializer_state
+				.config
 				.buffers
 				.field_reordering_super_buffers
 				.push(std::mem::replace(
@@ -62,14 +64,18 @@ impl<'r, 's, W> Drop for KindRecord<'r, 's, W> {
 	}
 }
 
-impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
-	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
+impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+	pub(super) fn record(
+		state: &'r mut SerializerState<'c, 's, W>,
+		record: &'s Record<'s>,
+	) -> Self {
 		Self {
 			kind: Kind::Record(KindRecord {
 				record_state: RecordState {
 					expected_fields: record.fields.iter(),
 					current_idx: 0,
 					buffers: state
+						.config
 						.buffers
 						.field_reordering_super_buffers
 						.pop()
@@ -86,7 +92,7 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 		}
 	}
 	pub(super) fn map(
-		state: &'r mut SerializerState<'s, W>,
+		state: &'r mut SerializerState<'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 		min_len: usize,
 	) -> Result<Self, SerError> {
@@ -97,7 +103,7 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 			},
 		})
 	}
-	pub(super) fn duration(state: &'r mut SerializerState<'s, W>) -> Result<Self, SerError> {
+	pub(super) fn duration(state: &'r mut SerializerState<'c, 's, W>) -> Result<Self, SerError> {
 		Ok(Self {
 			kind: Kind::Duration {
 				serializer_state: state,
@@ -166,6 +172,7 @@ impl<'r, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
 
 						already_serialized.clear();
 						serializer_state
+							.config
 							.buffers
 							.field_reordering_buffers
 							.push(already_serialized);
@@ -246,8 +253,8 @@ fn field_idx<'s>(
 	}
 }
 
-fn serialize_record_value<'r, 's, W: Write, T: ?Sized>(
-	serializer_state: &'r mut SerializerState<'s, W>,
+fn serialize_record_value<'r, 'c, 's, W: Write, T: ?Sized>(
+	serializer_state: &'r mut SerializerState<'c, 's, W>,
 	record_state: &mut RecordState<'s>,
 	field_idx: usize,
 	schema_node: &'s SchemaNode<'s>,
@@ -277,6 +284,7 @@ where
 
 			already_serialized.clear();
 			serializer_state
+				.config
 				.buffers
 				.field_reordering_buffers
 				.push(already_serialized);
@@ -297,9 +305,9 @@ where
 			}
 			field_buf @ None => field_buf,
 		};
-		// Temporarily steal the buffers of this SerializerState
 		let mut buf_serializer_state = SerializerState {
 			writer: serializer_state
+				.config
 				.buffers
 				.field_reordering_buffers
 				.pop()
@@ -309,19 +317,17 @@ where
 					v
 				})
 				.unwrap_or_else(Vec::new),
-			buffers: std::mem::replace(&mut serializer_state.buffers, Buffers::default()),
-			config: SerializerConfig {
-				schema_root: serializer_state.config.schema_root,
-			},
+			config: serializer_state.config,
 		};
-		let res = value.serialize(DatumSerializer {
+		value.serialize(DatumSerializer {
 			state: &mut buf_serializer_state,
 			schema_node,
-		});
-		// Put buffers back in their proper place
-		*field_buf = Some(buf_serializer_state.writer);
-		serializer_state.buffers = buf_serializer_state.buffers;
-		res
+		})?;
+		// Put buffer in place after serialization
+		// (after instead of before gives one less deref level during inner
+		// serialization, and avoids extra monomorphizations if serializing to Vec)
+		*field_buf = Some(buf_serializer_state.into_writer());
+		Ok(())
 	}
 }
 
@@ -360,7 +366,9 @@ pub(super) fn duration_fields_incorrect() -> SerError {
 	)
 }
 
-impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMapOrDuration<'r, 's, W> {
+impl<'r, 'c, 's, W: Write> SerializeStruct
+	for SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
+{
 	type Ok = ();
 
 	type Error = SerError;
@@ -417,8 +425,8 @@ impl<'r, 's, W: Write> SerializeStruct for SerializeStructAsRecordOrMapOrDuratio
 	}
 }
 
-impl<'r, 's, W: Write> SerializeStructVariant
-	for SerializeStructAsRecordOrMapOrDuration<'r, 's, W>
+impl<'r, 'c, 's, W: Write> SerializeStructVariant
+	for SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 {
 	type Ok = ();
 
@@ -440,8 +448,8 @@ impl<'r, 's, W: Write> SerializeStructVariant
 	}
 }
 
-pub struct SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
-	inner: SerializeStructAsRecordOrMapOrDuration<'r, 's, W>,
+pub struct SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+	inner: SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>,
 	key_hint: KeyHint<'s>,
 }
 
@@ -454,15 +462,18 @@ enum KeyHint<'s> {
 	DurationField(extract_for_duration::DurationFieldName),
 }
 
-impl<'r, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
-	pub(super) fn record(state: &'r mut SerializerState<'s, W>, record: &'s Record<'s>) -> Self {
+impl<'r, 'c, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+	pub(super) fn record(
+		state: &'r mut SerializerState<'c, 's, W>,
+		record: &'s Record<'s>,
+	) -> Self {
 		Self {
 			inner: SerializeStructAsRecordOrMapOrDuration::record(state, record),
 			key_hint: KeyHint::None,
 		}
 	}
 	pub(super) fn map(
-		state: &'r mut SerializerState<'s, W>,
+		state: &'r mut SerializerState<'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
 		min_len: usize,
 	) -> Result<Self, SerError> {
@@ -472,7 +483,7 @@ impl<'r, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
 		})
 	}
 
-	pub(super) fn duration(state: &'r mut SerializerState<'s, W>) -> Result<Self, SerError> {
+	pub(super) fn duration(state: &'r mut SerializerState<'c, 's, W>) -> Result<Self, SerError> {
 		Ok(Self {
 			inner: SerializeStructAsRecordOrMapOrDuration::duration(state)?,
 			key_hint: KeyHint::None,
@@ -480,7 +491,7 @@ impl<'r, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
 	}
 }
 
-impl<'r, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 's, W> {
+impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 

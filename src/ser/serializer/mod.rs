@@ -14,22 +14,22 @@ use {
 
 /// Can't be instantiated directly - has to be constructed from a
 /// [`SerializerState`]
-pub struct DatumSerializer<'r, 's, W> {
-	pub(super) state: &'r mut SerializerState<'s, W>,
+pub struct DatumSerializer<'r, 'c, 's, W> {
+	pub(super) state: &'r mut SerializerState<'c, 's, W>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
+impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
-	type SerializeSeq = SerializeAsArrayOrDuration<'r, 's, W>;
-	type SerializeTuple = SerializeAsArrayOrDuration<'r, 's, W>;
-	type SerializeTupleStruct = SerializeAsArrayOrDuration<'r, 's, W>;
-	type SerializeTupleVariant = SerializeAsArrayOrDuration<'r, 's, W>;
-	type SerializeMap = SerializeMapAsRecordOrMapOrDuration<'r, 's, W>;
-	type SerializeStruct = SerializeStructAsRecordOrMapOrDuration<'r, 's, W>;
-	type SerializeStructVariant = SerializeStructAsRecordOrMapOrDuration<'r, 's, W>;
+	type SerializeSeq = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
+	type SerializeTuple = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
+	type SerializeTupleStruct = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
+	type SerializeTupleVariant = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
+	type SerializeMap = SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W>;
+	type SerializeStruct = SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>;
+	type SerializeStructVariant = SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>;
 
 	fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
@@ -426,7 +426,7 @@ impl<'r, 's, W: Write> Serializer for DatumSerializer<'r, 's, W> {
 	}
 }
 
-impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
+impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 	fn serialize_union_unnamed<O>(
 		self,
 		union: &'s Union<'s>,
@@ -560,7 +560,7 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 	fn serialize_lookup_union_variant_by_name<O>(
 		self,
 		variant_name: &str,
-		f: impl FnOnce(DatumSerializer<'r, 's, W>) -> Result<O, SerError>,
+		f: impl FnOnce(DatumSerializer<'r, 'c, 's, W>) -> Result<O, SerError>,
 	) -> Result<O, SerError> {
 		match self.schema_node {
 			SchemaNode::Union(union) => match union.per_type_lookup.named(variant_name) {
@@ -588,7 +588,7 @@ impl<'r, 's, W: Write> DatumSerializer<'r, 's, W> {
 		self,
 		variant_or_struct_name: &str,
 		len: usize,
-	) -> Result<SerializeStructAsRecordOrMapOrDuration<'r, 's, W>, SerError> {
+	) -> Result<SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>, SerError> {
 		self.serialize_lookup_union_variant_by_name(variant_or_struct_name, |serializer| {
 			match *serializer.schema_node {
 				SchemaNode::Record(ref record) => Ok(

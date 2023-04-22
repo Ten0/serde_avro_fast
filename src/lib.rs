@@ -102,28 +102,49 @@ where
 /// Serialize an avro "datum" (raw data, no headers...)
 ///
 /// to the provided writer
-pub fn to_datum<T, W>(value: &T, writer: W, schema: &Schema) -> Result<(), ser::SerError>
+///
+/// [`SerializerConfig`](ser::SerializerConfig) can be built from a schema:
+/// ```
+/// # use serde_avro_fast::{ser, Schema};
+/// let schema: Schema = r#""int""#.parse().unwrap();
+/// let serializer_config = &mut ser::SerializerConfig::new(&schema);
+///
+/// let mut serialized: Vec<u8> = serde_avro_fast::to_datum_vec(&3, serializer_config).unwrap();
+/// assert_eq!(serialized, &[6]);
+///
+/// // reuse config and output buffer across serializations for ideal performance (~40% perf gain)
+/// serialized.clear();
+/// let serialized = serde_avro_fast::to_datum(&4, serialized, serializer_config).unwrap();
+/// assert_eq!(serialized, &[8]);
+/// ```
+pub fn to_datum<T, W>(
+	value: &T,
+	writer: W,
+	serializer_config: &mut ser::SerializerConfig<'_>,
+) -> Result<W, ser::SerError>
 where
 	T: serde::Serialize + ?Sized,
 	W: std::io::Write,
 {
-	serde::Serialize::serialize(
-		value,
-		ser::SerializerState::from_writer(writer, schema).serializer(),
-	)
+	let mut serializer_state = ser::SerializerState::from_writer(writer, serializer_config);
+	serde::Serialize::serialize(value, serializer_state.serializer())?;
+	Ok(serializer_state.into_writer())
 }
 
 /// Serialize an avro "datum" (raw data, no headers...)
 ///
 /// to a newly allocated Vec
 ///
-/// Note that unless you would otherwise allocate a `Vec` anyway, it will be
+/// Note that unless you would otherwise allocate a new `Vec` anyway, it will be
 /// more efficient to use [`to_datum`] instead.
-pub fn to_datum_vec<T>(value: &T, schema: &Schema) -> Result<Vec<u8>, ser::SerError>
+///
+/// See [`to_datum`] for more details.
+pub fn to_datum_vec<T>(
+	value: &T,
+	serializer_config: &mut ser::SerializerConfig<'_>,
+) -> Result<Vec<u8>, ser::SerError>
 where
 	T: serde::Serialize + ?Sized,
 {
-	let mut serializer_state = ser::SerializerState::from_writer(Vec::new(), schema);
-	serde::Serialize::serialize(value, serializer_state.serializer())?;
-	Ok(serializer_state.into_writer())
+	to_datum(value, Vec::new(), serializer_config)
 }
