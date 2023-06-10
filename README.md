@@ -38,6 +38,7 @@ assert_eq!(
 	Test { field: "foo" }
 );
 ```
+
 # An idiomatic (re)implementation of serde/avro (de)serialization
 
 At the time of writing, the other existing libraries for [Avro](https://avro.apache.org/docs/current/specification/)
@@ -48,6 +49,7 @@ This version is a more idiomatic implementation, both with regards to Rust
 and to [`serde`](https://crates.io/crates/serde).
 
 It is consequently >10x more performant (cf benchmarks):
+
 ```txt
 apache_avro/small       time:   [386.57 ns 387.04 ns 387.52 ns]
 serde_avro_fast/small   time:   [19.367 ns 19.388 ns 19.413 ns] <- x20 improvement
