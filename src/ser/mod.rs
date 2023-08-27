@@ -109,6 +109,7 @@ pub struct SerializerState<'c, 's, W> {
 /// ```
 pub struct SerializerConfig<'s> {
 	buffers: Buffers,
+	allow_slow_sequence_to_bytes: bool,
 	schema: &'s Schema,
 }
 
@@ -116,8 +117,22 @@ impl<'s> SerializerConfig<'s> {
 	pub fn new(schema: &'s Schema) -> Self {
 		Self {
 			schema,
+			allow_slow_sequence_to_bytes: false,
 			buffers: Buffers::default(),
 		}
+	}
+
+	/// For when you can't use `serde_bytes` and really need to serialize a
+	/// sequence as bytes.
+	///
+	/// If you need to serialize a `Vec<u8>` or `&[u8]` as `Bytes`/`Fixed`,
+	/// [`serde_bytes`] is the way to go. If however you can't use it because
+	/// e.g. you are transcoding... then you may enable this instead.
+	///
+	/// It will be slow, because the bytes are processed one by one.
+	pub fn allow_slow_sequence_to_bytes(&mut self) -> &mut Self {
+		self.allow_slow_sequence_to_bytes = true;
+		self
 	}
 
 	pub fn schema(&self) -> &'s Schema {

@@ -175,6 +175,7 @@ impl<'a> PerTypeLookup<'a> {
 					register_type_name("Bytes");
 					register(UnionVariantLookupKey::Str, 10);
 					register(UnionVariantLookupKey::SliceU8, 0);
+					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 2);
 				}
 				SchemaNode::String => {
 					register_type_name("String");
@@ -213,6 +214,7 @@ impl<'a> PerTypeLookup<'a> {
 					register_name(name);
 					register(UnionVariantLookupKey::Str, 15);
 					register(UnionVariantLookupKey::SliceU8, 0);
+					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 2);
 				}
 				SchemaNode::Decimal(Decimal { repr, .. }) => {
 					register_type_name("Decimal");

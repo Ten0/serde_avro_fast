@@ -8,7 +8,7 @@ use super::*;
 
 use {
 	blocks::BlockWriter,
-	seq_or_tuple::SerializeAsArrayOrDuration,
+	seq_or_tuple::SerializeSeqOrTupleOrTupleStruct,
 	struct_or_map::{SerializeMapAsRecordOrMapOrDuration, SerializeStructAsRecordOrMapOrDuration},
 };
 
@@ -23,10 +23,10 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
-	type SerializeSeq = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
-	type SerializeTuple = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
-	type SerializeTupleStruct = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
-	type SerializeTupleVariant = SerializeAsArrayOrDuration<'r, 'c, 's, W>;
+	type SerializeSeq = SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W>;
+	type SerializeTuple = SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W>;
+	type SerializeTupleStruct = SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W>;
+	type SerializeTupleVariant = SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W>;
 	type SerializeMap = SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W>;
 	type SerializeStruct = SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>;
 	type SerializeStructVariant = SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>;
@@ -153,7 +153,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
 			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Uuid => {
-				self.write_length_delimited(v.as_bytes())
+				self.state.write_length_delimited(v.as_bytes())
 			}
 			SchemaNode::Enum(
 				e @ Enum {
@@ -208,7 +208,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 
 	fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Bytes | SchemaNode::String => self.write_length_delimited(v),
+			SchemaNode::Bytes | SchemaNode::String => self.state.write_length_delimited(v),
 			SchemaNode::Fixed(Fixed { size, .. }) => {
 				if *size != v.len() {
 					Err(SerError::new(
@@ -334,7 +334,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Array(elements_schema) => Ok(SerializeAsArrayOrDuration::array(
+			SchemaNode::Array(elements_schema) => Ok(SerializeSeqOrTupleOrTupleStruct::array(
 				BlockWriter::new(self.state, len.unwrap_or(0))?,
 				elements_schema,
 			)),
@@ -342,7 +342,27 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				if len.map_or(false, |l| l != 3) {
 					Err(seq_or_tuple::duration_seq_len_incorrect())
 				} else {
-					Ok(SerializeAsArrayOrDuration::duration(self.state))
+					Ok(SerializeSeqOrTupleOrTupleStruct::duration(self.state))
+				}
+			}
+			SchemaNode::Bytes => {
+				self.state.check_allowed_slow_sequence_to_bytes()?;
+				match len {
+					None => Ok(SerializeSeqOrTupleOrTupleStruct::buffered_bytes(self.state)),
+					Some(len) => SerializeSeqOrTupleOrTupleStruct::bytes(self.state, len),
+				}
+			}
+			SchemaNode::Fixed(fixed) => {
+				self.state.check_allowed_slow_sequence_to_bytes()?;
+				if len.map_or(false, |l| l != fixed.size) {
+					Err(SerError::new(
+						"Could not serialize sequence, tuple or tuple struct to fixed: \
+							advertised size mismatch",
+					))
+				} else {
+					Ok(SerializeSeqOrTupleOrTupleStruct::fixed(
+						self.state, fixed.size,
+					))
 				}
 			}
 			SchemaNode::Union(union) => self.serialize_union_unnamed(
@@ -423,6 +443,33 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 		len: usize,
 	) -> Result<Self::SerializeStructVariant, Self::Error> {
 		self.serialize_struct_or_struct_variant(variant, len)
+	}
+}
+
+impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
+	fn write_length_delimited(&mut self, data: &[u8]) -> Result<(), SerError> {
+		self.writer
+			.write_varint::<i64>(data.len().try_into().map_err(|_| {
+				SerError::new(
+					"Buffer len does not fit i64 for encoding as length-delimited field size",
+				)
+			})?)
+			.map_err(SerError::io)?;
+		self.writer.write_all(data).map_err(SerError::io)
+	}
+
+	fn check_allowed_slow_sequence_to_bytes(&self) -> Result<(), SerError> {
+		if self.config.allow_slow_sequence_to_bytes {
+			Ok(())
+		} else {
+			Err(SerError::new(
+				"Sequence to bytes conversion is not allowed by default because it is much \
+					slower than going through `serialize_bytes`, which can be achieved via \
+					the `serde_bytes` crate. If this is not an option because e.g. you are \
+					transcoding, you can enable the slow sequence-to-bytes conversion by calling \
+					`allow_slow_sequence_to_bytes` on the `SerializerConfig`.",
+			))
+		}
 	}
 }
 
@@ -543,18 +590,6 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 				self.schema_node
 			))),
 		}
-	}
-
-	fn write_length_delimited(self, data: &[u8]) -> Result<(), SerError> {
-		self.state
-			.writer
-			.write_varint::<i64>(data.len().try_into().map_err(|_| {
-				SerError::new(
-					"Buffer len does not fit i64 for encoding as length-delimited field size",
-				)
-			})?)
-			.map_err(SerError::io)?;
-		self.state.writer.write_all(data).map_err(SerError::io)
 	}
 
 	fn serialize_lookup_union_variant_by_name<O>(

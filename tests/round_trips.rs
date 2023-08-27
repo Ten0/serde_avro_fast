@@ -268,3 +268,45 @@ fn test_decimal() {
 		[2, 0xFE]
 	);
 }
+
+#[test]
+fn test_bytes_with_serde_json_value() {
+	let (schema, value) = &SCHEMAS_TO_VALIDATE[3];
+	let schema = Schema::parse_str(schema).unwrap();
+	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
+	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+
+	let decoded: serde_json::Value = match value {
+		Value::Bytes(b) => b.into_iter().map(|b| *b as u64).collect(),
+		_ => unreachable!(),
+	};
+	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
+	config.allow_slow_sequence_to_bytes();
+	let mut serializer_state =
+		serde_avro_fast::ser::SerializerState::from_writer(Vec::new(), config);
+	serde::Serialize::serialize(&decoded, serializer_state.serializer()).unwrap();
+	let serialized = serializer_state.into_writer();
+
+	assert_eq!(serialized, encoded);
+}
+
+#[test]
+fn test_fixed_with_serde_json_value() {
+	let (schema, value) = &SCHEMAS_TO_VALIDATE[8];
+	let schema = Schema::parse_str(schema).unwrap();
+	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
+	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+
+	let decoded: serde_json::Value = match value {
+		Value::Fixed(_, b) => b.into_iter().map(|b| *b as u64).collect(),
+		_ => unreachable!(),
+	};
+	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
+	config.allow_slow_sequence_to_bytes();
+	let mut serializer_state =
+		serde_avro_fast::ser::SerializerState::from_writer(Vec::new(), config);
+	serde::Serialize::serialize(&decoded, serializer_state.serializer()).unwrap();
+	let serialized = serializer_state.into_writer();
+
+	assert_eq!(serialized, encoded);
+}
