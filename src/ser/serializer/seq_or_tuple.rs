@@ -54,6 +54,11 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 					.buffers
 					.field_reordering_buffers
 					.pop()
+					.map(|v| {
+						// To be replaced with `Option::inspect` once that is stabilized
+						assert!(v.is_empty());
+						v
+					})
 					.unwrap_or_else(Vec::new),
 				serializer_state: state,
 			},
@@ -178,10 +183,11 @@ impl<W> Drop for SerializeSeqOrTupleOrTupleStruct<'_, '_, '_, W> {
 	fn drop(&mut self) {
 		if let Kind::BufferedBytes {
 			serializer_state,
-			buffer,
+			mut buffer,
 		} = std::mem::replace(&mut self.kind, Kind::Finished)
 		{
 			if buffer.capacity() > 0 {
+				buffer.clear();
 				serializer_state
 					.config
 					.buffers
