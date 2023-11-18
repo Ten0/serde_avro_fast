@@ -1,21 +1,37 @@
 use super::*;
 
+pub(in super::super) enum DecimalMode<'a> {
+	Big,
+	Regular(&'a Decimal),
+}
+
 pub(super) fn serialize<'r, 'c, 's, W>(
 	state: &'r mut SerializerState<'c, 's, W>,
-	decimal: &'s Decimal,
+	decimal_mode: DecimalMode<'s>,
 	mut rust_decimal: rust_decimal::Decimal,
 ) -> Result<(), SerError>
 where
 	W: Write,
 {
-	// Try to scale it appropriately
-	rust_decimal.rescale(decimal.scale);
-	if rust_decimal.scale() != decimal.scale {
-		return Err(SerError::new(
-			"Decimal number cannot be scaled to fit in schema scale \
+	let mut scale_buf = [0; 10];
+	let scale_to_write = match decimal_mode {
+		DecimalMode::Regular(decimal) => {
+			// Try to scale it appropriately
+			rust_decimal.rescale(decimal.scale);
+			if rust_decimal.scale() != decimal.scale {
+				return Err(SerError::new(
+					"Decimal number cannot be scaled to fit in schema scale \
 				with a 96 bit mantissa (number or scale too large)",
-		));
-	}
+				));
+			}
+			&[]
+		}
+		DecimalMode::Big => {
+			let scale: i64 = rust_decimal.scale().into();
+			let n = <i64 as integer_encoding::VarInt>::encode_var(scale, &mut scale_buf);
+			&scale_buf[0..n]
+		}
+	};
 	let buf: [u8; 16] = rust_decimal.mantissa().to_be_bytes();
 	#[inline]
 	fn can_truncate_without_altering_number(buf: &[u8]) -> usize {
@@ -44,19 +60,53 @@ where
 		}
 		can_truncate
 	}
-	let start = match decimal.repr {
-		DecimalRepr::Bytes => {
+	let start = match decimal_mode {
+		DecimalMode::Big
+		| DecimalMode::Regular(Decimal {
+			repr: DecimalRepr::Bytes,
+			..
+		}) => {
 			// If it's a negative number we can ignore all 0xff followed by MSB
 			// at 1 If it's a positive number we can ignore all 0x00 followed by MSB at 0
 			let start = can_truncate_without_altering_number(&buf);
 			let len = (buf.len() - start) as i32;
-			state
-				.writer
-				.write_varint::<i32>(len)
-				.map_err(SerError::io)?;
+			match decimal_mode {
+				DecimalMode::Big => {
+					// We need to write the length of the full bytes, then write
+					// the length of the unscaled
+					assert!(!scale_to_write.is_empty());
+					let mut len_buf = [0; 10];
+					let len_len = <i32 as integer_encoding::VarInt>::encode_var(len, &mut len_buf);
+					state
+						.writer
+						.write_varint::<i32>(len_len as i32 + len + scale_to_write.len() as i32)
+						.map_err(SerError::io)?;
+					state
+						.writer
+						.write_all(&len_buf[0..len_len])
+						.map_err(SerError::io)?;
+				}
+				DecimalMode::Regular(Decimal {
+					repr: DecimalRepr::Bytes,
+					..
+				}) => {
+					// We need to write the length of the bytes
+					state
+						.writer
+						.write_varint::<i32>(len)
+						.map_err(SerError::io)?;
+				}
+				DecimalMode::Regular(Decimal {
+					repr: DecimalRepr::Fixed(_),
+					..
+				}) => unreachable!(),
+			}
 			start
 		}
-		DecimalRepr::Fixed(ref fixed) => {
+		DecimalMode::Regular(Decimal {
+			repr: DecimalRepr::Fixed(fixed),
+			..
+		}) => {
 			let size = fixed.size;
 			match buf.len().checked_sub(size) {
 				Some(start) => {
@@ -96,5 +146,15 @@ where
 			}
 		}
 	};
-	state.writer.write_all(&buf[start..]).map_err(SerError::io)
+	state
+		.writer
+		.write_all(&buf[start..])
+		.map_err(SerError::io)?;
+	if !scale_to_write.is_empty() {
+		state
+			.writer
+			.write_all(&scale_to_write)
+			.map_err(SerError::io)?;
+	}
+	Ok(())
 }

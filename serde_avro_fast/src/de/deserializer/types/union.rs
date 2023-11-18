@@ -88,6 +88,7 @@ impl<'de> Deserializer<'de> for SchemaTypeNameDeserializer<'_> {
 				repr: DecimalRepr::Bytes,
 				..
 			}) => "Decimal",
+			SchemaNode::BigDecimal => "BigDecimal",
 			SchemaNode::Uuid => "Uuid",
 			SchemaNode::Date => "Date",
 			SchemaNode::TimeMillis => "TimeMillis",

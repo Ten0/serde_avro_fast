@@ -171,7 +171,8 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					| LogicalType::TimeMicros
 					| LogicalType::TimestampMillis
 					| LogicalType::TimestampMicros
-					| LogicalType::Duration => {}
+					| LogicalType::Duration
+					| LogicalType::BigDecimal => {}
 					LogicalType::Unknown(_) => {}
 				}
 			} else {

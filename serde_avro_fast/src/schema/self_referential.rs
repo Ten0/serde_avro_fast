@@ -164,6 +164,7 @@ pub(crate) enum SchemaNode<'a> {
 	Enum(Enum),
 	Fixed(Fixed),
 	Decimal(Decimal),
+	BigDecimal,
 	Uuid,
 	Date,
 	TimeMillis,
@@ -339,6 +340,10 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					logical_type: Some(LogicalType::Duration),
 					type_: SafeSchemaType::Fixed(fixed),
 				} if fixed.size == 12 => SchemaNode::Duration,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::BigDecimal),
+					type_: SafeSchemaType::Bytes,
+				} => SchemaNode::BigDecimal,
 				_ => match safe_node.type_ {
 					SafeSchemaType::Null => SchemaNode::Null,
 					SafeSchemaType::Boolean => SchemaNode::Boolean,
@@ -527,6 +532,7 @@ impl<'a> std::fmt::Debug for SchemaNode<'a> {
 				}
 				d.finish()
 			}
+			SchemaNode::BigDecimal => f.debug_tuple("BigDecimal").finish(),
 			SchemaNode::Uuid => f.debug_tuple("Uuid").finish(),
 			SchemaNode::Date => f.debug_tuple("Date").finish(),
 			SchemaNode::TimeMillis => f.debug_tuple("TimeMillis").finish(),

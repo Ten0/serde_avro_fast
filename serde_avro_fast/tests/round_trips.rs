@@ -329,6 +329,72 @@ fn test_decimal() {
 }
 
 #[test]
+fn test_big_decimal() {
+	use serde_avro_fast::schema::*;
+	let editable_schema: SchemaMut = r#"{"type": "bytes", "logicalType": "big-decimal"}"#
+		.parse()
+		.unwrap();
+	dbg!(editable_schema.root());
+	assert!(matches!(
+		editable_schema.root(),
+		SchemaNode {
+			type_: RegularType::Bytes,
+			logical_type: Some(LogicalType::BigDecimal)
+		}
+	));
+
+	let schema = editable_schema.try_into().unwrap();
+	let serializer_config = &mut SerializerConfig::new(&schema);
+
+	// 0.2
+	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, 0.2);
+	let deserialized: String = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2");
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
+		[6, 2, 2, 2]
+	);
+
+	// - 0.2
+	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, -0.2);
+	let deserialized: String =
+		serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2");
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
+		[6, 2, 0xFE, 2]
+	);
+
+	// Make sure that the above is consistent with apache-avro's impl.
+	assert_eq!(
+		apache_avro::from_avro_datum(
+			&apache_avro::Schema::BigDecimal,
+			&mut (&[6, 2, 0xFE, 2u8] as &[u8]),
+			None,
+		)
+		.unwrap(),
+		Value::BigDecimal("-0.2".parse().unwrap()),
+	);
+
+	assert_eq!(
+		apache_avro::to_avro_datum(
+			&&apache_avro::Schema::BigDecimal,
+			Value::BigDecimal("-0.2".parse().unwrap())
+		)
+		.unwrap(),
+		[6, 2, 0xFE, 2]
+	);
+}
+
+#[test]
 fn test_bytes_with_serde_json_value() {
 	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[3];
 	let schema = Schema::parse_str(raw_schema).unwrap();

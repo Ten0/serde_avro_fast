@@ -449,6 +449,9 @@ pub enum LogicalType {
 	/// tuple, or to its raw representation [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
 	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
+	/// Logical type which represents `Decimal` values without predefined scale.
+	/// The underlying type is serialized and deserialized as `Schema::Bytes`
+	BigDecimal,
 	/// A logical type that is not known or not handled in any particular way
 	/// by this library.
 	///
@@ -549,6 +552,7 @@ impl LogicalType {
 			LogicalType::TimestampMillis => "timestamp-millis",
 			LogicalType::TimestampMicros => "timestamp-micros",
 			LogicalType::Duration => "duration",
+			LogicalType::BigDecimal => "big-decimal",
 			LogicalType::Unknown(unknown_logical_type) => &unknown_logical_type.logical_type_name,
 		}
 	}

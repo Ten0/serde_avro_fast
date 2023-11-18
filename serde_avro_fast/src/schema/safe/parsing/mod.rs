@@ -324,6 +324,7 @@ impl<'a> SchemaConstructionState<'a> {
 						"timestamp-millis" => LogicalType::TimestampMillis,
 						"timestamp-micros" => LogicalType::TimestampMicros,
 						"duration" => LogicalType::Duration,
+						"big-decimal" => LogicalType::BigDecimal,
 						unknown => LogicalType::Unknown(UnknownLogicalType::new(unknown)),
 					}
 				}),
