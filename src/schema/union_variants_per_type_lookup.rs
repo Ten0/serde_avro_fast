@@ -230,6 +230,14 @@ impl<'a> PerTypeLookup<'a> {
 					register(UnionVariantLookupKey::Float8, 2);
 					register(UnionVariantLookupKey::Str, 20);
 				}
+				SchemaNode::BigDecimal => {
+					register_type_name("BigDecimal");
+					register(UnionVariantLookupKey::Integer, 5);
+					register(UnionVariantLookupKey::Integer4, 5);
+					register(UnionVariantLookupKey::Integer8, 5);
+					register(UnionVariantLookupKey::Float8, 2);
+					register(UnionVariantLookupKey::Str, 20);
+				}
 				SchemaNode::Uuid => {
 					register_type_name("Uuid");
 					// A user may assume that uuid::Uuid will serialize to Uuid by default,

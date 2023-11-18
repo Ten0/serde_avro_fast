@@ -56,8 +56,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Fixed(ref fixed) => {
 				self.state.read_slice(fixed.size, BytesVisitor(visitor))
 			}
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::Str, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::Str,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::Str, visitor)
 			}
 			SchemaNode::Uuid => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Date => visitor.visit_i32(self.state.read_varint()?),
@@ -88,8 +94,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 					DeError::custom(format_args!("Got negative enum discriminant: {e}"))
 				})?)
 			}
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::U64, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::U64,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::U64, visitor)
 			}
 			_ => self.deserialize_any(visitor),
 		}
@@ -101,8 +113,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	{
 		match *self.schema_node {
 			SchemaNode::Long => visitor.visit_i64(self.state.read_varint()?),
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::I64, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::I64,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::I64, visitor)
 			}
 			_ => self.deserialize_any(visitor),
 		}
@@ -113,8 +131,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		match *self.schema_node {
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::U128, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::U128,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::U128, visitor)
 			}
 			_ => self.deserialize_any(visitor),
 		}
@@ -125,8 +149,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		V: Visitor<'de>,
 	{
 		match *self.schema_node {
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::I128, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::I128,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::I128, visitor)
 			}
 			_ => self.deserialize_any(visitor),
 		}
@@ -140,8 +170,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Double => {
 				visitor.visit_f64(f64::from_le_bytes(self.state.read_const_size_buf()?))
 			}
-			SchemaNode::Decimal(ref decimal) => {
-				read_decimal(self.state, decimal, VisitorHint::F64, visitor)
+			SchemaNode::Decimal(ref decimal) => read_decimal(
+				self.state,
+				DecimalMode::Regular(decimal),
+				VisitorHint::F64,
+				visitor,
+			),
+			SchemaNode::BigDecimal => {
+				read_decimal(self.state, DecimalMode::Big, VisitorHint::F64, visitor)
 			}
 			_ => self.deserialize_any(visitor),
 		}
@@ -305,6 +341,11 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
+		// Depending on the schema node type, it may represent the identifier of the
+		// enum variant directly (e.g. String type may be used to represent the enum
+		// variant name) If that's the case then we need to propose it as variant name
+		// when deserializing, otherwise we should propose the type as variant name and
+		// propagate deserialization of the current node to the variant's inner value
 		match *self.schema_node {
 			SchemaNode::Union(ref union) => visitor.visit_enum(SchemaTypeNameEnumAccess {
 				variant_schema: read_union_discriminant(self.state, union)?,
@@ -327,6 +368,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			| SchemaNode::Map(_)
 			| SchemaNode::Record(_)
 			| SchemaNode::Decimal(_)
+			| SchemaNode::BigDecimal
 			| SchemaNode::Uuid
 			| SchemaNode::Date
 			| SchemaNode::TimeMillis

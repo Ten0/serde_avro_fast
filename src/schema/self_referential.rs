@@ -117,6 +117,9 @@ pub enum SchemaNode<'a> {
 	///
 	/// <https://avro.apache.org/docs/current/specification/#decimal>
 	Decimal(Decimal),
+	/// Logical type which represents `Decimal` values without predefined scale.
+	/// The underlying type is serialized and deserialized as `Schema::Bytes`
+	BigDecimal,
 	/// A universally unique identifier, annotating a string.
 	Uuid,
 	/// Logical type which represents the number of days since the unix epoch.
@@ -293,6 +296,7 @@ impl From<super::safe::Schema> for Schema {
 					}),
 					SafeSchemaNode::Fixed(fixed) => SchemaNode::Fixed(fixed),
 					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(decimal),
+					SafeSchemaNode::BigDecimal => SchemaNode::BigDecimal,
 					SafeSchemaNode::Uuid => SchemaNode::Uuid,
 					SafeSchemaNode::Date => SchemaNode::Date,
 					SafeSchemaNode::TimeMillis => SchemaNode::TimeMillis,
@@ -417,6 +421,7 @@ impl<'a> std::fmt::Debug for SchemaNode<'a> {
 				}
 				d.finish()
 			}
+			SchemaNode::BigDecimal => f.debug_tuple("BigDecimal").finish(),
 			SchemaNode::Uuid => f.debug_tuple("Uuid").finish(),
 			SchemaNode::Date => f.debug_tuple("Date").finish(),
 			SchemaNode::TimeMillis => f.debug_tuple("TimeMillis").finish(),

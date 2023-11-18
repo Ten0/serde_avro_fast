@@ -79,7 +79,7 @@ pub fn from_avro_datum_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	dbg!(&avro_value);
 	let avro_value_reinterpreted = match (avro_value, schema) {
-		(Value::Bytes(v), Schema::Fixed { size, .. }) => {
+		(Value::Bytes(v), Schema::Fixed(apache_avro::schema::FixedSchema { size, .. })) => {
 			assert_eq!(*size, v.len());
 			Value::Fixed(*size, v)
 		}
@@ -230,7 +230,6 @@ fn test_decimal() {
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();
-	let serializer_config = &mut SerializerConfig::new(&schema);
 	use serde_avro_fast::schema::{DecimalRepr, SchemaNode};
 	dbg!(schema.root());
 	assert!(matches!(
@@ -241,6 +240,8 @@ fn test_decimal() {
 			repr: DecimalRepr::Bytes
 		})
 	));
+
+	let serializer_config = &mut SerializerConfig::new(&schema);
 
 	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
@@ -267,6 +268,68 @@ fn test_decimal() {
 		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
 		[2, 0xFE]
 	);
+}
+
+#[test]
+fn test_big_decimal() {
+	let schema: serde_avro_fast::Schema = r#"{"type": "bytes", "logicalType": "big-decimal"}"#
+		.parse()
+		.unwrap();
+	use serde_avro_fast::schema::SchemaNode;
+	dbg!(schema.root());
+	assert!(matches!(schema.root(), SchemaNode::BigDecimal));
+
+	let serializer_config = &mut SerializerConfig::new(&schema);
+
+	// 0.2
+	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, 0.2);
+	let deserialized: String = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2");
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
+	assert_eq!(deserialized, "0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
+		[6, 2, 2, 2]
+	);
+
+	// - 0.2
+	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, -0.2);
+	let deserialized: String =
+		serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2");
+	let deserialized: rust_decimal::Decimal =
+		serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
+	assert_eq!(deserialized, "-0.2".parse().unwrap());
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
+		[6, 2, 0xFE, 2]
+	);
+
+	// Make sure I understood it correctly since at the time of writing it's very
+	// undocumented in the avro spec.
+	assert_eq!(
+		apache_avro::from_avro_datum(
+			&Schema::BigDecimal,
+			&mut (&[6, 2, 0xFE, 2u8] as &[u8]),
+			None,
+		)
+		.unwrap(),
+		Value::BigDecimal("-0.2".parse().unwrap()),
+	);
+
+	// `apache-avro`'s serialization impl is buggy so this doesn't pass (they
+	// forgot to serialize the buf len)
+	/*assert_eq!(
+		apache_avro::to_avro_datum(
+			&Schema::BigDecimal,
+			Value::BigDecimal("-0.2".parse().unwrap())
+		)
+		.unwrap(),
+		[6, 2, 0xFE, 2]
+	);*/
 }
 
 #[test]

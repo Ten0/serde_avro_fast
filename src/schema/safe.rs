@@ -84,6 +84,7 @@ pub enum SchemaNode {
 	Enum(Enum),
 	Fixed(Fixed),
 	Decimal(Decimal),
+	BigDecimal,
 	Uuid,
 	Date,
 	TimeMillis,
@@ -257,15 +258,25 @@ impl Schema {
 						})
 						.collect::<Result<_, _>>()?,
 				}),
-				apache_avro::Schema::Enum { name, symbols, .. } => SchemaNode::Enum(Enum {
+				apache_avro::Schema::Enum(apache_avro::schema::EnumSchema {
+					name,
+					symbols,
+					..
+				}) => SchemaNode::Enum(Enum {
 					name: register_name(name)?,
 					symbols: symbols.clone(),
 				}),
-				apache_avro::Schema::Fixed { name, size, .. } => SchemaNode::Fixed(Fixed {
+				apache_avro::Schema::Fixed(apache_avro::schema::FixedSchema {
+					name, size, ..
+				}) => SchemaNode::Fixed(Fixed {
 					name: register_name(name)?,
 					size: *size,
 				}),
-				apache_avro::Schema::Record { name, fields, .. } => {
+				apache_avro::Schema::Record(apache_avro::schema::RecordSchema {
+					name,
+					fields,
+					..
+				}) => {
 					let namespace = match &name.namespace {
 						namespace @ Some(_) => namespace,
 						None => enclosing_namespace,
@@ -290,11 +301,11 @@ impl Schema {
 						name,
 					})
 				}
-				apache_avro::Schema::Decimal {
+				apache_avro::Schema::Decimal(apache_avro::schema::DecimalSchema {
 					precision,
 					scale,
 					inner,
-				} => SchemaNode::Decimal(Decimal {
+				}) => SchemaNode::Decimal(Decimal {
 					precision: *precision,
 					scale: {
 						let scale_value = *scale;
@@ -304,19 +315,20 @@ impl Schema {
 					},
 					repr: match &**inner {
 						apache_avro::Schema::Bytes => DecimalRepr::Bytes,
-						apache_avro::Schema::Fixed {
+						apache_avro::Schema::Fixed(apache_avro::schema::FixedSchema {
 							name,
 							aliases: _,
 							doc: _,
 							size,
 							attributes: _,
-						} => DecimalRepr::Fixed(Fixed {
+						}) => DecimalRepr::Fixed(Fixed {
 							name: register_name(name)?,
 							size: *size,
 						}),
 						_ => return Err(BuildSchemaFromApacheSchemaError::IncorrectDecimalRepr),
 					},
 				}),
+				apache_avro::Schema::BigDecimal => SchemaNode::BigDecimal,
 				apache_avro::Schema::Null => SchemaNode::Null,
 				apache_avro::Schema::Boolean => SchemaNode::Boolean,
 				apache_avro::Schema::Int => SchemaNode::Int,
@@ -331,6 +343,11 @@ impl Schema {
 				apache_avro::Schema::TimeMicros => SchemaNode::TimeMicros,
 				apache_avro::Schema::TimestampMillis => SchemaNode::TimestampMillis,
 				apache_avro::Schema::TimestampMicros => SchemaNode::TimestampMicros,
+				apache_avro::Schema::LocalTimestampMillis => {
+					// Why would you use this anyway?
+					SchemaNode::Long
+				}
+				apache_avro::Schema::LocalTimestampMicros => SchemaNode::Long,
 				apache_avro::Schema::Duration => SchemaNode::Duration,
 			};
 			schema.nodes[idx] = new_node;
@@ -364,6 +381,7 @@ impl Schema {
 					precision: _,
 					scale: _,
 				})
+				| SchemaNode::BigDecimal
 				| SchemaNode::Null
 				| SchemaNode::Boolean
 				| SchemaNode::Int

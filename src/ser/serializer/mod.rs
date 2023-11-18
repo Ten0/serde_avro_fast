@@ -132,7 +132,20 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 							"f64 cannot be converted to decimal for serialization as Decimal",
 						)
 					})?;
-				decimal::serialize(self.state, decimal, rust_decimal)
+				decimal::serialize(
+					self.state,
+					decimal::DecimalMode::Regular(decimal),
+					rust_decimal,
+				)
+			}
+			SchemaNode::BigDecimal => {
+				let rust_decimal: rust_decimal::Decimal = num_traits::FromPrimitive::from_f64(v)
+					.ok_or_else(|| {
+						SerError::new(
+							"f64 cannot be converted to decimal for serialization as BigDecimal",
+						)
+					})?;
+				decimal::serialize(self.state, decimal::DecimalMode::Big, rust_decimal)
 			}
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Float8, |ser| {
@@ -192,7 +205,20 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 						parse_err
 					))
 				})?;
-				decimal::serialize(self.state, decimal, rust_decimal)
+				decimal::serialize(
+					self.state,
+					decimal::DecimalMode::Regular(decimal),
+					rust_decimal,
+				)
+			}
+			SchemaNode::BigDecimal => {
+				let rust_decimal: rust_decimal::Decimal = v.parse().map_err(|parse_err| {
+					SerError::custom(format_args!(
+						"str cannot be converted to decimal for serialization as BigDecimal: {}",
+						parse_err
+					))
+				})?;
+				decimal::serialize(self.state, decimal::DecimalMode::Big, rust_decimal)
 			}
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Str, |ser| {

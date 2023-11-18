@@ -2,11 +2,19 @@ use crate::schema::{Decimal, DecimalRepr};
 
 use super::*;
 
-use {rust_decimal::prelude::ToPrimitive as _, std::marker::PhantomData};
+use {
+	rust_decimal::prelude::ToPrimitive as _,
+	std::{io::Read, marker::PhantomData},
+};
+
+pub(in super::super) enum DecimalMode<'a> {
+	Big,
+	Regular(&'a Decimal),
+}
 
 pub(in super::super) fn read_decimal<'de, R, V>(
 	state: &mut DeserializerState<R>,
-	decimal: &Decimal,
+	decimal_mode: DecimalMode<'_>,
 	hint: VisitorHint,
 	visitor: V,
 ) -> Result<V::Value, DeError>
@@ -14,9 +22,38 @@ where
 	R: ReadSlice<'de>,
 	V: Visitor<'de>,
 {
-	let size = match decimal.repr {
-		DecimalRepr::Bytes => read_len(state)?,
-		DecimalRepr::Fixed(ref fixed) => fixed.size,
+	let (size, mut reader) = match decimal_mode {
+		DecimalMode::Big => {
+			// BigDecimal are represented as bytes, and inside the bytes contain a length
+			// marker followed by the actual bytes, followed by another Long that represents
+			// the scale.
+
+			let bytes_len = state.read_varint::<i64>()?.try_into().map_err(|e| {
+				DeError::custom(format_args!(
+					"Invalid BigDecimal bytes length in stream: {e}"
+				))
+			})?;
+
+			let mut reader = (&mut state.reader).take(bytes_len);
+
+			// Read the unsized repr len
+			let unsized_len = integer_encoding::VarIntReader::read_varint::<i64>(&mut reader)
+				.map_err(DeError::io)?
+				.try_into()
+				.map_err(|e| {
+					DeError::custom(format_args!("Invalid BigDecimal length in bytes: {e}"))
+				})?;
+
+			(unsized_len, ReaderEither::Take(reader))
+		}
+		DecimalMode::Regular(Decimal {
+			repr: DecimalRepr::Bytes,
+			..
+		}) => (read_len(state)?, ReaderEither::Reader(&mut state.reader)),
+		DecimalMode::Regular(Decimal {
+			repr: DecimalRepr::Fixed(fixed),
+			..
+		}) => (fixed.size, ReaderEither::Reader(&mut state.reader)),
 	};
 	let mut buf = [0u8; 16];
 	let start = buf.len().checked_sub(size).ok_or_else(|| {
@@ -24,7 +61,7 @@ where
 			"Decimals of size larger than 16 are not supported (got size {size})"
 		))
 	})?;
-	state.read_exact(&mut buf[start..]).map_err(DeError::io)?;
+	reader.read_exact(&mut buf[start..]).map_err(DeError::io)?;
 	if buf.get(start).map_or(false, |&v| v & 0x80 != 0) {
 		// This is a negative number in CA2 repr, we need to maintain that for the
 		// larger number
@@ -33,7 +70,30 @@ where
 		}
 	}
 	let unscaled = i128::from_be_bytes(buf);
-	let scale = decimal.scale;
+	let scale = match decimal_mode {
+		DecimalMode::Big => integer_encoding::VarIntReader::read_varint::<i64>(&mut reader)
+			.map_err(DeError::io)?
+			.try_into()
+			.map_err(|e| {
+				DeError::custom(format_args!("Invalid BigDecimal scale in stream: {e}"))
+			})?,
+		DecimalMode::Regular(Decimal { scale, .. }) => *scale,
+	};
+	match reader {
+		ReaderEither::Take(take) => {
+			if take.limit() > 0 {
+				// This would be incorrect if we don't skip the extra bytes
+				// in the original reader.
+				// Arguably we could just ignore the extra bytes, but until proven
+				// that this is a real use-case we'll just do the conservative thing
+				// and encourage people to use the appropriate number of bytes.
+				return Err(DeError::new(
+					"BigDecimal scale is not at the end of the bytes",
+				));
+			}
+		}
+		ReaderEither::Reader(_) => {}
+	}
 	if scale == 0 {
 		match hint {
 			VisitorHint::U64 => {
@@ -111,5 +171,18 @@ impl<'de, V: Visitor<'de>> serde::Serializer for SerializeToVisitorStr<'de, V> {
 		bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char bytes none some unit unit_struct
 		unit_variant newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant i128 u128
+	}
+}
+
+enum ReaderEither<'a, R> {
+	Reader(&'a mut R),
+	Take(std::io::Take<&'a mut R>),
+}
+impl<R: Read> Read for ReaderEither<'_, R> {
+	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+		match self {
+			ReaderEither::Reader(reader) => reader.read(buf),
+			ReaderEither::Take(reader) => reader.read(buf),
+		}
 	}
 }
