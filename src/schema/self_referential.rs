@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// its correctness despite the usage of `unsafe`.
 ///
 /// It is useful to implement it this way because, due to how referencing via
-/// [Names](https://avro.apache.org/docs/current/specification/#names) work in Avro,
+/// [Names](https://avro.apache.org/docs/current/specification/#names) works in Avro,
 /// the most performant representation of an Avro schema is not a tree but a
 /// possibly-cyclic general directed graph.
 pub struct Schema {
