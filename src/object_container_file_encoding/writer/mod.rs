@@ -6,6 +6,7 @@ use compression::CompressionCodecState;
 use crate::{
 	object_container_file_encoding::{CompressionCodec, Metadata, METADATA_SCHEMA},
 	ser::{SerError, SerializerConfig, SerializerState},
+	Schema,
 };
 
 use super::HEADER_CONST;
@@ -14,6 +15,18 @@ use {
 	serde::Serialize,
 	std::{io::Write, num::NonZeroUsize},
 };
+
+pub fn write_all<W, IT>(schema: &Schema, writer: W, iterator: IT) -> Result<W, SerError>
+where
+	W: Write,
+	IT: Iterator,
+	IT::Item: Serialize,
+{
+	let mut serializer_config = SerializerConfig::new(schema);
+	let mut writer = WriterBuilder::new(&mut serializer_config).build(writer)?;
+	writer.serialize_all(iterator)?;
+	writer.into_inner()
+}
 
 pub struct WriterBuilder<'c, 's> {
 	compression_codec: CompressionCodec,
@@ -40,13 +53,20 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		self
 	}
 
+	pub fn build<W: Write>(self, writer: W) -> Result<Writer<'c, 's, W>, SerError> {
+		self.build_with_user_metadata(writer, ())
+	}
+
 	pub fn build_with_user_metadata<W: Write, M: Serialize>(
 		self,
 		mut writer: W,
-		metadata: &M,
+		metadata: M,
 	) -> Result<Writer<'c, 's, W>, SerError> {
 		// We'll use this both for serializing the header and as a buffer when
 		// serializing blocks
+		let mut sync_marker = [0; 16];
+		rand::Rng::fill(&mut rand::thread_rng(), &mut sync_marker);
+
 		let mut buf = Vec::with_capacity(self.aprox_block_size as usize * 5 / 4);
 
 		{
@@ -65,8 +85,10 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			.serialize(
 				header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA),
 			)?;
-
 			buf = header_serializer_state.into_writer();
+
+			buf.write_all(&sync_marker).map_err(SerError::io)?;
+
 			writer.write_all(&buf).map_err(SerError::io)?;
 			buf.clear();
 		};
@@ -74,11 +96,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		Ok(Writer {
 			inner: WriterInner {
 				serializer_state: SerializerState::from_writer(buf, self.serializer_config),
-				sync_marker: {
-					let mut sync_marker = [0; 16];
-					rand::Rng::fill(&mut rand::thread_rng(), &mut sync_marker);
-					sync_marker
-				},
+				sync_marker,
 				compression_codec: CompressionCodecState::new(self.compression_codec),
 				n_elements_in_block: 0,
 				aprox_block_size: self.aprox_block_size,
