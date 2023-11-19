@@ -42,8 +42,9 @@
 //! ```
 
 mod reader;
+mod writer;
 
-pub use reader::*;
+pub use {reader::*, writer::*};
 
 /// The compression codec used to compress blocks.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde_derive::Deserialize, serde_derive::Serialize)]
@@ -75,3 +76,17 @@ pub enum CompressionCodec {
 	// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
 	Zstandard,
 }
+
+const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
+
+#[derive(serde_derive::Deserialize, serde::Serialize)]
+struct Metadata<S, M> {
+	#[serde(rename = "avro.schema")]
+	schema: S,
+	#[serde(rename = "avro.codec")]
+	codec: CompressionCodec,
+	#[serde(flatten)]
+	user_metadata: M,
+}
+const METADATA_SCHEMA: &crate::schema::SchemaNode =
+	&crate::schema::SchemaNode::Map(&crate::schema::SchemaNode::Bytes);

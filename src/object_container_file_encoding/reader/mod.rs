@@ -5,7 +5,7 @@ use crate::{
 		read::{Read, ReadSlice},
 		DeError,
 	},
-	object_container_file_encoding::CompressionCodec,
+	object_container_file_encoding::{CompressionCodec, Metadata, HEADER_CONST, METADATA_SCHEMA},
 	*,
 };
 
@@ -96,28 +96,17 @@ where
 		if reader
 			.read_const_size_buf::<4>()
 			.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?
-			!= [b'O', b'b', b'j', 1u8]
+			!= HEADER_CONST
 		{
 			return Err(FailedToInitializeReader::NotAvroObjectContainerFile);
 		}
 
-		#[derive(serde_derive::Deserialize)]
-		struct Metadata<M> {
-			#[serde(rename = "avro.schema")]
-			schema: String,
-			#[serde(rename = "avro.codec")]
-			codec: CompressionCodec,
-			#[serde(flatten)]
-			user_metadata: M,
-		}
-
-		let mut metadata_deserializer_config = de::DeserializerConfig::from_schema_node(
-			&schema::SchemaNode::Map(&schema::SchemaNode::Bytes),
-		);
+		let mut metadata_deserializer_config =
+			de::DeserializerConfig::from_schema_node(METADATA_SCHEMA);
 		metadata_deserializer_config.max_seq_size = 1_000;
 		let mut metadata_deserializer_state =
 			de::DeserializerState::with_config(reader, metadata_deserializer_config);
-		let metadata: Metadata<M> =
+		let metadata: Metadata<String, M> =
 			serde::Deserialize::deserialize(metadata_deserializer_state.deserializer())
 				.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?;
 		reader = metadata_deserializer_state.into_reader();

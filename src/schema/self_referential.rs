@@ -43,6 +43,11 @@ impl Schema {
 		&self.nodes[0]
 	}
 
+	/// Obtain the JSON for this schema
+	pub fn as_str(&self) -> &str {
+		todo!()
+	}
+
 	/// Obtain the
 	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
 	/// of the schema

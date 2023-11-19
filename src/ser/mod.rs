@@ -110,11 +110,22 @@ pub struct SerializerState<'c, 's, W> {
 pub struct SerializerConfig<'s> {
 	buffers: Buffers,
 	allow_slow_sequence_to_bytes: bool,
-	schema: &'s Schema,
+	/// The schema is the default when building a serializer (or otherwise
+	/// calling `.schema()`). It can only be set to `None` within this crate.
+	/// Allowing overriding of the SchemaNode when building the serializer is a
+	/// ~hack to allow the object container file encoding writer to serialize
+	/// the header without instantiating a full `Schema`. This is only possible
+	/// within this crate.
+	schema: Option<&'s Schema>,
 }
 
 impl<'s> SerializerConfig<'s> {
 	pub fn new(schema: &'s Schema) -> Self {
+		Self::new_with_optional_schema(Some(schema))
+	}
+
+	/// See doc of [Self::schema]
+	pub(crate) fn new_with_optional_schema(schema: Option<&'s Schema>) -> Self {
 		Self {
 			schema,
 			allow_slow_sequence_to_bytes: false,
@@ -136,7 +147,7 @@ impl<'s> SerializerConfig<'s> {
 	}
 
 	pub fn schema(&self) -> &'s Schema {
-		self.schema
+		self.schema.expect("Unknown schema in SerializerConfig")
 	}
 }
 
@@ -150,7 +161,17 @@ impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
 
 	pub fn serializer<'r>(&'r mut self) -> DatumSerializer<'r, 'c, 's, W> {
 		DatumSerializer {
-			schema_node: self.config.schema.root(),
+			schema_node: self.config.schema().root(),
+			state: self,
+		}
+	}
+
+	pub(crate) fn serializer_overriding_schema_root<'r>(
+		&'r mut self,
+		schema_root: &'s SchemaNode<'s>,
+	) -> DatumSerializer<'r, 'c, 's, W> {
+		DatumSerializer {
+			schema_node: schema_root,
 			state: self,
 		}
 	}
