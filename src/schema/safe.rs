@@ -68,6 +68,7 @@ impl SchemaKey {
 /// For details about the meaning of the fields, see the
 /// [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum SchemaNode {
 	Null,
 	Boolean,

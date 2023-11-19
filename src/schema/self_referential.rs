@@ -62,6 +62,7 @@ impl Schema {
 /// [Avro Specification](https://avro.apache.org/docs/current/specification/).
 ///
 /// This enum is borrowed from a [`Schema`] and is used to navigate it.
+#[non_exhaustive]
 pub enum SchemaNode<'a> {
 	/// A `null` Avro schema.
 	Null,

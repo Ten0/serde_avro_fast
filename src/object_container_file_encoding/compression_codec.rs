@@ -3,6 +3,7 @@ use crate::de::{self, read::take::IntoLeftAfterTake, DeserializerConfig, Deseria
 /// The compression codec used to compress blocks.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum CompressionCodec {
 	/// The `Null` codec simply passes through data uncompressed.
 	Null,
