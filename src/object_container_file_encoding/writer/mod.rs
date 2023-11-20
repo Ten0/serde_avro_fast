@@ -16,14 +16,21 @@ use {
 	std::{io::Write, num::NonZeroUsize},
 };
 
-pub fn write_all<W, IT>(schema: &Schema, writer: W, iterator: IT) -> Result<W, SerError>
+pub fn write_all<W, IT>(
+	schema: &Schema,
+	compression_codec: CompressionCodec,
+	writer: W,
+	iterator: IT,
+) -> Result<W, SerError>
 where
 	W: Write,
 	IT: Iterator,
 	IT::Item: Serialize,
 {
 	let mut serializer_config = SerializerConfig::new(schema);
-	let mut writer = WriterBuilder::new(&mut serializer_config).build(writer)?;
+	let mut writer = WriterBuilder::new(&mut serializer_config)
+		.compression_codec(compression_codec)
+		.build(writer)?;
 	writer.serialize_all(iterator)?;
 	writer.into_inner()
 }
