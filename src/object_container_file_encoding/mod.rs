@@ -292,30 +292,25 @@ where
 					codec_data,
 					n_objects_in_block,
 				} => match n_objects_in_block.checked_sub(1) {
-					None => {
-						match std::mem::replace(&mut self.reader_state, ReaderState::Broken) {
-							ReaderState::InBlock {
-								codec_data,
-								n_objects_in_block: _,
-							} => {
-								let (mut reader, config, decompression_buffer) =
-									codec_data.into_source_reader_and_config()?;
-								let sync_marker = reader.read_const_size_buf::<16>()?;
-								if sync_marker != self.sync_marker {
-									return Err(DeError::new(
-										"Incorrect sync marker at end of block",
-									));
-								}
-								self.reader_state = ReaderState::NotInBlock {
-									reader,
-									config,
-									decompression_buffer,
-								}
+					None => match std::mem::replace(&mut self.reader_state, ReaderState::Broken) {
+						ReaderState::InBlock {
+							codec_data,
+							n_objects_in_block: _,
+						} => {
+							let (mut reader, config, decompression_buffer) =
+								codec_data.into_source_reader_and_config()?;
+							let sync_marker = reader.read_const_size_buf::<16>()?;
+							if sync_marker != self.sync_marker {
+								return Err(DeError::new("Incorrect sync marker at end of block"));
 							}
-							_ => unreachable!(),
+							self.reader_state = ReaderState::NotInBlock {
+								reader,
+								config,
+								decompression_buffer,
+							}
 						}
-						return Ok(None);
-					}
+						_ => unreachable!(),
+					},
 					Some(next_n_in_block) => {
 						*n_objects_in_block = next_n_in_block;
 						break match codec_data {
