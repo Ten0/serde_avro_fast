@@ -3,10 +3,15 @@
 //! updated to match this crate's interface
 
 use serde_avro_fast::{
-	from_datum_reader, from_datum_slice, object_container_file_encoding::Reader, Schema,
+	from_datum_reader, from_datum_slice,
+	object_container_file_encoding::{self as ocfe, CompressionCodec, Reader},
+	Schema,
 };
 
-use {pretty_assertions::assert_eq, serde::Deserialize};
+use {
+	pretty_assertions::assert_eq,
+	serde::{Deserialize, Serialize},
+};
 
 const SCHEMA: &str = r#"
     {
@@ -39,7 +44,7 @@ const ENCODED: &[u8] = &[
 	239,
 ];
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 struct SchemaRecord<'a> {
 	a: i64,
 	b: &'a str,
@@ -134,7 +139,7 @@ fn test_reader_iterator() {
 	//let schema: Schema = SCHEMA.parse().unwrap();
 	let mut reader = Reader::from_slice(ENCODED).unwrap();
 
-	let expected = vec![
+	let expected = &[
 		SchemaRecord { a: 27, b: "foo" },
 		SchemaRecord { a: 42, b: "bar" },
 	];
@@ -143,7 +148,42 @@ fn test_reader_iterator() {
 		.collect::<Result<_, _>>()
 		.unwrap();
 
-	assert_eq!(expected, res);
+	assert_eq!(expected.as_slice(), res.as_slice());
+}
+
+fn round_trip_writer(compression_codec: CompressionCodec) {
+	let input = &[
+		SchemaRecord { a: 27, b: "foo" },
+		SchemaRecord { a: 42, b: "bar" },
+	];
+
+	let schema: Schema = SCHEMA.parse().unwrap();
+	let serialized = ocfe::write_all(&schema, compression_codec, Vec::new(), input.iter()).unwrap();
+
+	let mut reader = Reader::from_slice(&serialized).unwrap();
+	let res: Vec<SchemaRecord> = reader
+		.deserialize_borrowed::<SchemaRecord>()
+		.collect::<Result<_, _>>()
+		.unwrap();
+
+	assert_eq!(input.as_slice(), res.as_slice());
+}
+
+#[test]
+fn test_writer_no_compression() {
+	round_trip_writer(CompressionCodec::Null);
+}
+
+#[cfg(feature = "snappy")]
+#[test]
+fn test_writer_snappy() {
+	round_trip_writer(CompressionCodec::Snappy);
+}
+
+#[cfg(feature = "deflate")]
+#[test]
+fn test_writer_deflate() {
+	round_trip_writer(CompressionCodec::Deflate);
 }
 
 #[test]
