@@ -5,7 +5,8 @@
 use {
 	serde_avro_fast::{
 		from_datum_reader, from_datum_slice,
-		object_container_file_encoding::{self as ocfe, CompressionCodec, Reader},
+		object_container_file_encoding::{CompressionCodec, Reader, WriterBuilder},
+		ser::SerializerConfig,
 		Schema,
 	},
 	std::borrow::Cow,
@@ -165,7 +166,7 @@ fn test_reader_iterator() {
 	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));
 }
 
-fn round_trip_writer(compression_codec: CompressionCodec) {
+fn round_trip_writer(compression_codec: CompressionCodec, aprox_block_size: u32) {
 	let input = &[
 		SchemaRecord {
 			a: 27,
@@ -178,7 +179,15 @@ fn round_trip_writer(compression_codec: CompressionCodec) {
 	];
 
 	let schema: Schema = SCHEMA.parse().unwrap();
-	let serialized = ocfe::write_all(&schema, compression_codec, Vec::new(), input.iter()).unwrap();
+
+	let mut serializer_config = SerializerConfig::new(&schema);
+	let mut writer = WriterBuilder::new(&mut serializer_config)
+		.compression_codec(compression_codec)
+		.aprox_block_size(aprox_block_size)
+		.build(Vec::new())
+		.unwrap();
+	writer.serialize_all(input.iter()).unwrap();
+	let serialized = writer.into_inner().unwrap();
 
 	let mut reader = Reader::from_slice(&serialized).unwrap();
 	let res: Vec<SchemaRecord> = reader
@@ -194,20 +203,27 @@ fn round_trip_writer(compression_codec: CompressionCodec) {
 }
 
 #[test]
-fn test_writer_no_compression() {
-	round_trip_writer(CompressionCodec::Null);
+fn test_writer_no_compression_regular_block_size() {
+	round_trip_writer(CompressionCodec::Null, 64 * 1024);
+}
+
+#[test]
+fn test_writer_no_compression_small_block_size() {
+	round_trip_writer(CompressionCodec::Null, 1);
 }
 
 #[cfg(feature = "snappy")]
 #[test]
 fn test_writer_snappy() {
-	round_trip_writer(CompressionCodec::Snappy);
+	round_trip_writer(CompressionCodec::Snappy, 64 * 1024);
+	round_trip_writer(CompressionCodec::Snappy, 1);
 }
 
 #[cfg(feature = "deflate")]
 #[test]
 fn test_writer_deflate() {
-	round_trip_writer(CompressionCodec::Deflate);
+	round_trip_writer(CompressionCodec::Deflate, 64 * 1024);
+	round_trip_writer(CompressionCodec::Deflate, 1);
 }
 
 #[test]
