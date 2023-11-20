@@ -84,14 +84,17 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			let mut header_serializer_config = SerializerConfig::new_with_optional_schema(None);
 			let mut header_serializer_state =
 				SerializerState::from_writer(buf, &mut header_serializer_config);
-			(Metadata {
+			(Metadata::<&str, M> {
 				schema: self.serializer_config.schema().json(),
 				codec: self.compression_codec,
 				user_metadata: metadata,
 			})
-			.serialize(
-				header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA),
-			)?;
+			.serialize(header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA))
+			.map_err(|ser_error| {
+				<SerError as serde::ser::Error>::custom(format_args!(
+					"Failed to serialize object container file header metadata: {ser_error}"
+				))
+			})?;
 			buf = header_serializer_state.into_writer();
 		}
 
@@ -140,7 +143,10 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 
 	pub fn into_inner(mut self) -> Result<W, SerError> {
 		self.finish_block()?;
-		Ok(self.writer.take().unwrap())
+		Ok(self
+			.writer
+			.take()
+			.expect("Only called by this function, which takes ownership"))
 	}
 
 	pub fn finish_block(&mut self) -> Result<(), SerError> {
@@ -155,7 +161,11 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 				// there's no block to flush
 			}
 			Some(block_header_size) => {
-				let writer = self.writer.as_mut().unwrap();
+				let writer = self.writer.as_mut().expect(
+					"This is only unset by into_inner, which guarantees that \
+						flush_finished_block is called, which guarantees that block_header_size \
+						is None",
+				);
 				// To be replaced with std's write_all_vectored once that is stabilized
 				// https://github.com/rust-lang/rust/issues/70436
 				vectored_write_polyfill::write_all_vectored(
@@ -238,6 +248,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 			self.block_header_size = Some(
 				NonZeroUsize::new(n + n2).expect("Encoding VarInts should never write zero bytes"),
 			);
+			self.n_elements_in_block = 0;
 		}
 
 		Ok(())

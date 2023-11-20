@@ -79,7 +79,7 @@ pub enum CompressionCodec {
 
 const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
 
-#[derive(serde_derive::Deserialize, serde::Serialize)]
+#[derive(serde_derive::Deserialize, serde_derive::Serialize)]
 struct Metadata<S, M> {
 	#[serde(rename = "avro.schema")]
 	schema: S,
