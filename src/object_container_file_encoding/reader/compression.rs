@@ -1,37 +1,7 @@
-use crate::de::{self, read::take::IntoLeftAfterTake, DeserializerConfig, DeserializerState};
-
-/// The compression codec used to compress blocks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum CompressionCodec {
-	/// The `Null` codec simply passes through data uncompressed.
-	Null,
-	#[cfg(feature = "deflate")]
-	/// The `Deflate` codec writes the data block using the deflate algorithm
-	/// as specified in RFC 1951, and typically implemented using the zlib
-	/// library. Note that this format (unlike the "zlib format" in RFC 1950)
-	/// does not have a checksum.
-	Deflate,
-	#[cfg(feature = "bzip2")]
-	/// The `BZip2` codec uses [BZip2](https://sourceware.org/bzip2/)
-	/// compression library.
-	Bzip2,
-	#[cfg(feature = "snappy")]
-	/// The `Snappy` codec uses Google's [Snappy](http://google.github.io/snappy/)
-	/// compression algorithm. Each compressed block is followed by the 4-byte,
-	/// big-endian CRC32 checksum of the uncompressed data in the block.
-	Snappy,
-	#[cfg(feature = "xz")]
-	/// The `Xz` codec uses [Xz utils](https://tukaani.org/xz/)
-	/// compression library.
-	Xz,
-	#[cfg(feature = "zstandard")]
-	// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
-	Zstandard,
-}
-// TODO add support for these compression protocols below (and declare features
-// and relevant additional dependencies)
+use crate::{
+	de::{self, read::take::IntoLeftAfterTake, DeserializerConfig, DeserializerState},
+	object_container_file_encoding::CompressionCodec,
+};
 
 impl CompressionCodec {
 	pub(super) fn state<'de, 's, R>(
