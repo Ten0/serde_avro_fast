@@ -26,6 +26,7 @@
 	rust_decimal = { version = "1", default-features = false, features = ["std", "serde-with-str"] }
 	serde = "1"
 	serde_derive = "1"
+	serde_json = "1"
 	serde_serializer_quick_unsupported = "0.1"
 	snap = { version = "1", optional = true }
 	thiserror = "1"
@@ -40,7 +41,6 @@
 	pretty_assertions = "1"
 	serde-tuple-vec-map = "1"
 	serde_bytes = "0.11"
-	serde_json = "1"
 
 [[bench]]
 	harness = false

@@ -78,7 +78,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			let mut header_serializer_state =
 				SerializerState::from_writer(buf, &mut header_serializer_config);
 			(Metadata {
-				schema: self.serializer_config.schema().as_str(),
+				schema: self.serializer_config.schema().json(),
 				codec: self.compression_codec,
 				user_metadata: metadata,
 			})
