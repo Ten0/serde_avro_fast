@@ -69,11 +69,11 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 
 		let mut buf = Vec::with_capacity(self.aprox_block_size as usize * 5 / 4);
 
+		// Construct the header into the buf
+		buf.write_all(&HEADER_CONST).map_err(SerError::io)?;
+
 		{
-			// Serialize the header
-
-			buf.write_all(&HEADER_CONST).map_err(SerError::io)?;
-
+			// Serialize metadata
 			let mut header_serializer_config = SerializerConfig::new_with_optional_schema(None);
 			let mut header_serializer_state =
 				SerializerState::from_writer(buf, &mut header_serializer_config);
@@ -86,12 +86,12 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 				header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA),
 			)?;
 			buf = header_serializer_state.into_writer();
+		}
 
-			buf.write_all(&sync_marker).map_err(SerError::io)?;
+		buf.write_all(&sync_marker).map_err(SerError::io)?;
 
-			writer.write_all(&buf).map_err(SerError::io)?;
-			buf.clear();
-		};
+		writer.write_all(&buf).map_err(SerError::io)?;
+		buf.clear();
 
 		Ok(Writer {
 			inner: WriterInner {
