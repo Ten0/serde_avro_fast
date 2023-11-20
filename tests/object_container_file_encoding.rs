@@ -2,10 +2,13 @@
 //! https://github.com/apache/avro/blob/6d90ec4b1c4ba47dba16650c54b4c15265016190/lang/rust/avro/src/reader.rs#L470
 //! updated to match this crate's interface
 
-use serde_avro_fast::{
-	from_datum_reader, from_datum_slice,
-	object_container_file_encoding::{self as ocfe, CompressionCodec, Reader},
-	Schema,
+use {
+	serde_avro_fast::{
+		from_datum_reader, from_datum_slice,
+		object_container_file_encoding::{self as ocfe, CompressionCodec, Reader},
+		Schema,
+	},
+	std::borrow::Cow,
 };
 
 use {
@@ -47,7 +50,8 @@ const ENCODED: &[u8] = &[
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 struct SchemaRecord<'a> {
 	a: i64,
-	b: &'a str,
+	#[serde(borrow)]
+	b: Cow<'a, str>,
 }
 
 #[test]
@@ -57,7 +61,10 @@ fn test_from_avro_datum() {
 
 	assert_eq!(
 		from_datum_slice::<SchemaRecord>(encoded, &schema).unwrap(),
-		SchemaRecord { a: 27, b: "foo" }
+		SchemaRecord {
+			a: 27,
+			b: "foo".into()
+		}
 	);
 }
 
@@ -140,8 +147,14 @@ fn test_reader_iterator() {
 	let mut reader = Reader::from_slice(ENCODED).unwrap();
 
 	let expected = &[
-		SchemaRecord { a: 27, b: "foo" },
-		SchemaRecord { a: 42, b: "bar" },
+		SchemaRecord {
+			a: 27,
+			b: "foo".into(),
+		},
+		SchemaRecord {
+			a: 42,
+			b: "bar".into(),
+		},
 	];
 	let res: Vec<SchemaRecord> = reader
 		.deserialize_borrowed::<SchemaRecord>()
@@ -149,12 +162,19 @@ fn test_reader_iterator() {
 		.unwrap();
 
 	assert_eq!(expected.as_slice(), res.as_slice());
+	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));
 }
 
 fn round_trip_writer(compression_codec: CompressionCodec) {
 	let input = &[
-		SchemaRecord { a: 27, b: "foo" },
-		SchemaRecord { a: 42, b: "bar" },
+		SchemaRecord {
+			a: 27,
+			b: "foo".into(),
+		},
+		SchemaRecord {
+			a: 42,
+			b: "bar".into(),
+		},
 	];
 
 	let schema: Schema = SCHEMA.parse().unwrap();
@@ -167,6 +187,10 @@ fn round_trip_writer(compression_codec: CompressionCodec) {
 		.unwrap();
 
 	assert_eq!(input.as_slice(), res.as_slice());
+	match compression_codec {
+		CompressionCodec::Null => assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_)))),
+		_ => assert!(res.iter().all(|r| matches!(r.b, Cow::Owned(_)))),
+	}
 }
 
 #[test]
