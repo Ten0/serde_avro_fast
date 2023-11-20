@@ -237,12 +237,12 @@ impl<'c, 's> WriterInner<'c, 's> {
 			self.compression_codec
 				.encode(self.serializer_state.writer.as_slice())?;
 
-			let n = integer_encoding::VarInt::encode_var(
-				self.n_elements_in_block,
+			let n = <i64 as integer_encoding::VarInt>::encode_var(
+				self.n_elements_in_block as i64,
 				&mut self.block_header_buffer,
 			);
-			let n2 = integer_encoding::VarInt::encode_var(
-				self.compressed_block().len(),
+			let n2 = <i64 as integer_encoding::VarInt>::encode_var(
+				self.compressed_block().len() as i64,
 				&mut self.block_header_buffer[n..],
 			);
 			self.block_header_size = Some(
