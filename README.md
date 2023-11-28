@@ -73,4 +73,4 @@ Aside from the already mentionned performance improvements, there are a couple m
   - I expect that any code that currently uses a reader schema could work out of the box with this new deserializer without the need to specify a reader schema at all.
   - If needing to convert Avro byte streams from one schema to another, this could likely be achieved simply by plugging the deserializer to the serializer through serde_transcode, as such serializer would combine the types provided from the original struct (or in this case, deserializer) with the schema variant to remap the values in a correct way, while preserving zero-alloc.
 - Schema representation is reworked to be a pre-computed self-referential graph structure.
-  - This is what allows for maximum performance when traveling it during de(serialization) operations.
+  - This is what allows for maximum performance when traveling it during (de)serialization operations.
