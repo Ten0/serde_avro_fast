@@ -188,8 +188,19 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 
 impl<'c, 's, W: Write> Drop for Writer<'c, 's, W> {
 	fn drop(&mut self) {
-		let res = self.finish_block();
-		if cfg!(debug_assertions) {
+		let panicking = std::thread::panicking();
+		let res = match panicking {
+			false => self.finish_block(),
+			true => {
+				// We are already panicking so even if finish_block panics we just want to let
+				// the current panic propagate.
+				// There is no exception safety concern within `self` because everything
+				// in there will be dropped as soon as we return anyway.
+				std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.finish_block()))
+					.unwrap_or(Ok(()))
+			}
+		};
+		if cfg!(debug_assertions) && !panicking {
 			res.expect(
 				"Failed to flush Writer on Drop. \
 					Please favor flushing manually before dropping the Writer.",
