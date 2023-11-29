@@ -121,6 +121,8 @@ impl CompressionCodecState {
 					.compress(input, &mut self.output_vec)
 					.map_err(|snappy_error| error("Snappy", &snappy_error))?;
 				self.output_vec.truncate(n);
+				self.output_vec
+					.extend(crc32fast::hash(&input).to_be_bytes());
 			}
 			#[cfg(feature = "xz")]
 			Kind::Xz => {

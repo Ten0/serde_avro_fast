@@ -290,7 +290,7 @@ fn test_snappy() {
 	let mut reader = Reader::from_slice(SNAPPY_COMPRESSED_AVRO).unwrap();
 	let expected: Vec<serde_json::Value> = vec![serde_json::json!({"num": "123"})];
 	let res: Vec<serde_json::Value> = reader
-		.deserialize_borrowed::<serde_json::Value>()
+		.deserialize::<serde_json::Value>()
 		.collect::<Result<_, _>>()
 		.unwrap();
 
