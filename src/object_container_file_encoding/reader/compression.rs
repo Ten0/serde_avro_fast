@@ -76,9 +76,14 @@ impl CompressionCodec {
 								.map_err(snappy_to_de_error)?,
 							0,
 						);
-						snap::raw::Decoder::new()
+						let written = snap::raw::Decoder::new()
 							.decompress(compressed_slice, &mut decompression_buffer)
 							.map_err(snappy_to_de_error)?;
+						if written != decompression_buffer.len() {
+							return Err(de::DeError::new(
+								"Snappy decompression error: incorrect decompressed size",
+							));
+						}
 						Ok(())
 					}),
 				)?;
