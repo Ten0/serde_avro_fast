@@ -52,8 +52,9 @@ impl CompressionCodecState {
 	/// If none, this means the codec is Null and the original
 	/// buffer should be used instead
 	pub(super) fn compressed_buffer(&self) -> Option<&[u8]> {
-		match self.kind {
+		match &self.kind {
 			Kind::Null => None,
+			Kind::Deflate { compress } => Some(&self.output_vec[..compress.total_out() as usize]),
 			_ => Some(&self.output_vec),
 		}
 	}
@@ -74,25 +75,23 @@ impl CompressionCodecState {
 					self.output_vec.resize(32 * 1024, 0);
 				}
 				let mut input = input;
-				while !input.is_empty() {
+				loop {
 					let before_in = compress.total_in() as usize;
 					let status = compress
 						.compress(
 							input,
-							&mut self.output_vec[before_in..],
+							&mut self.output_vec[compress.total_out() as usize..],
 							flate2::FlushCompress::Finish,
 						)
 						.map_err(|deflate_error| error("Deflate", &deflate_error))?;
-					let after_in = compress.total_in() as usize;
-					let written = after_in - before_in;
+					let written = compress.total_in() as usize - before_in;
 					match status {
 						flate2::Status::Ok => {
 							// There may be more to write.
+							// That may be true even if the input is empty, because flate2
+							// may have buffered some input.
 							input = &input[written..];
-							assert!(written > 0);
-							if !input.is_empty() {
-								self.output_vec.reserve(self.output_vec.len());
-							}
+							self.output_vec.resize(self.output_vec.len() * 2, 0);
 						}
 						flate2::Status::BufError => {
 							// miniz_oxide documents that this can only happen:
@@ -103,7 +102,6 @@ impl CompressionCodecState {
 						}
 						flate2::Status::StreamEnd => {
 							assert_eq!(input.len(), written as usize);
-							self.output_vec.truncate(after_in);
 							break;
 						}
 					}
