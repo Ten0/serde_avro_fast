@@ -16,7 +16,7 @@ impl CompressionCodecState {
 					compress: flate2::Compress::new(flate2::Compression::default(), false),
 				},
 				#[cfg(feature = "bzip2")]
-				CompressionCodec::Bzip2 => Kind::Bzip2,
+				CompressionCodec::Bzip2 => Kind::Bzip2 { len: 0 },
 				#[cfg(feature = "snappy")]
 				CompressionCodec::Snappy => Kind::Snappy {
 					encoder: snap::raw::Encoder::new(),
@@ -37,7 +37,9 @@ enum Kind {
 		compress: flate2::Compress,
 	},
 	#[cfg(feature = "bzip2")]
-	Bzip2,
+	Bzip2 {
+		len: usize,
+	},
 	#[cfg(feature = "snappy")]
 	Snappy {
 		encoder: snap::raw::Encoder,
@@ -55,6 +57,7 @@ impl CompressionCodecState {
 		match &self.kind {
 			Kind::Null => None,
 			Kind::Deflate { compress } => Some(&self.output_vec[..compress.total_out() as usize]),
+			Kind::Bzip2 { len } => Some(&self.output_vec[..*len]),
 			_ => Some(&self.output_vec),
 		}
 	}
@@ -108,8 +111,47 @@ impl CompressionCodecState {
 				}
 			}
 			#[cfg(feature = "bzip2")]
-			Kind::Bzip2 => {
-				todo!()
+			Kind::Bzip2 { len } => {
+				let mut compress = bzip2::Compress::new(bzip2::Compression::default(), {
+					// Default in BufRead::bzencoder
+					30
+				});
+				if self.output_vec.is_empty() {
+					// Default buffer length in flate2
+					self.output_vec.resize(32 * 1024, 0);
+				}
+				let mut input = input;
+				loop {
+					let before_in = compress.total_in() as usize;
+					let status = compress
+						.compress(
+							input,
+							&mut self.output_vec[compress.total_out() as usize..],
+							bzip2::Action::Finish,
+						)
+						.map_err(|deflate_error| error("Bzip2", &deflate_error))?;
+					let written = compress.total_in() as usize - before_in;
+					match status {
+						bzip2::Status::MemNeeded => {
+							// There may be more to write.
+							// That may be true even if the input is empty, because bzip2
+							// may have buffered some input.
+							input = &input[written..];
+							self.output_vec.resize(self.output_vec.len() * 2, 0);
+						}
+						bzip2::Status::FlushOk | bzip2::Status::RunOk | bzip2::Status::Ok => {
+							return Err(error(
+								"Bzip2",
+								&format_args!("got unexpected status from bzip2: {status:?}"),
+							));
+						}
+						bzip2::Status::FinishOk | bzip2::Status::StreamEnd => {
+							assert_eq!(input.len(), written as usize);
+							*len = compress.total_out() as usize;
+							break;
+						}
+					}
+				}
 			}
 			#[cfg(feature = "snappy")]
 			Kind::Snappy { ref mut encoder } => {

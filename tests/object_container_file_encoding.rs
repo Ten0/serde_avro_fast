@@ -226,6 +226,13 @@ fn test_writer_deflate() {
 	round_trip_writer(CompressionCodec::Deflate, 1);
 }
 
+#[cfg(feature = "bzip2")]
+#[test]
+fn test_writer_bzip2() {
+	round_trip_writer(CompressionCodec::Bzip2, 64 * 1024);
+	round_trip_writer(CompressionCodec::Bzip2, 1);
+}
+
 #[test]
 fn test_reader_invalid_header() {
 	//let schema: Schema = SCHEMA.parse().unwrap();
