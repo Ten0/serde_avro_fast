@@ -233,6 +233,13 @@ fn test_writer_bzip2() {
 	round_trip_writer(CompressionCodec::Bzip2, 1);
 }
 
+#[cfg(feature = "xz")]
+#[test]
+fn test_writer_xz() {
+	round_trip_writer(CompressionCodec::Xz, 64 * 1024);
+	round_trip_writer(CompressionCodec::Xz, 1);
+}
+
 #[test]
 fn test_reader_invalid_header() {
 	//let schema: Schema = SCHEMA.parse().unwrap();

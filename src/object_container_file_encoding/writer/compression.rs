@@ -22,7 +22,7 @@ impl CompressionCodecState {
 					encoder: snap::raw::Encoder::new(),
 				},
 				#[cfg(feature = "xz")]
-				CompressionCodec::Xz => Kind::Xz,
+				CompressionCodec::Xz => Kind::Xz { len: 0 },
 				#[cfg(feature = "zstandard")]
 				CompressionCodec::Zstandard => Kind::Zstandard,
 			},
@@ -45,7 +45,9 @@ enum Kind {
 		encoder: snap::raw::Encoder,
 	},
 	#[cfg(feature = "xz")]
-	Xz,
+	Xz {
+		len: usize,
+	},
 	#[cfg(feature = "zstandard")]
 	Zstandard,
 }
@@ -54,11 +56,13 @@ impl CompressionCodecState {
 	/// If none, this means the codec is Null and the original
 	/// buffer should be used instead
 	pub(super) fn compressed_buffer(&self) -> Option<&[u8]> {
-		match &self.kind {
+		match self.kind {
 			Kind::Null => None,
-			Kind::Deflate { compress } => Some(&self.output_vec[..compress.total_out() as usize]),
-			Kind::Bzip2 { len } => Some(&self.output_vec[..*len]),
-			_ => Some(&self.output_vec),
+			Kind::Deflate { ref compress } => {
+				Some(&self.output_vec[..compress.total_out() as usize])
+			}
+			Kind::Bzip2 { len } | Kind::Xz { len } => Some(&self.output_vec[..len]),
+			Kind::Zstandard | Kind::Snappy { .. } => Some(&self.output_vec),
 		}
 	}
 
@@ -117,7 +121,6 @@ impl CompressionCodecState {
 					30
 				});
 				if self.output_vec.is_empty() {
-					// Default buffer length in flate2
 					self.output_vec.resize(32 * 1024, 0);
 				}
 				let mut input = input;
@@ -165,8 +168,45 @@ impl CompressionCodecState {
 					.extend(crc32fast::hash(&input).to_be_bytes());
 			}
 			#[cfg(feature = "xz")]
-			Kind::Xz => {
-				todo!()
+			Kind::Xz { len } => {
+				let mut compress =
+					xz2::stream::Stream::new_easy_encoder(6, xz2::stream::Check::Crc64)
+						.map_err(|err| error("Xz", &err))?;
+				if self.output_vec.is_empty() {
+					self.output_vec.resize(32 * 1024, 0);
+				}
+				let mut input = input;
+				loop {
+					let before_in = compress.total_in() as usize;
+					let status = compress
+						.process(
+							input,
+							&mut self.output_vec[compress.total_out() as usize..],
+							xz2::stream::Action::Finish,
+						)
+						.map_err(|deflate_error| error("Bzip2", &deflate_error))?;
+					let written = compress.total_in() as usize - before_in;
+					match status {
+						xz2::stream::Status::MemNeeded => {
+							// There may be more to write.
+							// That may be true even if the input is empty, because bzip2
+							// may have buffered some input.
+							input = &input[written..];
+							self.output_vec.resize(self.output_vec.len() * 2, 0);
+						}
+						xz2::stream::Status::Ok | xz2::stream::Status::GetCheck => {
+							return Err(error(
+								"Xz",
+								&format_args!("got unexpected status from xz2: {status:?}"),
+							));
+						}
+						xz2::stream::Status::StreamEnd => {
+							assert_eq!(input.len(), written as usize);
+							*len = compress.total_out() as usize;
+							break;
+						}
+					}
+				}
 			}
 			#[cfg(feature = "zstandard")]
 			Kind::Zstandard => {
