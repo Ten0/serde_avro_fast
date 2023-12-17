@@ -24,7 +24,7 @@ impl CompressionCodecState {
 				#[cfg(feature = "xz")]
 				CompressionCodec::Xz => Kind::Xz { len: 0 },
 				#[cfg(feature = "zstandard")]
-				CompressionCodec::Zstandard => Kind::Zstandard,
+				CompressionCodec::Zstandard => Kind::Zstandard { encoder: None },
 			},
 		}
 	}
@@ -49,7 +49,9 @@ enum Kind {
 		len: usize,
 	},
 	#[cfg(feature = "zstandard")]
-	Zstandard,
+	Zstandard {
+		encoder: Option<zstd::stream::raw::Encoder<'static>>,
+	},
 }
 
 impl CompressionCodecState {
@@ -58,11 +60,16 @@ impl CompressionCodecState {
 	pub(super) fn compressed_buffer(&self) -> Option<&[u8]> {
 		match self.kind {
 			Kind::Null => None,
-			Kind::Deflate { ref compress } => {
-				Some(&self.output_vec[..compress.total_out() as usize])
-			}
-			Kind::Bzip2 { len } | Kind::Xz { len } => Some(&self.output_vec[..len]),
-			Kind::Zstandard | Kind::Snappy { .. } => Some(&self.output_vec),
+			#[cfg(feature = "deflate")]
+			Kind::Deflate { ref compress } => Some(&self.output_vec[..compress.total_out() as usize]),
+			#[cfg(feature = "bzip2")]
+			Kind::Bzip2 { len } => Some(&self.output_vec[..len]),
+			#[cfg(feature = "snappy")]
+			Kind::Snappy { .. } => Some(&self.output_vec),
+			#[cfg(feature = "xz")]
+			Kind::Xz { len } => Some(&self.output_vec[..len]),
+			#[cfg(feature = "zstandard")]
+			Kind::Zstandard { .. } => Some(&self.output_vec),
 		}
 	}
 
@@ -209,8 +216,50 @@ impl CompressionCodecState {
 				}
 			}
 			#[cfg(feature = "zstandard")]
-			Kind::Zstandard => {
-				todo!()
+			Kind::Zstandard { encoder } => {
+				use zstd::stream::raw::Operation;
+				let encoder = match encoder {
+					None => {
+						*encoder = Some(zstd::stream::raw::Encoder::new(0).map_err(|err| {
+							error("zstandard", &format_args!("zstd error on init: {err}"))
+						})?);
+						encoder.as_mut().unwrap()
+					}
+					Some(encoder) => {
+						encoder.reinit().map_err(|err| {
+							error("zstandard", &format_args!("zstd error on reinit: {err}"))
+						})?;
+						encoder
+					}
+				};
+
+				if self.output_vec.is_empty() {
+					// Default buffer length in flate2
+					self.output_vec.resize(32 * 1024, 0);
+				}
+				let mut input = zstd::stream::raw::InBuffer::around(input);
+				let mut output = zstd::stream::raw::OutBuffer::around(&mut self.output_vec);
+				let mut i = 0;
+				let mut finished_frame = false;
+				while input.pos() < input.src.len() {
+					dbg!(&input);
+					finished_frame = encoder.run(&mut input, &mut output).map_err(|err| {
+						error("zstandard", &format_args!("zstd error on run: {err}"))
+					})? == 0;
+					i += 1;
+					if i >= 3 {
+						break;
+					}
+				}
+				loop {
+					if encoder.finish(&mut output, finished_frame).map_err(|err| {
+						error("zstandard", &format_args!("zstd error on finish: {err}"))
+					})? == 0
+					{
+						break;
+					}
+				}
+				output.dst.truncate(output.pos());
 			}
 		}
 		Ok(())
