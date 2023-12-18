@@ -110,7 +110,7 @@ pub struct SerializerState<'c, 's, W> {
 pub struct SerializerConfig<'s> {
 	buffers: Buffers,
 	allow_slow_sequence_to_bytes: bool,
-	/// The schema is the default when building a serializer (or otherwise
+	/// This schema is the default when building a serializer (or otherwise
 	/// calling `.schema()`). It can only be set to `None` within this crate.
 	/// Allowing overriding of the SchemaNode when building the serializer is a
 	/// ~hack to allow the object container file encoding writer to serialize

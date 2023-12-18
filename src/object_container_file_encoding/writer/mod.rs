@@ -16,6 +16,7 @@ use {
 	std::{io::Write, num::NonZeroUsize},
 };
 
+/// Write all the elements of the provided sequence in an [object container file](https://avro.apache.org/docs/current/specification/#object-container-files)
 pub fn write_all<W, IT>(
 	schema: &Schema,
 	compression_codec: CompressionCodec,
@@ -35,6 +36,7 @@ where
 	writer.into_inner()
 }
 
+/// [`Writer`] builder for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
 pub struct WriterBuilder<'c, 's> {
 	compression_codec: CompressionCodec,
 	aprox_block_size: u32,
@@ -60,10 +62,14 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		self
 	}
 
+	/// After this method is called, it is guaranteed that the full object
+	/// container file encoding header is already written to the `writer`.
 	pub fn build<W: Write>(self, writer: W) -> Result<Writer<'c, 's, W>, SerError> {
 		self.build_with_user_metadata(writer, ())
 	}
 
+	/// After this method is called, it is guaranteed that the full object
+	/// container file encoding header is already written to the `writer`.
 	pub fn build_with_user_metadata<W: Write, M: Serialize>(
 		self,
 		mut writer: W,
@@ -118,12 +124,17 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	}
 }
 
+/// Writer for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
+///
+/// To be constructed via [`WriterBuilder`].
 pub struct Writer<'c, 's, W: Write> {
 	inner: WriterInner<'c, 's>,
 	writer: Option<W>,
 }
 
 impl<'c, 's, W: Write> Writer<'c, 's, W> {
+	/// Serialize each value of the provided sequence in the object container
+	/// file
 	pub fn serialize_all<IT: IntoIterator>(&mut self, iterator: IT) -> Result<(), SerError>
 	where
 		IT::Item: Serialize,
@@ -131,6 +142,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		iterator.into_iter().try_for_each(|i| self.serialize(i))
 	}
 
+	/// Serialize one value in the object container file
 	pub fn serialize<T: Serialize>(&mut self, value: T) -> Result<(), SerError> {
 		self.flush_finished_block()?;
 		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
@@ -141,6 +153,8 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		Ok(())
 	}
 
+	/// Flushe the final block (if a block was started) then return the
+	/// underlying writer.
 	pub fn into_inner(mut self) -> Result<W, SerError> {
 		self.finish_block()?;
 		Ok(self
@@ -149,6 +163,12 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 			.expect("Only called by this function, which takes ownership"))
 	}
 
+	/// Flush the current block (if a block was started)
+	///
+	/// After this function is called, if it returned no error, it is guaranteed
+	/// that the full block is written to the writer.
+	/// This implies that all bytes written so far amount to a valid object
+	/// container file.
 	pub fn finish_block(&mut self) -> Result<(), SerError> {
 		self.inner.finish_block()?;
 		self.flush_finished_block()?;
@@ -183,6 +203,52 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		}
 
 		Ok(())
+	}
+
+	/// Get a mutable reference to the inner writer
+	///
+	/// If you haven't received any error while manipulating the [`Writer`] or
+	/// its builder, you may expect that:
+	/// - The object container file encoding header has been written
+	/// - All blocks written so far are complete
+	///
+	/// This implies that everything written so far amounts to a valid object
+	/// container file.
+	///
+	/// It is however not guaranteed that all `serialize`d data has been written
+	/// as a block: there may still be an incomplete block in the writer's own
+	/// buffer.
+	///
+	/// You may use this if you want to e.g. write the headers/blocks to
+	/// separate files, free up the memory...
+	pub fn inner_mut(&mut self) -> &mut W {
+		self.writer.as_mut().expect(
+			"This is only unset by into_inner, which guarantees we \
+				couldn't call this function after",
+		)
+	}
+
+	/// Get a reference to the inner writer
+	///
+	/// If you haven't received any error while manipulating the [`Writer`] or
+	/// its builder, you may expect that:
+	/// - The object container file encoding header has been written
+	/// - All blocks written so far are complete
+	///
+	/// This implies that everything written so far amounts to a valid object
+	/// container file.
+	///
+	/// It is however not guaranteed that all `serialize`d data has been written
+	/// as a block: there may still be an incomplete block in the writer's own
+	/// buffer.
+	///
+	/// You may use this to e.g. read the header, check the length of what was
+	/// serialized so far...
+	pub fn inner(&self) -> &W {
+		self.writer.as_ref().expect(
+			"This is only unset by into_inner, which guarantees we \
+				couldn't call this function after",
+		)
 	}
 }
 
