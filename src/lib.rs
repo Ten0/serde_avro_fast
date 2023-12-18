@@ -84,7 +84,10 @@ where
 	)
 }
 
-/// Deserialize from an avro "datum" (raw data, no headers...) `impl Read`
+/// Deserialize from an avro "datum" (raw data, no headers...) `impl BufRead`
+///
+/// If you only have an `impl Read`, wrap it in a
+/// [`BufReader`](std::io::BufReader) first.
 ///
 /// If deserializing from a slice, a `Vec`, ... prefer using `from_datum_slice`,
 /// as it will be more performant and enable you to borrow `&str`s from the
@@ -92,7 +95,7 @@ where
 pub fn from_datum_reader<R, T>(reader: R, schema: &Schema) -> Result<T, de::DeError>
 where
 	T: serde::de::DeserializeOwned,
-	R: std::io::Read,
+	R: std::io::BufRead,
 {
 	serde::Deserialize::deserialize(
 		de::DeserializerState::from_reader(reader, &schema).deserializer(),

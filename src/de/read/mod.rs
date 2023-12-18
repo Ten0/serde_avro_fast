@@ -1,5 +1,5 @@
-//! Abstract reading from slices (propagating lifetime) or any other `impl Read`
-//! behind the same interface
+//! Abstract reading from slices (propagating lifetime) or any other
+//! `impl BufRead`/`impl Read` behind the same interface
 //!
 //! The deserializer is implemented generically on this.
 
@@ -9,7 +9,7 @@ use super::{DeError, Error};
 
 use integer_encoding::{VarInt, VarIntReader};
 
-/// Abstracts reading from slices or any other `impl Read` behind the same
+/// Abstracts reading from slices or any other `impl BufRead` behind the same
 /// interface
 ///
 /// The deserializer is implemented generically on this.
@@ -99,7 +99,7 @@ impl std::io::BufRead for SliceRead<'_> {
 	}
 }
 
-/// Implements `Read<'de>` reading from any `impl Read`
+/// Implements `Read<'de>` reading from any `impl BufRead`
 pub struct ReaderRead<R> {
 	reader: R,
 	scratch: Vec<u8>,
@@ -109,7 +109,11 @@ pub struct ReaderRead<R> {
 	pub max_alloc_size: usize,
 }
 impl<R: std::io::Read> private::Sealed for ReaderRead<R> {}
-impl<R: std::io::Read> ReaderRead<R> {
+impl<R: std::io::BufRead> ReaderRead<R> {
+	/// Construct a `ReaderRead` from an `impl BufRead`
+	///
+	/// If you only have an `impl Read`, wrap it in a
+	/// [`BufReader`](std::io::BufReader) first.
 	pub fn new(reader: R) -> Self {
 		Self {
 			reader,
@@ -124,24 +128,35 @@ impl<R> ReaderRead<R> {
 	}
 }
 impl<R: std::io::Read> Read for ReaderRead<R> {}
-impl<'de, R: std::io::Read> ReadSlice<'de> for ReaderRead<R> {
+impl<'de, R: std::io::BufRead> ReadSlice<'de> for ReaderRead<R> {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
 		V: ReadVisitor<'de>,
 	{
-		if n > self.max_alloc_size {
-			return Err(DeError::custom(format_args!(
-				"Allocation size that would be required ({n}) is larger than allowed for this \
-					deserializer from reader ({}) - this is probably due to malformed data",
-				self.max_alloc_size
-			)));
+		let buffer = self.reader.fill_buf().map_err(DeError::io)?;
+		match buffer.get(0..n) {
+			Some(slice) => {
+				let produced = read_visitor.visit(slice)?;
+				self.reader.consume(n);
+				Ok(produced)
+			}
+			None => {
+				if n > self.max_alloc_size {
+					return Err(DeError::custom(format_args!(
+						"Allocation size that would be required ({n}) is larger than \
+							allowed for this deserializer from reader ({}) - \
+							this is probably due to malformed data",
+						self.max_alloc_size
+					)));
+				}
+				if n > self.scratch.len() {
+					self.scratch.resize(n, 0);
+				}
+				let scratch = &mut self.scratch[..n];
+				self.reader.read_exact(scratch).map_err(DeError::io)?;
+				read_visitor.visit(scratch)
+			}
 		}
-		if n > self.scratch.len() {
-			self.scratch.resize(n, 0);
-		}
-		let scratch = &mut self.scratch[..n];
-		self.reader.read_exact(scratch).map_err(DeError::io)?;
-		read_visitor.visit(scratch)
 	}
 }
 impl<R: std::io::Read> std::io::Read for ReaderRead<R> {

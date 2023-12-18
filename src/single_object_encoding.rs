@@ -21,7 +21,10 @@ where
 }
 
 /// Deserialize from an avro
-/// [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding) `impl Read`
+/// [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding) `impl BufRead`
+///
+/// If you only have an `impl Read`, wrap it in a
+/// [`BufReader`](std::io::BufReader) first.
 ///
 /// If deserializing from a slice, a `Vec`, ... prefer using `from_datum_slice`,
 /// as it will be more performant and enable you to borrow `&str`s from the
@@ -29,7 +32,7 @@ where
 pub fn from_single_object_reader<R, T>(mut reader: R, schema: &Schema) -> Result<T, de::DeError>
 where
 	T: serde::de::DeserializeOwned,
-	R: std::io::Read,
+	R: std::io::BufRead,
 {
 	let mut header_buf = [0u8; 10];
 	reader
