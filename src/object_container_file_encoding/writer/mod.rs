@@ -44,6 +44,11 @@ pub struct WriterBuilder<'c, 's> {
 }
 
 impl<'c, 's> WriterBuilder<'c, 's> {
+	/// Construct a writer from a [`SerializerConfig`].
+	///
+	/// [`SerializerConfig`] holds the schema, as well as buffers that may
+	/// be reused across serializations for performance, and other
+	/// serialization configuration.
 	pub fn new(serializer_config: &'c mut SerializerConfig<'s>) -> Self {
 		Self {
 			serializer_config,
@@ -52,22 +57,31 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		}
 	}
 
+	/// Specify the compression codec that each block will be compressed with
 	pub fn compression_codec(mut self, compression_codec: CompressionCodec) -> Self {
 		self.compression_codec = compression_codec;
 		self
 	}
 
+	/// Approximate uncompressed block size in bytes
+	///
+	/// If after serializing a value, the total size of the uncompressed block
+	/// is greater than this value, the block will be compressed and flushed.
 	pub fn aprox_block_size(mut self, aprox_block_size: u32) -> Self {
 		self.aprox_block_size = aprox_block_size;
 		self
 	}
 
+	/// Build the [`Writer`]
+	///
 	/// After this method is called, it is guaranteed that the full object
 	/// container file encoding header is already written to the `writer`.
 	pub fn build<W: Write>(self, writer: W) -> Result<Writer<'c, 's, W>, SerError> {
 		self.build_with_user_metadata(writer, ())
 	}
 
+	/// Build the [`Writer`], also encoding [user-specified metadata](https://avro.apache.org/docs/current/specification/#object-container-files)
+	///
 	/// After this method is called, it is guaranteed that the full object
 	/// container file encoding header is already written to the `writer`.
 	pub fn build_with_user_metadata<W: Write, M: Serialize>(
@@ -142,7 +156,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		iterator.into_iter().try_for_each(|i| self.serialize(i))
 	}
 
-	/// Serialize one value in the object container file
+	/// Serialize one value as an object in the object container file
 	pub fn serialize<T: Serialize>(&mut self, value: T) -> Result<(), SerError> {
 		self.flush_finished_block()?;
 		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
