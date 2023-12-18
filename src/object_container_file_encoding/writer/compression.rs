@@ -239,17 +239,11 @@ impl CompressionCodecState {
 				}
 				let mut input = zstd::stream::raw::InBuffer::around(input);
 				let mut output = zstd::stream::raw::OutBuffer::around(&mut self.output_vec);
-				let mut i = 0;
 				let mut finished_frame = false;
 				while input.pos() < input.src.len() {
-					dbg!(&input);
 					finished_frame = encoder.run(&mut input, &mut output).map_err(|err| {
 						error("zstandard", &format_args!("zstd error on run: {err}"))
 					})? == 0;
-					i += 1;
-					if i >= 3 {
-						break;
-					}
 				}
 				loop {
 					if encoder.finish(&mut output, finished_frame).map_err(|err| {
