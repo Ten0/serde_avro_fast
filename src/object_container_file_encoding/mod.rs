@@ -55,7 +55,7 @@ use {
 
 /// Reader for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
 ///
-/// Works from either slices or arbitrary `impl Read`s.
+/// Works from either slices or arbitrary `impl BufRead`s.
 ///
 /// Slice version enables borrowing from the input if there is no compression
 /// involved.
@@ -209,7 +209,7 @@ where
 	/// Iterator over the deserialized values
 	///
 	/// Note that this may fail if the provided `T` requires to borrow from the
-	/// input and the input is actually an `impl Read`, or if the blocks are
+	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
 	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
@@ -234,7 +234,7 @@ where
 	/// Attempt to deserialize the next value
 	///
 	/// Note that this may fail if the provided `T` requires to borrow from the
-	/// input and the input is actually an `impl Read`, or if the blocks are
+	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
 	pub fn deserialize_next_borrowed<'de, T: Deserialize<'de>>(

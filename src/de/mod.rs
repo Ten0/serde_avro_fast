@@ -37,7 +37,7 @@
 //! 	field: String,
 //! }
 //!
-//! let avro_datum: &[u8] = &[6, 102, 111, 111]; // Any `impl Read`
+//! let avro_datum: &[u8] = &[6, 102, 111, 111]; // Any `impl BufRead`
 //!
 //! // Of course, don't actually use `ReaderRead` if you have a slice
 //! let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum);
@@ -98,8 +98,8 @@ pub struct DeserializerConfig<'s> {
 	/// This is to avoid running into an infinite loop at deserialization time.
 	/// Default for this is `1 000 000 000` (~1s CPU time)
 	///
-	/// Note that if you're deserializing from an `impl Read` instead of a slice
-	/// (consequently using [`ReaderRead`]), there's an additional similar
+	/// Note that if you're deserializing from an `impl BufRead` instead of a
+	/// slice (consequently using [`ReaderRead`]), there's an additional similar
 	/// parameter [there](ReaderRead::max_alloc_size) that you may want to
 	/// configure.
 	pub max_seq_size: usize,
@@ -158,7 +158,7 @@ impl<'s, 'a> DeserializerState<'s, read::SliceRead<'a>> {
 	}
 }
 
-impl<'s, R: std::io::Read> DeserializerState<'s, read::ReaderRead<R>> {
+impl<'s, R: std::io::BufRead> DeserializerState<'s, read::ReaderRead<R>> {
 	pub fn from_reader(reader: R, schema: &'s Schema) -> Self {
 		Self::new(read::ReaderRead::new(reader), schema)
 	}
