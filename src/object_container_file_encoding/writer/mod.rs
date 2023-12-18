@@ -25,14 +25,14 @@ pub fn write_all<W, IT>(
 ) -> Result<W, SerError>
 where
 	W: Write,
-	IT: Iterator,
+	IT: IntoIterator,
 	IT::Item: Serialize,
 {
 	let mut serializer_config = SerializerConfig::new(schema);
 	let mut writer = WriterBuilder::new(&mut serializer_config)
 		.compression_codec(compression_codec)
 		.build(writer)?;
-	writer.serialize_all(iterator)?;
+	writer.serialize_all(iterator.into_iter())?;
 	writer.into_inner()
 }
 

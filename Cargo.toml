@@ -35,6 +35,7 @@
 
 [dev-dependencies]
 	anyhow = "1"
+	apache-avro = { version = "0.14", features = ["bzip", "snappy", "xz", "zstandard"] }
 	criterion = "0.5"
 	lazy_static = "1"
 	paste = "1"
@@ -45,3 +46,7 @@
 [[bench]]
 	harness = false
 	name = "single"
+
+[[bench]]
+	harness = false
+	name = "object_container_file_encoding"
