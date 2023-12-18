@@ -67,6 +67,8 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	///
 	/// If after serializing a value, the total size of the uncompressed block
 	/// is greater than this value, the block will be compressed and flushed.
+	///
+	/// Default value is 64KiB.
 	pub fn aprox_block_size(mut self, aprox_block_size: u32) -> Self {
 		self.aprox_block_size = aprox_block_size;
 		self
