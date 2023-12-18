@@ -255,8 +255,29 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 				decompression_buffer,
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
+				let mut reader = reader.into_inner();
+				// With zstandard, we need to manually drive the reader to the end by asking to
+				// deserialize the rest of the data. If the serialized avro is correct, this
+				// should not yield anything, but if we don't, it won't read the last bytes of
+				// the compressed data, resulting in an error when checking that there's no data
+				// left in the block.
+				// https://github.com/gyscos/zstd-rs/issues/255
+				let mut drive_reader_to_end_buf = [0];
+				let read = std::io::Read::read(&mut reader, &mut drive_reader_to_end_buf).map_err(
+					|e| {
+						<de::DeError as serde::de::Error>::custom(format_args!(
+							"Zstandard error when driving decompressor to end: {e}"
+						))
+					},
+				)?;
+				if read != 0 {
+					return Err(de::DeError::new(
+						"Zstandard decompression error: There's decompressed data left in the \
+							block after reading the whole avro block out of it",
+					));
+				}
 				(
-					reader.into_inner().finish().into_left_after_take()?,
+					reader.finish().into_left_after_take()?,
 					config,
 					decompression_buffer,
 				)
