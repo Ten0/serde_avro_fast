@@ -66,6 +66,10 @@ lazy_static! {
 				("h".to_string(), Value::String("Abc".to_owned())),
 			])
 		),
+		(
+			r#"{"name": "null_or_string","type": ["null", "string"], "default": null}"#,
+			Value::Union(1, Box::new(Value::String("value".to_string())))
+		),
 	];
 }
 
@@ -164,12 +168,12 @@ fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 }
 
 macro_rules! tests {
-	($($type_: ty => $($idx: expr)+,)+) => {
+	($($type_: ty, $name: ident => $($idx: expr)+,)+) => {
 		paste::paste! {
 			$(
 				$(
 					#[test]
-					fn [<test_validate_ $idx>]() {
+					fn [<test_validate_ $name $idx>]() {
 						let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[$idx];
 						let schema = Schema::parse_str(raw_schema).unwrap();
 						assert!(
@@ -183,21 +187,21 @@ macro_rules! tests {
 
 				$(
 					#[test]
-					fn [<test_round_trip_apache_fast_ $idx>]() {
+					fn [<test_round_trip_apache_fast_ $name $idx>]() {
 						test_round_trip_apache_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
 
 				$(
 					#[test]
-					fn [<test_round_trip_fast_apache_ $idx>]() {
+					fn [<test_round_trip_fast_apache_ $name $idx>]() {
 						test_round_trip_fast_apache::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
 
 				$(
 					#[test]
-					fn [<test_round_trip_fast_fast_ $idx>]() {
+					fn [<test_round_trip_fast_fast_ $name $idx>]() {
 						test_round_trip_fast_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
@@ -214,9 +218,10 @@ macro_rules! tests {
 	};
 }
 tests! {
-	serde_json::Value => 00 01 02 04 05 06 07 10 11 12 13 14,
-	serde_bytes::ByteBuf => 03 08,
-	AB => 09,
+	serde_json::Value, sjv => 00 01 02 04 05 06 07 10 11 12 13 14 15,
+	serde_bytes::ByteBuf, byte_buf => 03 08,
+	AB, ab => 09,
+	Option<String>, option_string => 15,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 enum AB {
