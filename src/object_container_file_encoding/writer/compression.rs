@@ -253,7 +253,8 @@ impl CompressionCodecState {
 						break;
 					}
 				}
-				output.dst.truncate(output.pos());
+				let pos = output.pos();
+				self.output_vec.truncate(pos);
 			}
 		}
 		Ok(())
