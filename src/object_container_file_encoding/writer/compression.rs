@@ -24,7 +24,7 @@ impl CompressionCodecState {
 				#[cfg(feature = "xz")]
 				CompressionCodec::Xz => Kind::Xz { len: 0 },
 				#[cfg(feature = "zstandard")]
-				CompressionCodec::Zstandard => Kind::Zstandard { encoder: None },
+				CompressionCodec::Zstandard => Kind::Zstandard { compressor: None },
 			},
 		}
 	}
@@ -50,7 +50,7 @@ enum Kind {
 	},
 	#[cfg(feature = "zstandard")]
 	Zstandard {
-		encoder: Option<zstd::stream::raw::Encoder<'static>>,
+		compressor: Option<zstd::bulk::Compressor<'static>>,
 	},
 }
 
@@ -216,45 +216,23 @@ impl CompressionCodecState {
 				}
 			}
 			#[cfg(feature = "zstandard")]
-			Kind::Zstandard { encoder } => {
-				use zstd::stream::raw::Operation;
-				let encoder = match encoder {
+			Kind::Zstandard { compressor } => {
+				self.output_vec.clear();
+				self.output_vec.reserve(32 * 1024);
+
+				let compressor = match compressor {
 					None => {
-						*encoder = Some(zstd::stream::raw::Encoder::new(0).map_err(|err| {
-							error("zstandard", &format_args!("zstd error on init: {err}"))
+						*compressor = Some(zstd::bulk::Compressor::new(0).map_err(|err| {
+							error("zstandard", &format_args!("error on init: {err}"))
 						})?);
-						encoder.as_mut().unwrap()
+						compressor.as_mut().unwrap()
 					}
-					Some(encoder) => {
-						encoder.reinit().map_err(|err| {
-							error("zstandard", &format_args!("zstd error on reinit: {err}"))
-						})?;
-						encoder
-					}
+					Some(compressor) => compressor,
 				};
 
-				if self.output_vec.is_empty() {
-					// Default buffer length in flate2
-					self.output_vec.resize(32 * 1024, 0);
-				}
-				let mut input = zstd::stream::raw::InBuffer::around(input);
-				let mut output = zstd::stream::raw::OutBuffer::around(&mut self.output_vec);
-				let mut finished_frame = false;
-				while input.pos() < input.src.len() {
-					finished_frame = encoder.run(&mut input, &mut output).map_err(|err| {
-						error("zstandard", &format_args!("zstd error on run: {err}"))
-					})? == 0;
-				}
-				loop {
-					if encoder.finish(&mut output, finished_frame).map_err(|err| {
-						error("zstandard", &format_args!("zstd error on finish: {err}"))
-					})? == 0
-					{
-						break;
-					}
-				}
-				let pos = output.pos();
-				self.output_vec.truncate(pos);
+				compressor
+					.compress_to_buffer(input, &mut self.output_vec)
+					.map_err(|err| error("zstandard", &err))?;
 			}
 		}
 		Ok(())
