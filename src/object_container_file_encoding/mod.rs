@@ -57,6 +57,9 @@ use {
 ///
 /// Works from either slices or arbitrary `impl Read`s.
 ///
+/// If you only have an `impl Read`, wrap it in a
+/// [`BufReader`](std::io::BufReader) first.
+///
 /// Slice version enables borrowing from the input if there is no compression
 /// involved.
 pub struct Reader<R: de::read::take::Take> {
