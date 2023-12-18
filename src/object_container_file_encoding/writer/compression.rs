@@ -191,7 +191,7 @@ impl CompressionCodecState {
 							&mut self.output_vec[compress.total_out() as usize..],
 							xz2::stream::Action::Finish,
 						)
-						.map_err(|deflate_error| error("Bzip2", &deflate_error))?;
+						.map_err(|deflate_error| error("Xz", &deflate_error))?;
 					let written = compress.total_in() as usize - before_in;
 					match status {
 						xz2::stream::Status::MemNeeded => {
