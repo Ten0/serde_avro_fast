@@ -128,113 +128,141 @@ fn bench_object_container_file_serialization(c: &mut Criterion) {
 			},
 		})
 		.collect();
-	c.bench_with_input(
-		BenchmarkId::new(
-			"serde_avro_fast_object_container_file_serialization",
-			"zstandard",
+	for &(name, compression_codec, apache_codec) in &[
+		("null", CompressionCodec::Null, apache_avro::Codec::Null),
+		#[cfg(feature = "deflate")]
+		(
+			"deflate",
+			CompressionCodec::Deflate,
+			apache_avro::Codec::Deflate,
 		),
-		&inputs.as_slice(),
-		|b, &inputs| {
-			b.iter(|| {
-				serde_avro_fast::object_container_file_encoding::write_all(
-					&schema,
-					CompressionCodec::Zstandard,
-					Vec::new(),
-					inputs,
-				)
-			})
-		},
-	);
-	c.bench_with_input(
-		BenchmarkId::new(
-			"apache_avro_object_container_file_serialization",
-			"zstandard",
+		#[cfg(feature = "bzip2")]
+		("bzip2", CompressionCodec::Bzip2, apache_avro::Codec::Bzip2),
+		#[cfg(feature = "snappy")]
+		(
+			"snappy",
+			CompressionCodec::Snappy,
+			apache_avro::Codec::Snappy,
 		),
-		&inputs.as_slice(),
-		|b, &inputs| {
-			b.iter(|| {
-				let mut writer = apache_avro::Writer::with_codec(
-					&apache_schema,
-					Vec::new(),
-					apache_avro::Codec::Zstandard,
-				);
-				for input in inputs {
-					writer.append_ser(input).unwrap();
-				}
-				writer.into_inner().unwrap()
-			})
-		},
-	);
+		#[cfg(feature = "xz")]
+		("xz", CompressionCodec::Xz, apache_avro::Codec::Xz),
+		#[cfg(feature = "zstandard")]
+		(
+			"zstandard",
+			CompressionCodec::Zstandard,
+			apache_avro::Codec::Zstandard,
+		),
+	] {
+		c.bench_with_input(
+			BenchmarkId::new("serde_avro_fast_object_container_file_serialization", name),
+			&inputs.as_slice(),
+			|b, &inputs| {
+				b.iter(|| {
+					serde_avro_fast::object_container_file_encoding::write_all(
+						&schema,
+						compression_codec,
+						Vec::new(),
+						inputs,
+					)
+				})
+			},
+		);
+		c.bench_with_input(
+			BenchmarkId::new("apache_avro_object_container_file_serialization", name),
+			&inputs.as_slice(),
+			|b, &inputs| {
+				b.iter(|| {
+					let mut writer =
+						apache_avro::Writer::with_codec(&apache_schema, Vec::new(), apache_codec);
+					for input in inputs {
+						writer.append_ser(input).unwrap();
+					}
+					writer.into_inner().unwrap()
+				})
+			},
+		);
+	}
 }
 
 fn bench_object_container_file_deserialization(c: &mut Criterion) {
 	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
 	let schema = serde_avro_fast::Schema::from_apache_schema(&apache_schema).unwrap();
-	let serialized = serde_avro_fast::object_container_file_encoding::write_all(
-		&schema,
-		CompressionCodec::Zstandard,
-		Vec::new(),
-		(0..100000).into_iter().map(|i| BigStruct {
-			username: "John Doe",
-			age: i,
-			phone: "555-555-5555",
-			housenum: "123",
-			address: Address {
-				street: "123 Fake St",
-				city: "Springfield",
-				state_prov: "IL",
-				country: "USA",
-				zip: "12345",
-			},
-		}),
-	)
-	.unwrap();
-	c.bench_with_input(
-		BenchmarkId::new(
-			"serde_avro_fast_object_container_file_deserialization",
-			"zstandard",
-		),
-		&serialized,
-		|b, inputs| {
-			b.iter(|| {
-				let mut n = 0u64;
-				serde_avro_fast::object_container_file_encoding::Reader::from_slice(
-					inputs.as_slice(),
-				)
-				.unwrap()
-				.deserialize::<BigStructOwned>()
-				.try_for_each(|r| {
-					let s = r?;
-					n += s.age as u64;
-					Ok::<_, serde_avro_fast::de::DeError>(())
-				})
-				.unwrap();
-				n
-			})
-		},
-	);
-	c.bench_with_input(
-		BenchmarkId::new(
-			"apache_avro_object_container_file_deserialization",
-			"zstandard",
-		),
-		&serialized,
-		|b, inputs| {
-			b.iter(|| {
-				let mut n = 0u64;
-				apache_avro::Reader::new(inputs.as_slice())
+	for &(name, codec) in &[
+		("null", CompressionCodec::Null),
+		#[cfg(feature = "deflate")]
+		("deflate", CompressionCodec::Deflate),
+		#[cfg(feature = "bzip2")]
+		("bzip2", CompressionCodec::Bzip2),
+		#[cfg(feature = "snappy")]
+		("snappy", CompressionCodec::Snappy),
+		#[cfg(feature = "xz")]
+		("xz", CompressionCodec::Xz),
+		#[cfg(feature = "zstandard")]
+		("zstandard", CompressionCodec::Zstandard),
+	] {
+		let serialized = serde_avro_fast::object_container_file_encoding::write_all(
+			&schema,
+			codec,
+			Vec::new(),
+			(0..100000).into_iter().map(|i| BigStruct {
+				username: "John Doe",
+				age: i,
+				phone: "555-555-5555",
+				housenum: "123",
+				address: Address {
+					street: "123 Fake St",
+					city: "Springfield",
+					state_prov: "IL",
+					country: "USA",
+					zip: "12345",
+				},
+			}),
+		)
+		.unwrap();
+		c.bench_with_input(
+			BenchmarkId::new(
+				"serde_avro_fast_object_container_file_deserialization",
+				name,
+			),
+			&serialized,
+			|b, inputs| {
+				b.iter(|| {
+					let mut n = 0u64;
+					serde_avro_fast::object_container_file_encoding::Reader::from_slice(
+						inputs.as_slice(),
+					)
 					.unwrap()
-					.try_for_each(|res| {
-						let value = res?;
-						let deserialized: BigStructOwned = apache_avro::from_value(&value)?;
-						n += deserialized.age as u64;
-						Ok::<_, apache_avro::Error>(())
+					.deserialize::<BigStructOwned>()
+					.try_for_each(|r| {
+						let s = r?;
+						n += s.age as u64;
+						Ok::<_, serde_avro_fast::de::DeError>(())
 					})
 					.unwrap();
-				n
-			})
-		},
-	);
+					n
+				})
+			},
+		);
+		c.bench_with_input(
+			BenchmarkId::new("apache_avro_object_container_file_deserialization", name),
+			&serialized,
+			|b, inputs| {
+				b.iter(|| {
+					let mut n = 0u64;
+					apache_avro::Reader::new(inputs.as_slice())
+						.unwrap()
+						.try_for_each(|res| {
+							let value = res?;
+							let deserialized: BigStructOwned = apache_avro::from_value(&value)?;
+							n += deserialized.age as u64;
+							Ok::<_, apache_avro::Error>(())
+						})
+						.unwrap();
+					n
+				})
+			},
+		);
+	}
 }
 
 criterion_group!(
