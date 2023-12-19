@@ -4,12 +4,12 @@ mod vectored_write_polyfill;
 use compression::CompressionCodecState;
 
 use crate::{
-	object_container_file_encoding::{CompressionCodec, Metadata, METADATA_SCHEMA},
+	object_container_file_encoding::{Metadata, METADATA_SCHEMA},
 	ser::{SerError, SerializerConfig, SerializerState},
 	Schema,
 };
 
-use super::HEADER_CONST;
+use super::{Compression, HEADER_CONST};
 
 use {
 	serde::Serialize,
@@ -19,7 +19,7 @@ use {
 /// Write all the elements of the provided sequence in an [object container file](https://avro.apache.org/docs/current/specification/#object-container-files)
 pub fn write_all<W, IT>(
 	schema: &Schema,
-	compression_codec: CompressionCodec,
+	compression: Compression,
 	writer: W,
 	iterator: IT,
 ) -> Result<W, SerError>
@@ -30,7 +30,7 @@ where
 {
 	let mut serializer_config = SerializerConfig::new(schema);
 	let mut writer = WriterBuilder::new(&mut serializer_config)
-		.compression_codec(compression_codec)
+		.compression(compression)
 		.build(writer)?;
 	writer.serialize_all(iterator.into_iter())?;
 	writer.into_inner()
@@ -38,7 +38,7 @@ where
 
 /// [`Writer`] builder for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
 pub struct WriterBuilder<'c, 's> {
-	compression_codec: CompressionCodec,
+	compression: Compression,
 	aprox_block_size: u32,
 	serializer_config: &'c mut SerializerConfig<'s>,
 }
@@ -52,14 +52,14 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	pub fn new(serializer_config: &'c mut SerializerConfig<'s>) -> Self {
 		Self {
 			serializer_config,
-			compression_codec: CompressionCodec::Null,
+			compression: Compression::Null,
 			aprox_block_size: 64 * 1024,
 		}
 	}
 
 	/// Specify the compression codec that each block will be compressed with
-	pub fn compression_codec(mut self, compression_codec: CompressionCodec) -> Self {
-		self.compression_codec = compression_codec;
+	pub fn compression(mut self, compression: Compression) -> Self {
+		self.compression = compression;
 		self
 	}
 
@@ -108,7 +108,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 				SerializerState::from_writer(buf, &mut header_serializer_config);
 			(Metadata::<&str, M> {
 				schema: self.serializer_config.schema().json(),
-				codec: self.compression_codec,
+				codec: self.compression.codec(),
 				user_metadata: metadata,
 			})
 			.serialize(header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA))
@@ -129,7 +129,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			inner: WriterInner {
 				serializer_state: SerializerState::from_writer(buf, self.serializer_config),
 				sync_marker,
-				compression_codec: CompressionCodecState::new(self.compression_codec),
+				compression_codec_state: CompressionCodecState::new(self.compression),
 				n_elements_in_block: 0,
 				aprox_block_size: self.aprox_block_size,
 				block_header_buffer: [0; 20],
@@ -296,7 +296,7 @@ struct WriterInner<'c, 's> {
 	n_elements_in_block: u64,
 	aprox_block_size: u32,
 	sync_marker: [u8; 16],
-	compression_codec: CompressionCodecState,
+	compression_codec_state: CompressionCodecState,
 	block_header_buffer: [u8; 20],
 	block_header_size: Option<NonZeroUsize>,
 }
@@ -327,7 +327,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 				"Previous block should always be flushed before starting to serialize a new one"
 			);
 
-			self.compression_codec
+			self.compression_codec_state
 				.encode(self.serializer_state.writer.as_slice())?;
 
 			let n = <i64 as integer_encoding::VarInt>::encode_var(
@@ -348,7 +348,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 	}
 
 	fn compressed_block(&self) -> &[u8] {
-		self.compression_codec
+		self.compression_codec_state
 			.compressed_buffer()
 			.unwrap_or_else(|| {
 				// No compression codec, use the serializer's buffer directly

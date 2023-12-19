@@ -5,7 +5,7 @@
 use {
 	serde_avro_fast::{
 		from_datum_reader, from_datum_slice,
-		object_container_file_encoding::{CompressionCodec, Reader, WriterBuilder},
+		object_container_file_encoding::{Compression, CompressionLevel, Reader, WriterBuilder},
 		ser::SerializerConfig,
 		Schema,
 	},
@@ -167,7 +167,7 @@ fn test_reader_iterator() {
 	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));
 }
 
-fn round_trip_writer(compression_codec: CompressionCodec, aprox_block_size: u32) {
+fn round_trip_writer(compression_codec: Compression, aprox_block_size: u32) {
 	let input = &[
 		SchemaRecord {
 			a: 27,
@@ -183,7 +183,7 @@ fn round_trip_writer(compression_codec: CompressionCodec, aprox_block_size: u32)
 
 	let mut serializer_config = SerializerConfig::new(&schema);
 	let mut writer = WriterBuilder::new(&mut serializer_config)
-		.compression_codec(compression_codec)
+		.compression(compression_codec)
 		.aprox_block_size(aprox_block_size)
 		.build(Vec::new())
 		.unwrap();
@@ -198,54 +198,94 @@ fn round_trip_writer(compression_codec: CompressionCodec, aprox_block_size: u32)
 
 	assert_eq!(input.as_slice(), res.as_slice());
 	match compression_codec {
-		CompressionCodec::Null => assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_)))),
+		Compression::Null => assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_)))),
 		_ => assert!(res.iter().all(|r| matches!(r.b, Cow::Owned(_)))),
 	}
 }
 
 #[test]
 fn test_writer_no_compression_regular_block_size() {
-	round_trip_writer(CompressionCodec::Null, 64 * 1024);
+	round_trip_writer(Compression::Null, 64 * 1024);
 }
 
 #[test]
 fn test_writer_no_compression_small_block_size() {
-	round_trip_writer(CompressionCodec::Null, 1);
+	round_trip_writer(Compression::Null, 1);
 }
 
 #[cfg(feature = "snappy")]
 #[test]
 fn test_writer_snappy() {
-	round_trip_writer(CompressionCodec::Snappy, 64 * 1024);
-	round_trip_writer(CompressionCodec::Snappy, 1);
+	round_trip_writer(Compression::Snappy, 64 * 1024);
+	round_trip_writer(Compression::Snappy, 1);
 }
 
 #[cfg(feature = "deflate")]
 #[test]
 fn test_writer_deflate() {
-	round_trip_writer(CompressionCodec::Deflate, 64 * 1024);
-	round_trip_writer(CompressionCodec::Deflate, 1);
+	round_trip_writer(
+		Compression::Deflate {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Deflate {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
 }
 
 #[cfg(feature = "bzip2")]
 #[test]
 fn test_writer_bzip2() {
-	round_trip_writer(CompressionCodec::Bzip2, 64 * 1024);
-	round_trip_writer(CompressionCodec::Bzip2, 1);
+	round_trip_writer(
+		Compression::Bzip2 {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Bzip2 {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
 }
 
 #[cfg(feature = "xz")]
 #[test]
 fn test_writer_xz() {
-	round_trip_writer(CompressionCodec::Xz, 64 * 1024);
-	round_trip_writer(CompressionCodec::Xz, 1);
+	round_trip_writer(
+		Compression::Xz {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Xz {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
 }
 
 #[cfg(feature = "zstandard")]
 #[test]
 fn test_writer_zstandard() {
-	round_trip_writer(CompressionCodec::Zstandard, 64 * 1024);
-	round_trip_writer(CompressionCodec::Zstandard, 1);
+	round_trip_writer(
+		Compression::Zstandard {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Zstandard {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
 }
 
 #[test]

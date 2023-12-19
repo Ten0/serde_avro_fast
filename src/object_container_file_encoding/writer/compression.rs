@@ -1,4 +1,4 @@
-use crate::{object_container_file_encoding::CompressionCodec, ser::SerError};
+use crate::{object_container_file_encoding::Compression, ser::SerError};
 
 pub(super) struct CompressionCodecState {
 	output_vec: Vec<u8>,
@@ -6,25 +6,31 @@ pub(super) struct CompressionCodecState {
 }
 
 impl CompressionCodecState {
-	pub(super) fn new(compression_codec: CompressionCodec) -> Self {
+	pub(super) fn new(compression_codec: Compression) -> Self {
 		Self {
 			output_vec: Vec::new(),
 			kind: match compression_codec {
-				CompressionCodec::Null => Kind::Null,
+				Compression::Null => Kind::Null,
 				#[cfg(feature = "deflate")]
-				CompressionCodec::Deflate => Kind::Deflate {
-					compress: flate2::Compress::new(flate2::Compression::default(), false),
+				Compression::Deflate { level } => Kind::Deflate {
+					compress: flate2::Compress::new(
+						level.instantiate(flate2::Compression::new),
+						false,
+					),
 				},
 				#[cfg(feature = "bzip2")]
-				CompressionCodec::Bzip2 => Kind::Bzip2 { len: 0 },
+				Compression::Bzip2 { level } => Kind::Bzip2 { len: 0, level },
 				#[cfg(feature = "snappy")]
-				CompressionCodec::Snappy => Kind::Snappy {
+				Compression::Snappy => Kind::Snappy {
 					encoder: snap::raw::Encoder::new(),
 				},
 				#[cfg(feature = "xz")]
-				CompressionCodec::Xz => Kind::Xz { len: 0 },
+				Compression::Xz { level } => Kind::Xz { len: 0, level },
 				#[cfg(feature = "zstandard")]
-				CompressionCodec::Zstandard => Kind::Zstandard { compressor: None },
+				Compression::Zstandard { level } => Kind::Zstandard {
+					compressor: None,
+					level,
+				},
 			},
 		}
 	}
@@ -39,6 +45,7 @@ enum Kind {
 	#[cfg(feature = "bzip2")]
 	Bzip2 {
 		len: usize,
+		level: crate::object_container_file_encoding::CompressionLevel,
 	},
 	#[cfg(feature = "snappy")]
 	Snappy {
@@ -47,10 +54,12 @@ enum Kind {
 	#[cfg(feature = "xz")]
 	Xz {
 		len: usize,
+		level: crate::object_container_file_encoding::CompressionLevel,
 	},
 	#[cfg(feature = "zstandard")]
 	Zstandard {
 		compressor: Option<zstd::bulk::Compressor<'static>>,
+		level: crate::object_container_file_encoding::CompressionLevel,
 	},
 }
 
@@ -63,11 +72,11 @@ impl CompressionCodecState {
 			#[cfg(feature = "deflate")]
 			Kind::Deflate { ref compress } => Some(&self.output_vec[..compress.total_out() as usize]),
 			#[cfg(feature = "bzip2")]
-			Kind::Bzip2 { len } => Some(&self.output_vec[..len]),
+			Kind::Bzip2 { len, .. } => Some(&self.output_vec[..len]),
 			#[cfg(feature = "snappy")]
 			Kind::Snappy { .. } => Some(&self.output_vec),
 			#[cfg(feature = "xz")]
-			Kind::Xz { len } => Some(&self.output_vec[..len]),
+			Kind::Xz { len, .. } => Some(&self.output_vec[..len]),
 			#[cfg(feature = "zstandard")]
 			Kind::Zstandard { .. } => Some(&self.output_vec),
 		}
@@ -122,11 +131,12 @@ impl CompressionCodecState {
 				}
 			}
 			#[cfg(feature = "bzip2")]
-			Kind::Bzip2 { len } => {
-				let mut compress = bzip2::Compress::new(bzip2::Compression::default(), {
-					// Default in BufRead::bzencoder
-					30
-				});
+			Kind::Bzip2 { len, level } => {
+				let mut compress =
+					bzip2::Compress::new(level.instantiate(bzip2::Compression::new), {
+						// Default in BufRead::bzencoder
+						30
+					});
 				if self.output_vec.is_empty() {
 					self.output_vec.resize(32 * 1024, 0);
 				}
@@ -175,10 +185,12 @@ impl CompressionCodecState {
 					.extend(crc32fast::hash(&input).to_be_bytes());
 			}
 			#[cfg(feature = "xz")]
-			Kind::Xz { len } => {
-				let mut compress =
-					xz2::stream::Stream::new_easy_encoder(6, xz2::stream::Check::Crc64)
-						.map_err(|err| error("Xz", &err))?;
+			Kind::Xz { len, level } => {
+				let mut compress = xz2::stream::Stream::new_easy_encoder(
+					level.instantiate_nb(6),
+					xz2::stream::Check::Crc64,
+				)
+				.map_err(|err| error("Xz", &err))?;
 				if self.output_vec.is_empty() {
 					self.output_vec.resize(32 * 1024, 0);
 				}
@@ -216,15 +228,17 @@ impl CompressionCodecState {
 				}
 			}
 			#[cfg(feature = "zstandard")]
-			Kind::Zstandard { compressor } => {
+			Kind::Zstandard { compressor, level } => {
 				self.output_vec.clear();
 				self.output_vec.reserve(32 * 1024);
 
 				let compressor = match compressor {
 					None => {
-						*compressor = Some(zstd::bulk::Compressor::new(0).map_err(|err| {
-							error("zstandard", &format_args!("error on init: {err}"))
-						})?);
+						*compressor = Some(
+							zstd::bulk::Compressor::new(level.instantiate_nb(0)).map_err(
+								|err| error("zstandard", &format_args!("error on init: {err}")),
+							)?,
+						);
 						compressor.as_mut().unwrap()
 					}
 					Some(compressor) => compressor,

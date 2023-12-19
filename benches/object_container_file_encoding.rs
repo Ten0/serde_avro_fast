@@ -1,4 +1,4 @@
-use serde_avro_fast::object_container_file_encoding::CompressionCodec;
+use serde_avro_fast::object_container_file_encoding::{Compression, CompressionLevel};
 
 use criterion::BenchmarkId;
 
@@ -129,27 +129,39 @@ fn bench_object_container_file_serialization(c: &mut Criterion) {
 		})
 		.collect();
 	for &(name, compression_codec, apache_codec) in &[
-		("null", CompressionCodec::Null, apache_avro::Codec::Null),
+		("null", Compression::Null, apache_avro::Codec::Null),
 		#[cfg(feature = "deflate")]
 		(
 			"deflate",
-			CompressionCodec::Deflate,
+			Compression::Deflate {
+				level: CompressionLevel::default(),
+			},
 			apache_avro::Codec::Deflate,
 		),
 		#[cfg(feature = "bzip2")]
-		("bzip2", CompressionCodec::Bzip2, apache_avro::Codec::Bzip2),
-		#[cfg(feature = "snappy")]
 		(
-			"snappy",
-			CompressionCodec::Snappy,
-			apache_avro::Codec::Snappy,
+			"bzip2",
+			Compression::Bzip2 {
+				level: CompressionLevel::default(),
+			},
+			apache_avro::Codec::Bzip2,
 		),
+		#[cfg(feature = "snappy")]
+		("snappy", Compression::Snappy, apache_avro::Codec::Snappy),
 		#[cfg(feature = "xz")]
-		("xz", CompressionCodec::Xz, apache_avro::Codec::Xz),
+		(
+			"xz",
+			Compression::Xz {
+				level: CompressionLevel::default(),
+			},
+			apache_avro::Codec::Xz,
+		),
 		#[cfg(feature = "zstandard")]
 		(
 			"zstandard",
-			CompressionCodec::Zstandard,
+			Compression::Zstandard {
+				level: CompressionLevel::default(),
+			},
 			apache_avro::Codec::Zstandard,
 		),
 	] {
@@ -188,17 +200,37 @@ fn bench_object_container_file_deserialization(c: &mut Criterion) {
 	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
 	let schema = serde_avro_fast::Schema::from_apache_schema(&apache_schema).unwrap();
 	for &(name, codec) in &[
-		("null", CompressionCodec::Null),
+		("null", Compression::Null),
 		#[cfg(feature = "deflate")]
-		("deflate", CompressionCodec::Deflate),
+		(
+			"deflate",
+			Compression::Deflate {
+				level: CompressionLevel::default(),
+			},
+		),
 		#[cfg(feature = "bzip2")]
-		("bzip2", CompressionCodec::Bzip2),
+		(
+			"bzip2",
+			Compression::Bzip2 {
+				level: CompressionLevel::default(),
+			},
+		),
 		#[cfg(feature = "snappy")]
-		("snappy", CompressionCodec::Snappy),
+		("snappy", Compression::Snappy),
 		#[cfg(feature = "xz")]
-		("xz", CompressionCodec::Xz),
+		(
+			"xz",
+			Compression::Xz {
+				level: CompressionLevel::default(),
+			},
+		),
 		#[cfg(feature = "zstandard")]
-		("zstandard", CompressionCodec::Zstandard),
+		(
+			"zstandard",
+			Compression::Zstandard {
+				level: CompressionLevel::default(),
+			},
+		),
 	] {
 		let serialized = serde_avro_fast::object_container_file_encoding::write_all(
 			&schema,
