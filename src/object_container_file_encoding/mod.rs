@@ -50,7 +50,7 @@ pub enum Compression {
 
 /// Compression level to use for the compression algorithm
 ///
-/// You may either specify a given number (0-9) or use the default compression
+/// You may either specify a given number (1-9) or use the default compression
 /// level.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CompressionLevel {
@@ -60,7 +60,7 @@ impl CompressionLevel {
 	/// Specifies the compression level that will be used for the compression
 	/// algorithms
 	///
-	/// Panics if `level` is `0` or greater than `9`
+	/// Panics if `level` is lower than `1` or greater than `9`
 	///
 	/// This is because all algorithms expect compression levels between `1`
 	/// (fast compression) and `9` (take as long as you'd like).
