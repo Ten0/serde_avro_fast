@@ -174,8 +174,10 @@ impl<'a> PerTypeLookup<'a> {
 				SchemaNode::Bytes => {
 					register_type_name("Bytes");
 					register(UnionVariantLookupKey::Str, 10);
+					register(UnionVariantLookupKey::UnitStruct, 10);
 					register(UnionVariantLookupKey::SliceU8, 0);
 					register(UnionVariantLookupKey::SeqOrTupleOrTupleStruct, 2);
+					register(UnionVariantLookupKey::UnitVariant, 10);
 				}
 				SchemaNode::String => {
 					register_type_name("String");

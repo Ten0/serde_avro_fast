@@ -2,11 +2,20 @@
 //! https://github.com/apache/avro/blob/6d90ec4b1c4ba47dba16650c54b4c15265016190/lang/rust/avro/src/reader.rs#L470
 //! updated to match this crate's interface
 
-use serde_avro_fast::{
-	from_datum_reader, from_datum_slice, object_container_file_encoding::Reader, Schema,
+use {
+	serde_avro_fast::{
+		from_datum_reader, from_datum_slice,
+		object_container_file_encoding::{Compression, CompressionLevel, Reader, WriterBuilder},
+		ser::SerializerConfig,
+		Schema,
+	},
+	std::borrow::Cow,
 };
 
-use {pretty_assertions::assert_eq, serde::Deserialize};
+use {
+	pretty_assertions::assert_eq,
+	serde::{Deserialize, Serialize},
+};
 
 const SCHEMA: &str = r#"
     {
@@ -39,10 +48,11 @@ const ENCODED: &[u8] = &[
 	239,
 ];
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 struct SchemaRecord<'a> {
 	a: i64,
-	b: &'a str,
+	#[serde(borrow)]
+	b: Cow<'a, str>,
 }
 
 #[test]
@@ -52,7 +62,10 @@ fn test_from_avro_datum() {
 
 	assert_eq!(
 		from_datum_slice::<SchemaRecord>(encoded, &schema).unwrap(),
-		SchemaRecord { a: 27, b: "foo" }
+		SchemaRecord {
+			a: 27,
+			b: "foo".into()
+		}
 	);
 }
 
@@ -134,9 +147,15 @@ fn test_reader_iterator() {
 	//let schema: Schema = SCHEMA.parse().unwrap();
 	let mut reader = Reader::from_slice(ENCODED).unwrap();
 
-	let expected = vec![
-		SchemaRecord { a: 27, b: "foo" },
-		SchemaRecord { a: 42, b: "bar" },
+	let expected = &[
+		SchemaRecord {
+			a: 27,
+			b: "foo".into(),
+		},
+		SchemaRecord {
+			a: 42,
+			b: "bar".into(),
+		},
 	];
 	let res: Vec<SchemaRecord> = reader
 		.deserialize_borrowed::<SchemaRecord>()
@@ -144,7 +163,129 @@ fn test_reader_iterator() {
 		.unwrap();
 	std::mem::drop(reader);
 
-	assert_eq!(expected, res);
+	assert_eq!(expected.as_slice(), res.as_slice());
+	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));
+}
+
+fn round_trip_writer(compression_codec: Compression, aprox_block_size: u32) {
+	let input = &[
+		SchemaRecord {
+			a: 27,
+			b: "foo".into(),
+		},
+		SchemaRecord {
+			a: 42,
+			b: "bar".into(),
+		},
+	];
+
+	let schema: Schema = SCHEMA.parse().unwrap();
+
+	let mut serializer_config = SerializerConfig::new(&schema);
+	let mut writer = WriterBuilder::new(&mut serializer_config)
+		.compression(compression_codec)
+		.aprox_block_size(aprox_block_size)
+		.build(Vec::new())
+		.unwrap();
+	writer.serialize_all(input.iter()).unwrap();
+	let serialized = writer.into_inner().unwrap();
+
+	let mut reader = Reader::from_slice(&serialized).unwrap();
+	let res: Vec<SchemaRecord> = reader
+		.deserialize_borrowed::<SchemaRecord>()
+		.collect::<Result<_, _>>()
+		.unwrap();
+
+	assert_eq!(input.as_slice(), res.as_slice());
+	match compression_codec {
+		Compression::Null => assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_)))),
+		_ => assert!(res.iter().all(|r| matches!(r.b, Cow::Owned(_)))),
+	}
+}
+
+#[test]
+fn test_writer_no_compression_regular_block_size() {
+	round_trip_writer(Compression::Null, 64 * 1024);
+}
+
+#[test]
+fn test_writer_no_compression_small_block_size() {
+	round_trip_writer(Compression::Null, 1);
+}
+
+#[cfg(feature = "snappy")]
+#[test]
+fn test_writer_snappy() {
+	round_trip_writer(Compression::Snappy, 64 * 1024);
+	round_trip_writer(Compression::Snappy, 1);
+}
+
+#[cfg(feature = "deflate")]
+#[test]
+fn test_writer_deflate() {
+	round_trip_writer(
+		Compression::Deflate {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Deflate {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
+}
+
+#[cfg(feature = "bzip2")]
+#[test]
+fn test_writer_bzip2() {
+	round_trip_writer(
+		Compression::Bzip2 {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Bzip2 {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
+}
+
+#[cfg(feature = "xz")]
+#[test]
+fn test_writer_xz() {
+	round_trip_writer(
+		Compression::Xz {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Xz {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
+}
+
+#[cfg(feature = "zstandard")]
+#[test]
+fn test_writer_zstandard() {
+	round_trip_writer(
+		Compression::Zstandard {
+			level: CompressionLevel::default(),
+		},
+		64 * 1024,
+	);
+	round_trip_writer(
+		Compression::Zstandard {
+			level: CompressionLevel::default(),
+		},
+		1,
+	);
 }
 
 #[test]
@@ -185,25 +326,35 @@ fn test_reader_only_header() {
 	assert!(res.is_err());
 }
 
+const SNAPPY_COMPRESSED_AVRO: &[u8] = &[
+	79, 98, 106, 1, 4, 22, 97, 118, 114, 111, 46, 115, 99, 104, 101, 109, 97, 210, 1, 123, 34, 102,
+	105, 101, 108, 100, 115, 34, 58, 91, 123, 34, 110, 97, 109, 101, 34, 58, 34, 110, 117, 109, 34,
+	44, 34, 116, 121, 112, 101, 34, 58, 34, 115, 116, 114, 105, 110, 103, 34, 125, 93, 44, 34, 110,
+	97, 109, 101, 34, 58, 34, 101, 118, 101, 110, 116, 34, 44, 34, 110, 97, 109, 101, 115, 112, 97,
+	99, 101, 34, 58, 34, 101, 120, 97, 109, 112, 108, 101, 110, 97, 109, 101, 115, 112, 97, 99,
+	101, 34, 44, 34, 116, 121, 112, 101, 34, 58, 34, 114, 101, 99, 111, 114, 100, 34, 125, 20, 97,
+	118, 114, 111, 46, 99, 111, 100, 101, 99, 12, 115, 110, 97, 112, 112, 121, 0, 213, 209, 241,
+	208, 200, 110, 164, 47, 203, 25, 90, 235, 161, 167, 195, 177, 2, 20, 4, 12, 6, 49, 50, 51, 115,
+	38, 58, 0, 213, 209, 241, 208, 200, 110, 164, 47, 203, 25, 90, 235, 161, 167, 195, 177,
+];
 #[cfg(not(feature = "snappy"))]
 #[test]
 fn test_avro_3549_read_not_enabled_codec() {
-	let snappy_compressed_avro: &[u8] = &[
-		79, 98, 106, 1, 4, 22, 97, 118, 114, 111, 46, 115, 99, 104, 101, 109, 97, 210, 1, 123, 34,
-		102, 105, 101, 108, 100, 115, 34, 58, 91, 123, 34, 110, 97, 109, 101, 34, 58, 34, 110, 117,
-		109, 34, 44, 34, 116, 121, 112, 101, 34, 58, 34, 115, 116, 114, 105, 110, 103, 34, 125, 93,
-		44, 34, 110, 97, 109, 101, 34, 58, 34, 101, 118, 101, 110, 116, 34, 44, 34, 110, 97, 109,
-		101, 115, 112, 97, 99, 101, 34, 58, 34, 101, 120, 97, 109, 112, 108, 101, 110, 97, 109,
-		101, 115, 112, 97, 99, 101, 34, 44, 34, 116, 121, 112, 101, 34, 58, 34, 114, 101, 99, 111,
-		114, 100, 34, 125, 20, 97, 118, 114, 111, 46, 99, 111, 100, 101, 99, 12, 115, 110, 97, 112,
-		112, 121, 0, 213, 209, 241, 208, 200, 110, 164, 47, 203, 25, 90, 235, 161, 167, 195, 177,
-		2, 20, 4, 12, 6, 49, 50, 51, 115, 38, 58, 0, 213, 209, 241, 208, 200, 110, 164, 47, 203,
-		25, 90, 235, 161, 167, 195, 177,
-	];
-
-	if let Err(err) = Reader::from_slice(snappy_compressed_avro) {
+	if let Err(err) = Reader::from_slice(SNAPPY_COMPRESSED_AVRO) {
 		assert_eq!("Failed to validate avro object container file header: unknown variant `snappy`, expected `null` or `deflate`", err.to_string());
 	} else {
 		panic!("Expected an error in the reading of the codec!");
 	}
+}
+#[cfg(feature = "snappy")]
+#[test]
+fn test_snappy() {
+	let mut reader = Reader::from_slice(SNAPPY_COMPRESSED_AVRO).unwrap();
+	let expected: Vec<serde_json::Value> = vec![serde_json::json!({"num": "123"})];
+	let res: Vec<serde_json::Value> = reader
+		.deserialize::<serde_json::Value>()
+		.collect::<Result<_, _>>()
+		.unwrap();
+
+	assert_eq!(expected, res);
 }

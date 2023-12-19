@@ -28,8 +28,9 @@ pub struct Schema {
 	// which will downcast it and we never push anything more in there (which would cause
 	// reallocation and invalidate all nodes) this is correct.
 	nodes: Vec<SchemaNode<'static>>,
-	parsing_canonical_form: String,
 	fingerprint: [u8; 8],
+	schema_json: String,
+	parsing_canonical_form: String,
 }
 
 impl Schema {
@@ -41,6 +42,11 @@ impl Schema {
 		// the signature of this function downgrades the fake 'static lifetime in a way
 		// that makes it correct
 		&self.nodes[0]
+	}
+
+	/// Obtain the JSON for this schema
+	pub fn json(&self) -> &str {
+		&self.schema_json
 	}
 
 	/// Obtain the
@@ -215,8 +221,9 @@ impl From<super::safe::Schema> for Schema {
 		// invalid
 		let mut ret = Self {
 			nodes: (0..safe.nodes.len()).map(|_| SchemaNode::Null).collect(),
-			parsing_canonical_form: safe.parsing_canonical_form,
 			fingerprint: safe.fingerprint,
+			schema_json: safe.schema_json,
+			parsing_canonical_form: safe.parsing_canonical_form,
 		};
 		let len = ret.nodes.len();
 		// Let's be extra-sure (second condition is for calls to add)

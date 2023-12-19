@@ -17,8 +17,9 @@ use std::collections::{hash_map, HashMap};
 pub struct Schema {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
-	pub(super) parsing_canonical_form: String,
 	pub(super) fingerprint: [u8; 8],
+	pub(super) schema_json: String,
+	pub(super) parsing_canonical_form: String,
 }
 
 impl Schema {
@@ -164,8 +165,8 @@ impl Schema {
 	pub fn from_apache_schema(
 		apache_schema: &apache_avro::Schema,
 	) -> Result<Self, BuildSchemaFromApacheSchemaError> {
-		let mut names: HashMap<apache_avro::schema::Name, usize> = HashMap::new();
 		let parsing_canonical_form = apache_schema.canonical_form();
+		let mut names: HashMap<apache_avro::schema::Name, usize> = HashMap::new();
 		let mut schema = Self {
 			nodes: Vec::new(),
 			fingerprint: <apache_avro::rabin::Rabin as digest::Digest>::digest(
@@ -173,6 +174,8 @@ impl Schema {
 			)
 			.into(),
 			parsing_canonical_form,
+			schema_json: serde_json::to_string(&apache_schema)
+				.unwrap_or_else(|e| panic!("Failed to serialize schema to JSON: {e}")),
 		};
 		let mut unresolved_names: Vec<apache_avro::schema::Name> = Vec::new();
 		const REMAP_BIT: usize = 1usize << (usize::BITS - 1);

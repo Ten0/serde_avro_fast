@@ -272,7 +272,9 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
 			SchemaNode::Null => Ok(()),
-			SchemaNode::String | SchemaNode::Enum(_) => self.serialize_str(name),
+			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Enum(_) => {
+				self.serialize_str(name)
+			}
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::UnitStruct, |ser| {
 					ser.serialize_unit_struct(name)
@@ -293,7 +295,9 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
 			SchemaNode::Null if variant == "Null" => Ok(()),
-			SchemaNode::String | SchemaNode::Enum(_) => self.serialize_str(variant),
+			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Enum(_) => {
+				self.serialize_str(variant)
+			}
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::UnitVariant, |ser| {
 					ser.serialize_unit_variant(name, variant_index, variant)
