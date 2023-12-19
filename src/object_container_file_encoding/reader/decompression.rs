@@ -264,9 +264,10 @@ impl<'s, R: de::read::take::Take> DecompressionState<'s, R> {
 				let mut drive_reader_to_end_buf = [0];
 				let read = std::io::Read::read(&mut reader, &mut drive_reader_to_end_buf).map_err(
 					|e| {
-						<de::DeError as serde::de::Error>::custom(format_args!(
-							"Zstandard error when driving decompressor to end: {e}"
-						))
+						de::DeError::custom_io(
+							"Zstandard error when driving decompressor to end",
+							e,
+						)
 					},
 				)?;
 				if read != 0 {

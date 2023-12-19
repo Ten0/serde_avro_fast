@@ -69,6 +69,12 @@ pub struct Reader<R: de::read::take::Take> {
 	reader_state: ReaderState<'static, R>,
 	compression_codec: CompressionCodec,
 	sync_marker: [u8; 16],
+	/// If we hit an IO error, we yield it once, then for following calls to
+	/// `deserialize_next` we pretend that we reached EOF. This is because IO
+	/// errors will typically reproduce at every call, and we don't want to keep
+	/// yielding the same error over and over again if the caller happens to try
+	/// to recover from deserialization errors.
+	pretend_eof_because_yielded_unrecoverable_error: bool,
 	_schema: Schema,
 }
 
@@ -182,6 +188,7 @@ where
 				},
 				compression_codec: metadata.codec,
 				sync_marker,
+				pretend_eof_because_yielded_unrecoverable_error: false,
 				_schema: schema,
 			},
 			metadata.user_metadata,
@@ -196,7 +203,7 @@ where
 		R: ReadSlice<'rs>,
 		<R as de::read::take::Take>::Take: ReadSlice<'rs>,
 	{
-		self.deserialize_borrowed_inner()
+		self.deserialize_inner()
 	}
 
 	/// Iterator over the deserialized values
@@ -211,7 +218,7 @@ where
 		R: ReadSlice<'de> + IsSliceRead,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		Self::deserialize_borrowed_inner::<T>(self)
+		Self::deserialize_inner::<T>(self)
 	}
 
 	/// Iterator over the deserialized values
@@ -220,14 +227,14 @@ where
 	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
-	fn deserialize_borrowed_inner<'r, 'de, T: Deserialize<'de>>(
+	fn deserialize_inner<'r, 'de, T: Deserialize<'de>>(
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		std::iter::from_fn(|| self.deserialize_next_borrowed_inner().transpose())
+		std::iter::from_fn(|| self.deserialize_next_inner().transpose())
 	}
 
 	/// Attempt to deserialize the next value
@@ -236,7 +243,7 @@ where
 		R: ReadSlice<'a>,
 		<R as de::read::take::Take>::Take: ReadSlice<'a>,
 	{
-		self.deserialize_next_borrowed_inner()
+		self.deserialize_next_inner()
 	}
 
 	/// Attempt to deserialize the next value
@@ -251,7 +258,30 @@ where
 		R: ReadSlice<'de> + IsSliceRead,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		self.deserialize_next_borrowed_inner()
+		self.deserialize_next_inner()
+	}
+
+	fn deserialize_next_inner<'de, T: Deserialize<'de>>(&mut self) -> Result<Option<T>, DeError>
+	where
+		R: ReadSlice<'de>,
+		<R as de::read::take::Take>::Take: ReadSlice<'de>,
+	{
+		if self.pretend_eof_because_yielded_unrecoverable_error {
+			return Ok(None);
+		}
+		let res = self.deserialize_next_inner_2();
+		if let Err(ref de_error) = res {
+			if de_error.io_error().is_some() || matches!(self.reader_state, ReaderState::Broken) {
+				// we yield this error once, then for following calls to
+				// `deserialize_next` we pretend that we reached EOF. This is
+				// because IO errors will typically reproduce at every call, and we
+				// don't want to keep yielding the same error over and over again
+				// if the caller happens to try to recover from deserialization
+				// errors.
+				self.pretend_eof_because_yielded_unrecoverable_error = true;
+			}
+		}
+		res
 	}
 
 	/// Attempt to deserialize the next value
@@ -260,9 +290,7 @@ where
 	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
-	fn deserialize_next_borrowed_inner<'de, T: Deserialize<'de>>(
-		&mut self,
-	) -> Result<Option<T>, DeError>
+	fn deserialize_next_inner_2<'de, T: Deserialize<'de>>(&mut self) -> Result<Option<T>, DeError>
 	where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
