@@ -161,6 +161,7 @@ fn test_reader_iterator() {
 		.deserialize_borrowed::<SchemaRecord>()
 		.collect::<Result<_, _>>()
 		.unwrap();
+	std::mem::drop(reader);
 
 	assert_eq!(expected.as_slice(), res.as_slice());
 	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));

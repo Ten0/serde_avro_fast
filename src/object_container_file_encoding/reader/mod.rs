@@ -18,6 +18,9 @@ use {
 ///
 /// Works from either slices or arbitrary `impl BufRead`s.
 ///
+/// If you only have an `impl Read`, wrap it in a
+/// [`BufReader`](std::io::BufReader) first.
+///
 /// Slice version enables borrowing from the input if there is no compression
 /// involved.
 pub struct Reader<R: de::read::take::Take> {
@@ -153,7 +156,22 @@ where
 		R: ReadSlice<'rs>,
 		<R as de::read::take::Take>::Take: ReadSlice<'rs>,
 	{
-		self.deserialize_borrowed()
+		self.deserialize_borrowed_inner()
+	}
+
+	/// Iterator over the deserialized values
+	///
+	/// Note that this may fail if the provided `T` requires to borrow from the
+	/// input and the blocks are compressed. (`deserialize_next` typechecks that
+	/// we have `DeserializeOwned` to make sure that is never the case)
+	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
+		&'r mut self,
+	) -> impl Iterator<Item = Result<T, DeError>> + 'r
+	where
+		R: ReadSlice<'de> + IsSliceRead,
+		<R as de::read::take::Take>::Take: ReadSlice<'de>,
+	{
+		Self::deserialize_borrowed_inner::<T>(self)
 	}
 
 	/// Iterator over the deserialized values
@@ -162,14 +180,14 @@ where
 	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
-	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
+	fn deserialize_borrowed_inner<'r, 'de, T: Deserialize<'de>>(
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
 	where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		std::iter::from_fn(|| self.deserialize_next_borrowed().transpose())
+		std::iter::from_fn(|| self.deserialize_next_borrowed_inner().transpose())
 	}
 
 	/// Attempt to deserialize the next value
@@ -178,7 +196,22 @@ where
 		R: ReadSlice<'a>,
 		<R as de::read::take::Take>::Take: ReadSlice<'a>,
 	{
-		self.deserialize_next_borrowed()
+		self.deserialize_next_borrowed_inner()
+	}
+
+	/// Attempt to deserialize the next value
+	///
+	/// Note that this may fail if the provided `T` requires to borrow from the
+	/// input and the blocks are compressed. (`deserialize_next` typechecks that
+	/// we have `DeserializeOwned` to make sure that is never the case)
+	pub fn deserialize_next_borrowed<'de, T: Deserialize<'de>>(
+		&mut self,
+	) -> Result<Option<T>, DeError>
+	where
+		R: ReadSlice<'de> + IsSliceRead,
+		<R as de::read::take::Take>::Take: ReadSlice<'de>,
+	{
+		self.deserialize_next_borrowed_inner()
 	}
 
 	/// Attempt to deserialize the next value
@@ -187,7 +220,7 @@ where
 	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
-	pub fn deserialize_next_borrowed<'de, T: Deserialize<'de>>(
+	fn deserialize_next_borrowed_inner<'de, T: Deserialize<'de>>(
 		&mut self,
 	) -> Result<Option<T>, DeError>
 	where
@@ -308,3 +341,20 @@ enum ReaderState<'s, R: de::read::take::Take> {
 		n_objects_in_block: usize,
 	},
 }
+
+mod private {
+	/// Implemented only on [`SliceRead<'_>`](crate::de::read::SliceRead)
+	///
+	/// We need this trait to enforce that `deserialize_borrowed` and
+	/// `deserialize_next_borrowed` are only callable when `R = SliceRead<'de>`,
+	/// not on arbitrary BufReads.
+	///
+	/// We have to use this trait instead of implementing directly on
+	/// `Reader<de::read::SliceRead<'a>>` because otherwise the compiler
+	/// complains that "hidden type for `impl Iterator<Item = Result<T,
+	/// de::error::DeError>> + 'r` captures lifetime that does not appear in
+	/// bounds"
+	pub trait IsSliceRead {}
+}
+use private::IsSliceRead;
+impl IsSliceRead for de::read::SliceRead<'_> {}
