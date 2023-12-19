@@ -1,4 +1,4 @@
-mod compression;
+mod decompression;
 
 use crate::{
 	de::{
@@ -10,7 +10,7 @@ use crate::{
 };
 
 use {
-	compression::CompressionCodecState,
+	decompression::DecompressionState,
 	serde::{de::DeserializeOwned, Deserialize},
 };
 
@@ -337,27 +337,27 @@ where
 					Some(next_n_in_block) => {
 						*n_objects_in_block = next_n_in_block;
 						break match codec_data {
-							CompressionCodecState::Null {
+							DecompressionState::Null {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "deflate")]
-							CompressionCodecState::Deflate {
+							DecompressionState::Deflate {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "bzip2")]
-							CompressionCodecState::Bzip2 {
+							DecompressionState::Bzip2 {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "snappy")]
-							CompressionCodecState::Snappy {
+							DecompressionState::Snappy {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "xz")]
-							CompressionCodecState::Xz {
+							DecompressionState::Xz {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "zstandard")]
-							CompressionCodecState::Zstandard {
+							DecompressionState::Zstandard {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 						}
@@ -377,7 +377,7 @@ enum ReaderState<'s, R: de::read::take::Take> {
 		decompression_buffer: Vec<u8>,
 	},
 	InBlock {
-		codec_data: CompressionCodecState<'s, R>,
+		codec_data: DecompressionState<'s, R>,
 		n_objects_in_block: usize,
 	},
 }
