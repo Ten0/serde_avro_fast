@@ -12,6 +12,7 @@ use crate::{
 use {
 	decompression::DecompressionState,
 	serde::{de::DeserializeOwned, Deserialize},
+	std::sync::Arc,
 };
 
 /// Reader for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
@@ -75,7 +76,9 @@ pub struct Reader<R: de::read::take::Take> {
 	/// yielding the same error over and over again if the caller happens to try
 	/// to recover from deserialization errors.
 	pretend_eof_because_yielded_unrecoverable_error: bool,
-	_schema: Schema,
+	/// This has to be stored in here and be the last field because the Reader
+	/// is self referential: it stores references to inside Schema.
+	schema: Arc<Schema>,
 }
 
 /// Errors that may happen when attempting to construct a [`Reader`]
@@ -159,21 +162,24 @@ where
 			serde::Deserialize::deserialize(metadata_deserializer_state.deserializer())
 				.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?;
 		reader = metadata_deserializer_state.into_reader();
-		let schema: Schema = metadata
-			.schema
-			.parse()
-			.map_err(FailedToInitializeReader::FailedToParseSchema)?;
+		let schema: Arc<Schema> = Arc::new(
+			metadata
+				.schema
+				.parse()
+				.map_err(FailedToInitializeReader::FailedToParseSchema)?,
+		);
 
 		let sync_marker = reader
 			.read_const_size_buf::<16>()
 			.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?;
 
+		// Build a `&'static SchemaNode` from the `Arc<Schema>` (`'static` is fake)
 		// Safety: we don't drop the schema until this is dropped
 		// This is useful to be able to store a DeserializerState directly in here,
 		// which will avoid additional &mut levels, allowing for highest performance and
 		// ergonomics
 		let schema_root: &'static schema::SchemaNode<'static> = unsafe {
-			let schema = &*(&schema as *const Schema);
+			let schema = &*(&*schema as *const Schema);
 			let a: *const schema::SchemaNode<'_> = schema.root() as *const schema::SchemaNode<'_>;
 			let b: *const schema::SchemaNode<'static> = a as *const _;
 			&*b
@@ -189,7 +195,7 @@ where
 				compression_codec: metadata.codec,
 				sync_marker,
 				pretend_eof_because_yielded_unrecoverable_error: false,
-				_schema: schema,
+				schema,
 			},
 			metadata.user_metadata,
 		))
@@ -394,6 +400,13 @@ where
 				},
 			}
 		}
+	}
+
+	/// Get the schema used for deserialization
+	///
+	/// It was read from the header of the object container file
+	pub fn schema(&self) -> &Arc<Schema> {
+		&self.schema
 	}
 }
 
