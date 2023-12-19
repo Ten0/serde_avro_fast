@@ -17,6 +17,52 @@ use {
 };
 
 /// Write all the elements of the provided sequence in an [object container file](https://avro.apache.org/docs/current/specification/#object-container-files)
+///
+/// # Example
+/// ```
+/// use serde_avro_fast::object_container_file_encoding::{self, Compression, Reader};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema: serde_avro_fast::Schema = r#"
+/// {
+/// 	"type": "record",
+/// 	"name": "test",
+/// 	"fields": [
+/// 		{ "name": "a", "type": "long" },
+/// 		{ "name": "b", "type": "string" }
+/// 	]
+/// }
+/// "#
+/// .parse()?;
+///
+/// #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug, PartialEq, Eq)]
+/// struct SchemaRecord<'a> {
+/// 	a: i64,
+/// 	b: &'a str,
+/// }
+///
+/// let object_container_file_encoded: Vec<u8> = object_container_file_encoding::write_all(
+/// 	&schema,
+/// 	Compression::Null,
+/// 	Vec::new(),
+/// 	(0..3).map(|a| SchemaRecord { a, b: "hello" }),
+/// )?;
+///
+/// let decoded = Reader::from_slice(&object_container_file_encoded)?
+/// 	.deserialize_borrowed() // Only use `_borrowed` if data is not compressed
+/// 	.collect::<Result<Vec<SchemaRecord>, _>>()?;
+///
+/// assert_eq!(
+/// 	decoded,
+/// 	&[
+/// 		SchemaRecord { a: 0, b: "hello" },
+/// 		SchemaRecord { a: 1, b: "hello" },
+/// 		SchemaRecord { a: 2, b: "hello" }
+/// 	]
+/// );
+/// # Ok(())
+/// # }
+/// ```
 pub fn write_all<W, IT>(
 	schema: &Schema,
 	compression: Compression,
@@ -37,6 +83,8 @@ where
 }
 
 /// [`Writer`] builder for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
+///
+/// See [`Writer`] for an example.
 pub struct WriterBuilder<'c, 's> {
 	compression: Compression,
 	aprox_block_size: u32,
@@ -143,6 +191,60 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 /// Writer for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
 ///
 /// To be constructed via [`WriterBuilder`].
+///
+/// # Example
+///
+/// ```
+/// use serde_avro_fast::{
+/// 	object_container_file_encoding::{Compression, Reader, WriterBuilder},
+/// 	ser::SerializerConfig,
+/// };
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema: serde_avro_fast::Schema = r#"
+/// {
+/// 	"type": "record",
+/// 	"name": "test",
+/// 	"fields": [
+/// 		{ "name": "a", "type": "long" },
+/// 		{ "name": "b", "type": "string" }
+/// 	]
+/// }
+/// "#
+/// .parse()?;
+///
+/// #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug, PartialEq, Eq)]
+/// struct SchemaRecord<'a> {
+/// 	a: i64,
+/// 	b: &'a str,
+/// }
+///
+/// let mut serializer_config = SerializerConfig::new(&schema);
+/// let mut writer = WriterBuilder::new(&mut serializer_config)
+/// 	.compression(Compression::Null)
+/// 	.build(Vec::new())?;
+///
+/// for i in 0..3 {
+/// 	writer.serialize(SchemaRecord { a: i, b: "hello" })?;
+/// }
+///
+/// let object_container_file_encoded: Vec<u8> = writer.into_inner()?;
+///
+/// let decoded = Reader::from_slice(&object_container_file_encoded)?
+/// 	.deserialize_borrowed() // Only use `_borrowed` if data is not compressed
+/// 	.collect::<Result<Vec<SchemaRecord>, _>>()?;
+///
+/// assert_eq!(
+/// 	decoded,
+/// 	&[
+/// 		SchemaRecord { a: 0, b: "hello" },
+/// 		SchemaRecord { a: 1, b: "hello" },
+/// 		SchemaRecord { a: 2, b: "hello" }
+/// 	]
+/// );
+/// # Ok(())
+/// # }
+/// ```
 pub struct Writer<'c, 's, W: Write> {
 	inner: WriterInner<'c, 's>,
 	writer: Option<W>,

@@ -47,7 +47,7 @@ use {
 /// 	SchemaRecord { a: 42, b: "bar" },
 /// ];
 /// let res: Vec<SchemaRecord> = reader
-/// 	.deserialize_borrowed::<SchemaRecord>()
+/// 	.deserialize_borrowed::<SchemaRecord>() // Only use `_borrowed` if data is not compressed
 /// 	.collect::<Result<_, _>>()
 /// 	.expect("Failed to deserialize a record");
 ///

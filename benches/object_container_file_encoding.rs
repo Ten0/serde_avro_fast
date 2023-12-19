@@ -113,7 +113,6 @@ fn bench_object_container_file_serialization(c: &mut Criterion) {
 	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
 	let schema = serde_avro_fast::Schema::from_apache_schema(&apache_schema).unwrap();
 	let inputs: Vec<BigStruct> = (0..100000)
-		.into_iter()
 		.map(|i| BigStruct {
 			username: "John Doe",
 			age: i,
@@ -236,7 +235,7 @@ fn bench_object_container_file_deserialization(c: &mut Criterion) {
 			&schema,
 			codec,
 			Vec::new(),
-			(0..100000).into_iter().map(|i| BigStruct {
+			(0..100000).map(|i| BigStruct {
 				username: "John Doe",
 				age: i,
 				phone: "555-555-5555",
