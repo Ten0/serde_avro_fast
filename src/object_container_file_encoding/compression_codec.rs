@@ -55,8 +55,10 @@ impl CompressionCodec {
 			#[cfg(feature = "deflate")]
 			CompressionCodec::Deflate => CompressionCodecState::Deflate {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(flate2::bufread::DeflateDecoder::new(
-						de::read::take::Take::take(reader, block_size)?,
+					de::read::ReaderRead::new(std::io::BufReader::new(
+						flate2::bufread::DeflateDecoder::new(de::read::take::Take::take(
+							reader, block_size,
+						)?),
 					)),
 					config,
 				),
@@ -65,8 +67,10 @@ impl CompressionCodec {
 			#[cfg(feature = "bzip2")]
 			CompressionCodec::Bzip2 => CompressionCodecState::Bzip2 {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(bzip2::bufread::BzDecoder::new(
-						de::read::take::Take::take(reader, block_size)?,
+					de::read::ReaderRead::new(std::io::BufReader::new(
+						bzip2::bufread::BzDecoder::new(de::read::take::Take::take(
+							reader, block_size,
+						)?),
 					)),
 					config,
 				),
@@ -130,8 +134,10 @@ impl CompressionCodec {
 			#[cfg(feature = "xz")]
 			CompressionCodec::Xz => CompressionCodecState::Xz {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(xz2::bufread::XzDecoder::new(
-						de::read::take::Take::take(reader, block_size)?,
+					de::read::ReaderRead::new(std::io::BufReader::new(
+						xz2::bufread::XzDecoder::new(de::read::take::Take::take(
+							reader, block_size,
+						)?),
 					)),
 					config,
 				),
@@ -140,12 +146,12 @@ impl CompressionCodec {
 			#[cfg(feature = "zstandard")]
 			CompressionCodec::Zstandard => CompressionCodecState::Zstandard {
 				deserializer_state: de::DeserializerState::with_config(
-					de::read::ReaderRead::new(
+					de::read::ReaderRead::new(std::io::BufReader::new(
 						zstd::stream::read::Decoder::with_buffer(de::read::take::Take::take(
 							reader, block_size,
 						)?)
 						.map_err(de::DeError::io)?,
-					),
+					)),
 					config,
 				),
 				decompression_buffer,
@@ -161,14 +167,18 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 	},
 	#[cfg(feature = "deflate")]
 	Deflate {
-		deserializer_state:
-			DeserializerState<'s, de::read::ReaderRead<flate2::bufread::DeflateDecoder<R::Take>>>,
+		deserializer_state: DeserializerState<
+			's,
+			de::read::ReaderRead<std::io::BufReader<flate2::bufread::DeflateDecoder<R::Take>>>,
+		>,
 		decompression_buffer: Vec<u8>,
 	},
 	#[cfg(feature = "bzip2")]
 	Bzip2 {
-		deserializer_state:
-			DeserializerState<'s, de::read::ReaderRead<bzip2::bufread::BzDecoder<R::Take>>>,
+		deserializer_state: DeserializerState<
+			's,
+			de::read::ReaderRead<std::io::BufReader<bzip2::bufread::BzDecoder<R::Take>>>,
+		>,
 		decompression_buffer: Vec<u8>,
 	},
 	#[cfg(feature = "snappy")]
@@ -178,15 +188,17 @@ pub(super) enum CompressionCodecState<'s, R: de::read::take::Take> {
 	},
 	#[cfg(feature = "xz")]
 	Xz {
-		deserializer_state:
-			DeserializerState<'s, de::read::ReaderRead<xz2::bufread::XzDecoder<R::Take>>>,
+		deserializer_state: DeserializerState<
+			's,
+			de::read::ReaderRead<std::io::BufReader<xz2::bufread::XzDecoder<R::Take>>>,
+		>,
 		decompression_buffer: Vec<u8>,
 	},
 	#[cfg(feature = "zstandard")]
 	Zstandard {
 		deserializer_state: DeserializerState<
 			's,
-			de::read::ReaderRead<zstd::stream::read::Decoder<'static, R::Take>>,
+			de::read::ReaderRead<std::io::BufReader<zstd::stream::read::Decoder<'static, R::Take>>>,
 		>,
 		decompression_buffer: Vec<u8>,
 	},
@@ -211,7 +223,11 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
 				(
-					reader.into_inner().into_inner().into_left_after_take()?,
+					reader
+						.into_inner()
+						.into_inner()
+						.into_inner()
+						.into_left_after_take()?,
 					config,
 					decompression_buffer,
 				)
@@ -223,7 +239,11 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
 				(
-					reader.into_inner().into_inner().into_left_after_take()?,
+					reader
+						.into_inner()
+						.into_inner()
+						.into_inner()
+						.into_left_after_take()?,
 					config,
 					decompression_buffer,
 				)
@@ -243,7 +263,11 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
 				(
-					reader.into_inner().into_inner().into_left_after_take()?,
+					reader
+						.into_inner()
+						.into_inner()
+						.into_inner()
+						.into_left_after_take()?,
 					config,
 					decompression_buffer,
 				)
@@ -254,7 +278,7 @@ impl<'s, R: de::read::take::Take> CompressionCodecState<'s, R> {
 				decompression_buffer,
 			} => {
 				let (reader, config) = deserializer_state.into_inner();
-				let mut reader = reader.into_inner();
+				let mut reader = reader.into_inner().into_inner();
 				// With zstandard, we need to manually drive the reader to the end by asking to
 				// deserialize the rest of the data. If the serialized avro is correct, this
 				// should not yield anything, but if we don't, it won't read the last bytes of
