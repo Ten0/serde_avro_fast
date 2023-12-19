@@ -142,6 +142,7 @@ fn test_reader_iterator() {
 		.deserialize_borrowed::<SchemaRecord>()
 		.collect::<Result<_, _>>()
 		.unwrap();
+	std::mem::drop(reader);
 
 	assert_eq!(expected, res);
 }
