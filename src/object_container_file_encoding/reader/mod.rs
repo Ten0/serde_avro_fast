@@ -214,9 +214,12 @@ where
 
 	/// Iterator over the deserialized values
 	///
+	/// This can only be used if reading directly from a slice (Reader built via
+	/// [`Reader::from_slice`], `R = `[`SliceRead<'_>`](de::read::SliceRead))
+	///
 	/// Note that this may fail if the provided `T` requires to borrow from the
 	/// input and the blocks are compressed. (`deserialize_next` typechecks that
-	/// we have `DeserializeOwned` to make sure that is never the case)
+	/// we have `DeserializeOwned` to make sure that is never the case).
 	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
@@ -232,7 +235,7 @@ where
 	/// Note that this may fail if the provided `T` requires to borrow from the
 	/// input and the input is actually an `impl BufRead`, or if the blocks are
 	/// compressed. (`deserialize_next` typechecks that we have
-	/// `DeserializeOwned` to make sure that is never the case)
+	/// `DeserializeOwned` to make sure that is never the case).
 	fn deserialize_inner<'r, 'de, T: Deserialize<'de>>(
 		&'r mut self,
 	) -> impl Iterator<Item = Result<T, DeError>> + 'r
@@ -254,9 +257,12 @@ where
 
 	/// Attempt to deserialize the next value
 	///
+	/// This can only be used if reading directly from a slice (Reader built via
+	/// [`Reader::from_slice`], `R = `[`SliceRead<'_>`](de::read::SliceRead)).
+	///
 	/// Note that this may fail if the provided `T` requires to borrow from the
 	/// input and the blocks are compressed. (`deserialize_next` typechecks that
-	/// we have `DeserializeOwned` to make sure that is never the case)
+	/// we have `DeserializeOwned` to make sure that is never the case).
 	pub fn deserialize_next_borrowed<'de, T: Deserialize<'de>>(
 		&mut self,
 	) -> Result<Option<T>, DeError>
@@ -404,7 +410,7 @@ where
 
 	/// Get the schema used for deserialization
 	///
-	/// It was read from the header of the object container file
+	/// It was read from the header of the object container file.
 	pub fn schema(&self) -> &Arc<Schema> {
 		&self.schema
 	}
