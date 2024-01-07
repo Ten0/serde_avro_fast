@@ -137,10 +137,11 @@ impl<'s> SerializerConfig<'s> {
 	/// sequence as bytes.
 	///
 	/// If you need to serialize a `Vec<u8>` or `&[u8]` as `Bytes`/`Fixed`,
-	/// [`serde_bytes`] is the way to go. If however you can't use it because
-	/// e.g. you are transcoding... then you may enable this instead.
+	/// [`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/) is the way to go.
+	/// If however you can't use it because e.g. you are transcoding... then you
+	/// may enable this instead.
 	///
-	/// It will be slow, because the bytes are processed one by one.
+	/// It will be slow, because the bytes will be processed one by one.
 	pub fn allow_slow_sequence_to_bytes(&mut self) -> &mut Self {
 		self.allow_slow_sequence_to_bytes = true;
 		self
