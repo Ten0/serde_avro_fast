@@ -217,7 +217,12 @@ impl std::fmt::Debug for Enum {
 
 impl From<super::safe::Schema> for Schema {
 	fn from(safe: super::safe::Schema) -> Self {
-		// This allocation should never be moved otherwise references will become
+		super::safe::check_no_zero_sized_cycle(&safe).expect(
+			"Unconditional cycle detected in schema \
+				- make sure to not construct a such schema (this panic can only happen if you \
+				have manually updated the safe::Schema before attempting conversion)",
+		);
+		// The `nodes` allocation should never be moved otherwise references will become
 		// invalid
 		let mut ret = Self {
 			nodes: (0..safe.nodes.len()).map(|_| SchemaNode::Null).collect(),

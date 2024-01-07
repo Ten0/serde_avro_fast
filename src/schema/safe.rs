@@ -158,6 +158,8 @@ pub enum BuildSchemaFromApacheSchemaError {
 	IncorrectDecimalRepr,
 	#[error("The apache_avro::Schema contains an unreasonably large `scale` for a Decimal")]
 	DecimalScaleTooLarge { scale_value: usize },
+	#[error("The schema contains a record that ends up always containing itself")]
+	UnconditionalCycle,
 }
 impl Schema {
 	/// Attempt to convert a [`Schema`](apache_avro::Schema) from the
@@ -390,6 +392,61 @@ impl Schema {
 			}
 		}
 
+		check_no_zero_sized_cycle(&schema)
+			.map_err(|UnconditionalCycle| BuildSchemaFromApacheSchemaError::UnconditionalCycle)?;
+
 		Ok(schema)
 	}
+}
+
+#[derive(Debug)]
+pub(crate) struct UnconditionalCycle;
+pub(crate) fn check_no_zero_sized_cycle(schema: &Schema) -> Result<(), UnconditionalCycle> {
+	// Zero-size cycles (that would trigger infinite recursion when parsing, without
+	// consuming any input) can only happen with records that end up containing
+	// themselves ~immediately (that is, only through record paths).
+	// Any other path would consume at least one byte (e.g union discriminant...)
+
+	// Since we shouldn't forbid conditional self-referential records (e.g. `Self {
+	// next: union { null, Self } }`), we can't really prevent non zero-sized
+	// stack overflows anyway (besides limiting depth in the deserializer), so best
+	// we can reliably do at this step is only to prevent zero-sized cycles.
+	let mut visited_nodes = vec![false; schema.nodes.len()];
+	let mut checked_nodes = vec![false; schema.nodes.len()];
+	for (idx, node) in schema.nodes.iter().enumerate() {
+		if matches!(node, SchemaNode::Record(_)) && !checked_nodes[idx] {
+			check_no_zero_sized_cycle_inner(schema, idx, &mut visited_nodes, &mut checked_nodes)?;
+		}
+	}
+	Ok(())
+}
+fn check_no_zero_sized_cycle_inner(
+	schema: &Schema,
+	node_idx: usize,
+	visited_nodes: &mut Vec<bool>,
+	checked_nodes: &mut Vec<bool>,
+) -> Result<(), UnconditionalCycle> {
+	visited_nodes[node_idx] = true;
+	for field in match &schema.nodes[node_idx] {
+		SchemaNode::Record(record) => &record.fields,
+		_ => unreachable!(),
+	} {
+		if let SchemaNode::Record(_) = &schema.nodes[field.schema.idx] {
+			if visited_nodes[field.schema.idx] {
+				return Err(UnconditionalCycle);
+			} else {
+				check_no_zero_sized_cycle_inner(
+					schema,
+					field.schema.idx,
+					visited_nodes,
+					checked_nodes,
+				)?;
+			}
+		}
+	}
+	visited_nodes[node_idx] = false;
+	// If we have visited a node and it was ok as part of another record, no need to
+	// re-visit it individually.
+	checked_nodes[node_idx] = true;
+	Ok(())
 }

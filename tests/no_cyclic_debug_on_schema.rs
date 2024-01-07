@@ -15,19 +15,24 @@ fn test_no_cyclic_debug_on_schema() {
           "default": 42
         },
         {
-          "name": "b",
-          "type": {"type": "test"}
+            "name": "b",
+            "type": {"type": ["null", "test"]}
         }
       ]
     }"#
 	.parse()
 	.unwrap();
 	let root = schema.root();
+	dbg!(&root);
 	let sub_root = match root {
 		SchemaNode::Record(Record { fields, .. }) => fields[1].schema,
 		_ => panic!(),
 	};
-	assert_eq!(root as *const _, sub_root as *const _); // This is a case where we have to pay attention
+	let sub_root_some = match sub_root {
+		SchemaNode::Union(union) => union.variants[1],
+		_ => panic!(),
+	};
+	assert_eq!(root as *const _, sub_root_some as *const _); // This is a case where we have to pay attention
 
 	use std::fmt::Write;
 	struct CheckCycle {
@@ -58,19 +63,12 @@ fn test_no_cyclic_debug_on_schema() {
             },
             RecordField {
                 name: "b",
-                schema: Record(
-                    Record {
-                        fields: [
-                            RecordField {
-                                name: "a",
-                                schema: Long,
-                            },
-                            RecordField {
-                                name: "b",
-                                schema: Record,
-                            },
+                schema: Union(
+                    Union {
+                        variants: [
+                            Null,
+                            Record,
                         ],
-                        name: "test",
                     },
                 ),
             },

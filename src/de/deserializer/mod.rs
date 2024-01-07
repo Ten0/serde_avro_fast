@@ -46,7 +46,8 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			}
 			.deserialize_any(visitor),
 			SchemaNode::Record(ref record) => {
-				// TODO prevent infinite loop on recursive structs
+				// NB: infinite recursion is prevented here by the fact we prevent constructing
+				// a schema that contains a record that always ends up containing itself
 				visitor.visit_map(RecordMapAccess {
 					record_fields: record.fields.iter(),
 					state: self.state,
