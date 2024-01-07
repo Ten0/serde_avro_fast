@@ -392,9 +392,9 @@ impl Schema {
 			}
 		}
 
-		schema
-			.check_for_cycles()
-			.map_err(|UnconditionalCycle| BuildSchemaFromApacheSchemaError::UnconditionalCycle)?;
+		schema.check_for_cycles().map_err(|_: UnconditionalCycle| {
+			BuildSchemaFromApacheSchemaError::UnconditionalCycle
+		})?;
 
 		Ok(schema)
 	}
@@ -429,7 +429,13 @@ impl Schema {
 
 #[derive(Debug, thiserror::Error)]
 #[error("The schema contains a record that ends up always containing itself")]
-pub struct UnconditionalCycle;
+/// Error: Detected unconditional cycle in provided schema
+///
+/// It was detected that the schema contains a record that ends up always
+/// containing itself
+pub struct UnconditionalCycle {
+	_private: (),
+}
 fn check_no_zero_sized_cycle_inner(
 	schema: &Schema,
 	node_idx: usize,
@@ -443,7 +449,7 @@ fn check_no_zero_sized_cycle_inner(
 	} {
 		if let SchemaNode::Record(_) = &schema.nodes[field.schema.idx] {
 			if visited_nodes[field.schema.idx] {
-				return Err(UnconditionalCycle);
+				return Err(UnconditionalCycle { _private: () });
 			} else {
 				check_no_zero_sized_cycle_inner(
 					schema,
