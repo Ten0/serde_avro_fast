@@ -1,7 +1,10 @@
+mod allowed_depth;
 mod types;
 mod unit_variant_enum_access;
 
 use {types::*, unit_variant_enum_access::UnitVariantEnumAccess};
+
+pub(crate) use allowed_depth::AllowedDepth;
 
 use super::*;
 
@@ -10,6 +13,7 @@ use super::*;
 pub struct DatumDeserializer<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
+	pub(super) allowed_depth: AllowedDepth,
 }
 
 impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> {
@@ -34,15 +38,16 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema,
-				block_reader: BlockReader::new(self.state),
+				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Map(elements_schema) => visitor.visit_map(MapMapAccess {
 				element_schema: elements_schema,
-				block_reader: BlockReader::new(self.state),
+				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Union(ref union) => Self {
 				schema_node: read_union_discriminant(self.state, union)?,
 				state: self.state,
+				allowed_depth: self.allowed_depth.dec()?,
 			}
 			.deserialize_any(visitor),
 			SchemaNode::Record(ref record) => {
@@ -51,6 +56,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				visitor.visit_map(RecordMapAccess {
 					record_fields: record.fields.iter(),
 					state: self.state,
+					allowed_depth: self.allowed_depth.dec()?,
 				})
 			}
 			SchemaNode::Enum(ref enum_) => read_enum_as_str(self.state, &enum_.symbols, visitor),
@@ -214,6 +220,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 						visitor.visit_some(DatumDeserializer {
 							state: self.state,
 							schema_node: variant_schema,
+							allowed_depth: self.allowed_depth.dec()?,
 						})
 					}
 					Some(variant_schema) => {
@@ -221,6 +228,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 							inner: DatumDeserializer {
 								state: self.state,
 								schema_node: variant_schema,
+								allowed_depth: self.allowed_depth.dec()?,
 							},
 						})
 					}
@@ -239,7 +247,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema,
-				block_reader: BlockReader::new(self.state),
+				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration => visitor.visit_seq(DurationMapAndSeqAccess {
 				duration_buf: &self.state.read_const_size_buf::<12>()?,
@@ -256,7 +264,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema,
-				block_reader: BlockReader::new(self.state),
+				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration if len == 3 => visitor.visit_seq(DurationMapAndSeqAccess {
 				duration_buf: &self.state.read_const_size_buf::<12>()?,
@@ -310,6 +318,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Union(ref union) => visitor.visit_enum(SchemaTypeNameEnumAccess {
 				variant_schema: read_union_discriminant(self.state, union)?,
 				state: self.state,
+				allowed_depth: self.allowed_depth.dec()?,
 			}),
 			ref possible_unit_variant_identifier @ (SchemaNode::Int
 			| SchemaNode::Long
@@ -319,6 +328,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			| SchemaNode::Fixed(_)) => visitor.visit_enum(UnitVariantEnumAccess {
 				state: self.state,
 				schema_node: possible_unit_variant_identifier,
+				allowed_depth: self.allowed_depth.dec()?,
 			}),
 			ref not_unit_variant_identifier @ (SchemaNode::Null
 			| SchemaNode::Boolean
@@ -337,6 +347,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			| SchemaNode::Duration) => visitor.visit_enum(SchemaTypeNameEnumAccess {
 				state: self.state,
 				variant_schema: not_unit_variant_identifier,
+				allowed_depth: self.allowed_depth.dec()?,
 			}),
 		}
 	}

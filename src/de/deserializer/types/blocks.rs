@@ -28,13 +28,18 @@ pub(in super::super) struct BlockReader<'r, 's, R> {
 	current_block_len: usize,
 	n_read: usize,
 	reader: &'r mut DeserializerState<'s, R>,
+	allowed_depth: AllowedDepth,
 }
 impl<'r, 's, R> BlockReader<'r, 's, R> {
-	pub(in super::super) fn new(reader: &'r mut DeserializerState<'s, R>) -> Self {
+	pub(in super::super) fn new(
+		reader: &'r mut DeserializerState<'s, R>,
+		allowed_depth: AllowedDepth,
+	) -> Self {
 		Self {
 			reader,
 			current_block_len: 0,
 			n_read: 0,
+			allowed_depth,
 		}
 	}
 	fn has_more<'de>(&mut self) -> Result<bool, DeError>
@@ -82,6 +87,7 @@ impl<'de, R: ReadSlice<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 		Ok(Some(seed.deserialize(DatumDeserializer {
 			schema_node: self.elements_schema,
 			state: self.block_reader.reader,
+			allowed_depth: self.block_reader.allowed_depth,
 		})?))
 	}
 }
@@ -113,6 +119,7 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 		seed.deserialize(DatumDeserializer {
 			schema_node: self.element_schema,
 			state: self.block_reader.reader,
+			allowed_depth: self.block_reader.allowed_depth,
 		})
 	}
 }

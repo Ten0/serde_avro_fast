@@ -3,6 +3,7 @@ use super::*;
 pub(super) struct UnitVariantEnumAccess<'r, 's, R> {
 	pub(super) state: &'r mut DeserializerState<'s, R>,
 	pub(super) schema_node: &'s SchemaNode<'s>,
+	pub(super) allowed_depth: AllowedDepth,
 }
 
 impl<'de, R: ReadSlice<'de>> EnumAccess<'de> for UnitVariantEnumAccess<'_, '_, R>
@@ -19,6 +20,7 @@ where
 		seed.deserialize(DatumDeserializer {
 			state: self.state,
 			schema_node: self.schema_node,
+			allowed_depth: self.allowed_depth,
 		})
 		.map(|value| (value, private::UnitOnly))
 	}

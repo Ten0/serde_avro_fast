@@ -103,6 +103,12 @@ pub struct DeserializerConfig<'s> {
 	/// parameter [there](ReaderRead::max_alloc_size) that you may want to
 	/// configure.
 	pub max_seq_size: usize,
+	/// If a datum turns out to be deeper than this during deserialization, we
+	/// will throw an error instead.
+	///
+	/// This is to avoid running into a stack overflow at deserialization time.
+	/// Default for this is `64`.
+	pub allowed_depth: usize,
 }
 
 impl<'s> DeserializerConfig<'s> {
@@ -113,6 +119,7 @@ impl<'s> DeserializerConfig<'s> {
 		Self {
 			schema_root,
 			max_seq_size: 1_000_000_000,
+			allowed_depth: 64,
 		}
 	}
 }
@@ -133,6 +140,7 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 	pub fn deserializer<'r>(&'r mut self) -> DatumDeserializer<'r, 's, R> {
 		DatumDeserializer {
 			schema_node: self.config.schema_root,
+			allowed_depth: AllowedDepth::new(self.config.allowed_depth),
 			state: self,
 		}
 	}

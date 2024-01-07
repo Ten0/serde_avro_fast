@@ -3,6 +3,7 @@ use super::*;
 pub(in super::super) struct RecordMapAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
 	pub(in super::super) record_fields: std::slice::Iter<'s, RecordField<'s>>,
+	pub(in super::super) allowed_depth: AllowedDepth,
 }
 impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 	type Error = DeError;
@@ -28,6 +29,7 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 				.expect("Called next_value without seed returning Some before")
 				.schema,
 			state: self.state,
+			allowed_depth: self.allowed_depth,
 		})
 	}
 }

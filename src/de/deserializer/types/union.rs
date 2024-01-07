@@ -19,6 +19,7 @@ where
 pub(in super::super) struct SchemaTypeNameEnumAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
 	pub(in super::super) variant_schema: &'s SchemaNode<'s>,
+	pub(in super::super) allowed_depth: AllowedDepth,
 }
 
 impl<'de, 'r, 's, R> EnumAccess<'de> for SchemaTypeNameEnumAccess<'r, 's, R>
@@ -42,6 +43,7 @@ where
 					datum_deserializer: DatumDeserializer {
 						state: self.state,
 						schema_node: self.variant_schema,
+						allowed_depth: self.allowed_depth,
 					},
 				},
 			)
@@ -182,6 +184,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de>
 		visitor.visit_enum(SchemaTypeNameEnumAccess {
 			state: self.inner.state,
 			variant_schema: self.inner.schema_node,
+			allowed_depth: self.inner.allowed_depth,
 		})
 	}
 
