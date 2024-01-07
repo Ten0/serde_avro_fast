@@ -392,34 +392,44 @@ impl Schema {
 			}
 		}
 
-		check_no_zero_sized_cycle(&schema)
+		schema
+			.check_for_cycles()
 			.map_err(|UnconditionalCycle| BuildSchemaFromApacheSchemaError::UnconditionalCycle)?;
 
 		Ok(schema)
 	}
-}
 
-#[derive(Debug)]
-pub(crate) struct UnconditionalCycle;
-pub(crate) fn check_no_zero_sized_cycle(schema: &Schema) -> Result<(), UnconditionalCycle> {
-	// Zero-size cycles (that would trigger infinite recursion when parsing, without
-	// consuming any input) can only happen with records that end up containing
-	// themselves ~immediately (that is, only through record paths).
-	// Any other path would consume at least one byte (e.g union discriminant...)
+	/// Check that the schema does not contain zero-sized unconditional cycles.
+	///
+	/// This is called by the parsing functions already, so this may only be
+	/// useful if you've manally edited the [`safe::Schema`](Schema) graph.
+	///
+	/// Note that deserialization functions otherwise already prevent stack
+	/// overflows by limiting the recursion depth.
+	pub fn check_for_cycles(&self) -> Result<(), UnconditionalCycle> {
+		// Zero-size cycles (that would trigger infinite recursion when parsing, without
+		// consuming any input) can only happen with records that end up containing
+		// themselves ~immediately (that is, only through record paths).
+		// Any other path would consume at least one byte (e.g union discriminant...)
 
-	// Since we shouldn't forbid conditional self-referential records (e.g. `Self {
-	// next: union { null, Self } }`), we can't really prevent non zero-sized
-	// stack overflows anyway (besides limiting depth in the deserializer), so best
-	// we can reliably do at this step is only to prevent zero-sized cycles.
-	let mut visited_nodes = vec![false; schema.nodes.len()];
-	let mut checked_nodes = vec![false; schema.nodes.len()];
-	for (idx, node) in schema.nodes.iter().enumerate() {
-		if matches!(node, SchemaNode::Record(_)) && !checked_nodes[idx] {
-			check_no_zero_sized_cycle_inner(schema, idx, &mut visited_nodes, &mut checked_nodes)?;
+		// Since we shouldn't forbid conditional self-referential records (e.g. `Self {
+		// next: union { null, Self } }`), we can't really prevent non zero-sized
+		// stack overflows anyway (besides limiting depth in the deserializer), so best
+		// we can reliably do at this step is only to prevent zero-sized cycles.
+		let mut visited_nodes = vec![false; self.nodes.len()];
+		let mut checked_nodes = vec![false; self.nodes.len()];
+		for (idx, node) in self.nodes.iter().enumerate() {
+			if matches!(node, SchemaNode::Record(_)) && !checked_nodes[idx] {
+				check_no_zero_sized_cycle_inner(self, idx, &mut visited_nodes, &mut checked_nodes)?;
+			}
 		}
+		Ok(())
 	}
-	Ok(())
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("The schema contains a record that ends up always containing itself")]
+pub struct UnconditionalCycle;
 fn check_no_zero_sized_cycle_inner(
 	schema: &Schema,
 	node_idx: usize,
