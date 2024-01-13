@@ -63,22 +63,16 @@ impl SchemaKey {
 	pub fn from_idx(idx: usize) -> Self {
 		Self { idx, is_ref: false }
 	}
-	pub fn reference(idx: usize) -> Self {
-		Self { idx, is_ref: true }
-	}
 	pub fn idx(self) -> usize {
 		self.idx
 	}
-	pub fn is_ref(self) -> bool {
-		self.is_ref
-	}
 }
-impl std::ops::Index<SchemaKey> for EditableSchema {
+/*impl std::ops::Index<SchemaKey> for EditableSchema {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
 		&self.nodes[key.idx]
 	}
-}
+}*/
 
 /// A node of an avro schema, stored in an [`EditableSchema`].
 ///

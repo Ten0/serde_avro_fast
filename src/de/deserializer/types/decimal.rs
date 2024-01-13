@@ -1,5 +1,3 @@
-use crate::schema::{Decimal, DecimalRepr};
-
 use super::*;
 
 use {rust_decimal::prelude::ToPrimitive as _, std::marker::PhantomData};

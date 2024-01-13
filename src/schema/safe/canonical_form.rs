@@ -15,8 +15,12 @@ impl EditableSchema {
 	/// See https://issues.apache.org/jira/browse/AVRO-1721
 	pub(crate) fn parsing_canonical_form(&self) -> Result<String, SchemaError> {
 		let mut buf = String::new();
-		write_canonical_form(self, SchemaKey::from_idx(0), &mut buf)?;
-		Ok(buf)
+		let mut state = WriteCanonicalFormState {
+			buf: String::new(),
+			named_type_written: vec![false; self.nodes.len()],
+		};
+		state.write_canonical_form(self, SchemaKey::from_idx(0))?;
+		Ok(state.buf)
 	}
 
 	/// Obtain the Rabin fingerprint of the schema
@@ -29,134 +33,142 @@ impl EditableSchema {
 	}
 }
 
-/// Manual implementation that strictly copies that of the reference
-/// implementation in Java. According to the java code, this is not guaranteed
-/// to actually be valid JSON (no escaping...)
-fn write_canonical_form(
-	schema: &EditableSchema,
-	key: SchemaKey,
-	buf: &mut String,
-) -> Result<(), SchemaError> {
-	use std::fmt::Write;
+struct WriteCanonicalFormState {
+	buf: String,
+	named_type_written: Vec<bool>,
+}
 
-	let mut first_time = true;
-	let node = schema
-		.nodes
-		.get(key.idx)
-		.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
-	if key.is_ref {
-		let name = match node {
-			SchemaType::Enum(enum_) => &enum_.name,
-			SchemaType::Fixed(fixed) => &fixed.name,
-			SchemaType::Record(record) => &record.name,
-			_ => {
-				return Err(SchemaError::new(
-					"SchemaKey::reference refers to non-named node",
-				))
-			}
-		};
-		buf.push('"');
-		buf.push_str(name.fully_qualified_name());
-		buf.push('"');
-	} else {
-		match *node {
+impl WriteCanonicalFormState {
+	/// Manual implementation that strictly copies that of the reference
+	/// implementation in Java. According to the java code, this is not
+	/// guaranteed to actually be valid JSON (no escaping...)
+	fn write_canonical_form(
+		&mut self,
+		schema: &EditableSchema,
+		key: SchemaKey,
+	) -> Result<(), SchemaError> {
+		use std::fmt::Write;
+
+		let mut first_time = true;
+		let node = schema
+			.nodes
+			.get(key.idx)
+			.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
+
+		let should_not_write_only_name =
+			|name: &s::Name, state: &mut WriteCanonicalFormState| -> bool {
+				match &mut state.named_type_written[key.idx] {
+					b @ false => {
+						*b = true;
+						true
+					}
+					true => {
+						state.buf.push('"');
+						state.buf.push_str(name.fully_qualified_name());
+						state.buf.push('"');
+						false
+					}
+				}
+			};
+
+		// In PCF, logical types are completely ignored
+		// https://issues.apache.org/jira/browse/AVRO-1721
+		match node.type_ {
 			SchemaType::Null => {
-				buf.push_str("\"null\"");
+				self.buf.push_str("\"null\"");
 			}
 			SchemaType::Boolean => {
-				buf.push_str("\"boolean\"");
+				self.buf.push_str("\"boolean\"");
 			}
-			SchemaType::Bytes
-			| SchemaType::Decimal(s::Decimal {
-				repr: s::DecimalRepr::Bytes,
-				..
-			}) => {
-				buf.push_str("\"bytes\"");
+			SchemaType::Bytes => {
+				self.buf.push_str("\"bytes\"");
 			}
 			SchemaType::Double => {
-				buf.push_str("\"double\"");
+				self.buf.push_str("\"double\"");
 			}
 			SchemaType::Float => {
-				buf.push_str("\"float\"");
+				self.buf.push_str("\"float\"");
 			}
 			SchemaType::Int => {
-				buf.push_str("\"int\"");
+				self.buf.push_str("\"int\"");
 			}
 			SchemaType::Long => {
-				buf.push_str("\"long\"");
+				self.buf.push_str("\"long\"");
 			}
 			SchemaType::String => {
-				buf.push_str("\"string\"");
+				self.buf.push_str("\"string\"");
 			}
 			SchemaType::Union(ref union) => {
-				buf.push('[');
+				self.buf.push('[');
 				for variant in union.variants {
 					if !first_time {
-						buf.push(',');
+						self.buf.push(',');
 					} else {
 						first_time = false;
 					}
-					write_canonical_form(schema, variant, buf);
+					self.write_canonical_form(schema, variant);
 				}
-				buf.push(']');
+				self.buf.push(']');
 			}
 			SchemaType::Array(array_items) => {
-				buf.push_str("{\"type\":\"array\",\"items\":");
-				write_canonical_form(schema, array_items, buf);
-				buf.push('}');
+				self.buf.push_str("{\"type\":\"array\",\"items\":");
+				self.write_canonical_form(schema, array_items);
+				self.buf.push('}');
 			}
 			SchemaType::Map(map_values) => {
-				buf.push_str("{\"type\":\"map\",\"values\":");
-				write_canonical_form(schema, map_values, buf);
-				buf.push('}');
+				self.buf.push_str("{\"type\":\"map\",\"values\":");
+				self.write_canonical_form(schema, map_values);
+				self.buf.push('}');
 			}
 			SchemaType::Enum(enum_) => {
-				buf.push_str("{\"name\":\"");
-				buf.push_str(enum_.name.fully_qualified_name());
-				buf.push_str("\",\"type\":\"enum\",\"symbols\":[");
-				for enum_symbol in enum_.symbols.iter() {
-					if !first_time {
-						buf.push(',');
-					} else {
-						first_time = false;
+				if !should_not_write_only_name(&enum_.name, self) {
+					self.buf.push_str("{\"name\":\"");
+					self.buf.push_str(enum_.name.fully_qualified_name());
+					self.buf.push_str("\",\"type\":\"enum\",\"symbols\":[");
+					for enum_symbol in enum_.symbols.iter() {
+						if !first_time {
+							self.buf.push(',');
+						} else {
+							first_time = false;
+						}
+						self.buf.push('"');
+						self.buf.push_str(enum_symbol);
+						self.buf.push('"');
 					}
-					buf.push('"');
-					buf.push_str(enum_symbol);
-					buf.push('"');
+					self.buf.push(']');
+					self.buf.push('}');
 				}
-				buf.push(']');
-				buf.push('}');
 			}
-			SchemaType::Fixed(fixed)
-			| SchemaType::Decimal(s::Decimal {
-				repr: s::DecimalRepr::Fixed(fixed),
-				..
-			}) => {
-				buf.push_str("{\"name\":\"");
-				buf.push_str(fixed.name.fully_qualified_name());
-				buf.push_str("\",\"type\":\"fixed\",\"size\":");
-				write!(buf, "{}", fixed.size).unwrap();
-				buf.push('}');
+			SchemaType::Fixed(fixed) => {
+				if !should_not_write_only_name(&fixed.name, self) {
+					self.buf.push_str("{\"name\":\"");
+					self.buf.push_str(fixed.name.fully_qualified_name());
+					self.buf.push_str("\",\"type\":\"fixed\",\"size\":");
+					write!(self.buf, "{}", fixed.size).unwrap();
+					self.buf.push('}');
+				}
 			}
 			SchemaType::Record(record) => {
-				buf.push_str("{\"name\":\"");
-				buf.push_str(record.name.fully_qualified_name());
-				buf.push_str("\",\"type\":\"record\",\"fields\":[");
-				for field in record.fields.iter() {
-					if !first_time {
-						buf.push(',');
-					} else {
-						first_time = false;
+				if !should_not_write_only_name(&record.name, self) {
+					self.buf.push_str("{\"name\":\"");
+					self.buf.push_str(record.name.fully_qualified_name());
+					self.buf.push_str("\",\"type\":\"record\",\"fields\":[");
+					for field in record.fields.iter() {
+						if !first_time {
+							self.buf.push(',');
+						} else {
+							first_time = false;
+						}
+						self.buf.push_str("{\"name\":\"");
+						self.buf.push_str(&field.name);
+						self.buf.push_str("\",\"type\":");
+						self.write_canonical_form(schema, field.schema);
+						self.buf.push('}');
 					}
-					buf.push_str("{\"name\":\"");
-					buf.push_str(&field.name);
-					buf.push_str("\",\"type\":");
-					write_canonical_form(schema, field.schema, buf);
-					buf.push('}');
+					self.buf.push_str("]}");
 				}
-				buf.push_str("]}");
 			}
 		}
+		Ok(())
 	}
-	Ok(())
 }

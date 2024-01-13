@@ -1,5 +1,3 @@
-use crate::schema::{Decimal, DecimalRepr};
-
 use super::*;
 
 pub(in super::super) fn read_union_discriminant<'de, 's, R>(
