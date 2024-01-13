@@ -6,10 +6,7 @@ use crate::schema::{
 	Decimal, DecimalRepr, Fixed, Name,
 };
 
-use {
-	serde::de,
-	std::collections::{hash_map, HashMap},
-};
+use {serde::de, std::collections::HashMap};
 
 /// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON
 /// `&str`
@@ -49,77 +46,75 @@ const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 impl std::str::FromStr for Schema {
 	type Err = ParseSchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let state = SchemaDeserializerState {
+		let mut state = SchemaConstructionState {
 			nodes: Vec::new(),
 			names: HashMap::new(),
 			unresolved_names: Vec::new(),
 		};
 
-		/*de::DeserializeSeed::deserialize(
-			SchemaDeserializerSeed {
-				state: &mut state,
-				enclosing_namespace: None,
-			},
-			&mut serde_json::Deserializer::from_str(s),
-		)
-		.map_err(|inner| ParseSchemaError { inner })?;*/
-
 		let raw_schema: raw::SchemaNode = serde_json::from_str(s)?;
 
 		state.register_node(&raw_schema, None)?;
 
-		let resolved_names: Vec<SchemaKey> = unresolved_names
-			.into_iter()
-			.map(|name| {
-				names
-					.get(&name)
-					.ok_or(ParseSchemaError::InvalidReference(name))
-					.map(|&idx| SchemaKey { idx })
-			})
-			.collect::<Result<_, _>>()?;
-		let fix_key = |key: &mut SchemaKey| {
-			if key.idx & REMAP_BIT != 0 {
-				*key = resolved_names[key.idx ^ REMAP_BIT];
-			}
-		};
-		for schema_node in &mut schema.nodes {
-			match schema_node {
-				SchemaNode::Array(key) | SchemaNode::Map(key) => fix_key(key),
-				SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
-				SchemaNode::Record(record) => record
-					.fields
-					.iter_mut()
-					.for_each(|f| fix_key(&mut f.schema)),
-				SchemaNode::Decimal(Decimal {
-					repr: DecimalRepr::Bytes | DecimalRepr::Fixed(Fixed { size: _, name: _ }),
-					precision: _,
-					scale: _,
+		if !state.unresolved_names.is_empty() {
+			let resolved_names: Vec<SchemaKey> = state
+				.unresolved_names
+				.into_iter()
+				.map(|name| {
+					state
+						.names
+						.get(&name)
+						.ok_or(ParseSchemaError::msg(format_args!(
+							"The Schema contains an unknown reference: {}",
+							name,
+						)))
+						.map(|&idx| SchemaKey::reference(idx))
 				})
-				| SchemaNode::Null
-				| SchemaNode::Boolean
-				| SchemaNode::Int
-				| SchemaNode::Long
-				| SchemaNode::Float
-				| SchemaNode::Double
-				| SchemaNode::Bytes
-				| SchemaNode::String
-				| SchemaNode::Enum(Enum {
-					symbols: _,
-					name: _,
-				})
-				| SchemaNode::Fixed(Fixed { size: _, name: _ })
-				| SchemaNode::Uuid
-				| SchemaNode::Date
-				| SchemaNode::TimeMillis
-				| SchemaNode::TimeMicros
-				| SchemaNode::TimestampMillis
-				| SchemaNode::TimestampMicros
-				| SchemaNode::Duration => {}
+				.collect::<Result<_, _>>()?;
+			let fix_key = |key: &mut SchemaKey| {
+				if key.idx & REMAP_BIT != 0 {
+					*key = resolved_names[key.idx ^ REMAP_BIT];
+				}
+			};
+			for schema_node in &mut state.nodes {
+				match schema_node {
+					SchemaNode::Array(key) | SchemaNode::Map(key) => fix_key(key),
+					SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
+					SchemaNode::Record(record) => record
+						.fields
+						.iter_mut()
+						.for_each(|f| fix_key(&mut f.schema)),
+					SchemaNode::Decimal(Decimal {
+						repr: DecimalRepr::Bytes | DecimalRepr::Fixed(Fixed { size: _, name: _ }),
+						precision: _,
+						scale: _,
+					})
+					| SchemaNode::Null
+					| SchemaNode::Boolean
+					| SchemaNode::Int
+					| SchemaNode::Long
+					| SchemaNode::Float
+					| SchemaNode::Double
+					| SchemaNode::Bytes
+					| SchemaNode::String
+					| SchemaNode::Enum(Enum {
+						symbols: _,
+						name: _,
+					})
+					| SchemaNode::Fixed(Fixed { size: _, name: _ })
+					| SchemaNode::Uuid
+					| SchemaNode::Date
+					| SchemaNode::TimeMillis
+					| SchemaNode::TimeMicros
+					| SchemaNode::TimestampMillis
+					| SchemaNode::TimestampMicros
+					| SchemaNode::Duration => {}
+				}
 			}
 		}
 
 		let mut schema = Self {
-			nodes,
+			nodes: state.nodes,
 			fingerprint: raw_schema.rabin_fingerprint(),
 			schema_json: String::from_utf8({
 				// Sanitize & minify json, preserving all keys.
@@ -133,21 +128,23 @@ impl std::str::FromStr for Schema {
 			.expect("serde_json should not emit invalid UTF-8"),
 		};
 
-		schema
-			.check_for_cycles()
-			.map_err(|_: UnconditionalCycle| ParseSchemaError::UnconditionalCycle)?;
+		schema.check_for_cycles().map_err(|_: UnconditionalCycle| {
+			ParseSchemaError::msg(
+				"The schema contains a record that ends up always containing itself",
+			)
+		})?;
 
 		Ok(schema)
 	}
 }
 
-struct SchemaDeserializerState<'a> {
+struct SchemaConstructionState<'a> {
 	nodes: Vec<SchemaNode>,
 	names: HashMap<NameKey<'a>, usize>,
 	unresolved_names: Vec<NameKey<'a>>,
 }
 
-impl<'a> SchemaDeserializerState<'a> {
+impl<'a> SchemaConstructionState<'a> {
 	fn register_node(
 		&mut self,
 		raw_schema: &raw::SchemaNode<'a>,
@@ -212,7 +209,7 @@ impl<'a> SchemaDeserializerState<'a> {
 			if let Some(_) = self.names.insert(name_key, idx) {
 				return Err(ParseSchemaError::msg(format_args!(
 					"The Schema contains duplicate definitions for {}",
-					name_key.name().fully_qualified_name()
+					name_key
 				)));
 			}
 			Some(name_key)
@@ -288,6 +285,9 @@ impl<'a> SchemaDeserializerState<'a> {
 				}
 			}
 		};
+
+		// TODO logical types
+
 		self.nodes[idx] = new_node; // Fill the spot we have previously reserved
 		Ok(SchemaKey::reference(idx))
 	}
@@ -312,37 +312,11 @@ impl NameKey<'_> {
 		}
 	}
 }
-
-struct SchemaDeserializerSeed<'a, 's> {
-	state: &'s mut SchemaDeserializerState<'a>,
-	enclosing_namespace: Option<&'a str>,
-}
-
-impl<'de, 's> de::DeserializeSeed<'de> for SchemaDeserializerSeed<'de, 's> {
-	type Value = SchemaKey;
-
-	fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		deserializer.deserialize_any(self)
-	}
-}
-impl<'de, 's> de::Visitor<'de> for SchemaDeserializerSeed<'de, 's> {
-	type Value = ();
-
-	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(formatter, "A string or an object with a `type` field")
-	}
-
-	fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-	where
-		A: de::MapAccess<'de>,
-	{
-		let raw_schema_node: RawSchemaNode =
-			de::Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))?;
-
-		let idx = self.state.nodes.len();
-		self.state.nodes.push(SchemaNode::Null); // Reserve the spot for us
+impl std::fmt::Display for NameKey<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self.namespace {
+			None => self.name.fmt(f),
+			Some(namespace) => write!(f, "{}.{}", namespace, self.name),
+		}
 	}
 }

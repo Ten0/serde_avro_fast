@@ -54,46 +54,60 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 	where
 		D: Deserializer<'de>,
 	{
-		let mut out = SchemaNode {
-			type_: None,
-			logical_type: None,
-			name: None,
-			namespace: None,
-			fields: None,
-			symbols: None,
-			items: None,
-			values: None,
-			size: None,
-		};
-		struct SchemaNodeVisitor<'n, 'a>(&'n mut SchemaNode<'a>);
-		impl<'n, 'de> Visitor<'de> for SchemaNodeVisitor<'n, 'de> {
-			type Value = ();
+		struct SchemaNodeVisitor<'de>(std::marker::PhantomData<&'de ()>);
+		impl<'de> Visitor<'de> for SchemaNodeVisitor<'de> {
+			type Value = SchemaNode<'de>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
 				write!(
 					formatter,
-					"A borrowed &str or an object with a `type` field"
+					"A string (type) or an object with a `type` field or an array (union)"
 				)
 			}
 
-			fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
 			where
 				E: Error,
 			{
-				self.0.type_ = Some(v);
-				Ok(())
+				// That's a type right away, or a ref.
+				Ok(
+					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
+					{
+						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Err(FailedDeserialization) => SchemaNode::Ref(v),
+					},
+				)
 			}
 
-			/*fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+			fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
 			where
-				E: Error,
+				A: SeqAccess<'de>,
 			{
-				// That's a type right away
-				self.0.type_ = Some(Type::deserialize(value::StrDeserializer::new(v))?);
-				Ok(())
-			}*/
+				// That's a union.
+				Ok(SchemaNode::Union(Deserialize::deserialize(
+					serde::de::value::SeqAccessDeserializer::new(seq),
+				)?))
+			}
+
+			fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+			where
+				A: MapAccess<'de>,
+			{
+				// That's an object.
+				Ok(SchemaNode::Object(Deserialize::deserialize(
+					serde::de::value::MapAccessDeserializer::new(map),
+				)?))
+			}
 		}
-		deserializer.deserialize_any(SchemaNodeVisitor(&mut out))?;
-		Ok(out)
+		deserializer.deserialize_any(SchemaNodeVisitor(std::marker::PhantomData))
+	}
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to deserialize")]
+struct FailedDeserialization;
+impl Error for FailedDeserialization {
+	fn custom<T: std::fmt::Display>(_msg: T) -> Self {
+		FailedDeserialization
 	}
 }
