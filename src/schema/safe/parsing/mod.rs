@@ -1,4 +1,3 @@
-mod canonical_form;
 mod raw;
 
 use crate::schema::{
@@ -113,19 +112,20 @@ impl std::str::FromStr for Schema {
 			}
 		}
 
-		let mut schema = Self {
+		let schema = Self {
 			nodes: state.nodes,
-			fingerprint: raw_schema.rabin_fingerprint(),
-			schema_json: String::from_utf8({
-				// Sanitize & minify json, preserving all keys.
-				let mut serializer = serde_json::Serializer::new(Vec::new());
-				serde_transcode::transcode(
-					&mut serde_json::Deserializer::from_str(s),
-					&mut serializer,
-				)?;
-				serializer.into_inner()
-			})
-			.expect("serde_json should not emit invalid UTF-8"),
+			schema_json: Some(
+				String::from_utf8({
+					// Sanitize & minify json, preserving all keys.
+					let mut serializer = serde_json::Serializer::new(Vec::new());
+					serde_transcode::transcode(
+						&mut serde_json::Deserializer::from_str(s),
+						&mut serializer,
+					)?;
+					serializer.into_inner()
+				})
+				.expect("serde_json should not emit invalid UTF-8"),
+			),
 		};
 
 		schema.check_for_cycles().map_err(|_: UnconditionalCycle| {
@@ -147,8 +147,8 @@ struct SchemaConstructionState<'a> {
 impl<'a> SchemaConstructionState<'a> {
 	fn register_node(
 		&mut self,
-		raw_schema: &raw::SchemaNode<'a>,
-		enclosing_namespace: Option<&str>,
+		raw_schema: &'a raw::SchemaNode<'a>,
+		enclosing_namespace: Option<&'a str>,
 	) -> Result<SchemaKey, ParseSchemaError> {
 		enum TypeOrUnion<'r, 'a> {
 			Type(raw::Type),
@@ -158,7 +158,7 @@ impl<'a> SchemaConstructionState<'a> {
 			raw::SchemaNode::TypeOnly(type_) => (TypeOrUnion::Type(type_), None),
 			raw::SchemaNode::Object(ref object) => (TypeOrUnion::Type(object.type_), Some(object)),
 			raw::SchemaNode::Union(ref union_schemas) => (TypeOrUnion::Union(union_schemas), None),
-			raw::SchemaNode::Ref(reference) => {
+			raw::SchemaNode::Ref(ref reference) => {
 				// This is supposed to be the fullname of a
 				// previous named type. According to the spec the type
 				// definition should always be parsed before, but we support
@@ -171,7 +171,7 @@ impl<'a> SchemaConstructionState<'a> {
 				} else {
 					NameKey {
 						namespace: None,
-						name: reference,
+						name: &reference,
 					}
 				};
 				return Ok(match self.names.get(&name_key) {
@@ -218,7 +218,7 @@ impl<'a> SchemaConstructionState<'a> {
 		};
 		let name = || match name_key {
 			None => Err(ParseSchemaError::msg("Missing name")),
-			Some(name_key) => Ok(name_key.name()),
+			Some(name_key) => Ok((name_key.name(), name_key)),
 		};
 
 		let new_node = match type_ {
@@ -251,15 +251,15 @@ impl<'a> SchemaConstructionState<'a> {
 					}
 
 					raw::Type::Enum => SchemaNode::Enum(Enum {
-						name: name()?,
+						name: name()?.0,
 						symbols: field!(symbols).to_owned(),
 					}),
 					raw::Type::Fixed => SchemaNode::Fixed(Fixed {
-						name: name()?,
+						name: name()?.0,
 						size: *field!(size),
 					}),
 					raw::Type::Record => {
-						let name = name()?;
+						let (name, name_key) = name()?;
 						SchemaNode::Record(Record {
 							fields: field!(fields)
 								.iter()
@@ -267,7 +267,7 @@ impl<'a> SchemaConstructionState<'a> {
 									Ok(RecordField {
 										name: (*field.name).to_owned(),
 										schema: self
-											.register_node(&field.type_, name.namespace())?,
+											.register_node(&field.type_, name_key.namespace)?,
 									})
 								})
 								.collect::<Result<_, ParseSchemaError>>()?,
@@ -285,8 +285,6 @@ impl<'a> SchemaConstructionState<'a> {
 				}
 			}
 		};
-
-		// TODO logical types
 
 		self.nodes[idx] = new_node; // Fill the spot we have previously reserved
 		Ok(SchemaKey::reference(idx))

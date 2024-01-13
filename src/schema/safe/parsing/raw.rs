@@ -22,12 +22,13 @@ pub(super) enum Type {
 
 pub(super) enum SchemaNode<'a> {
 	TypeOnly(Type),
-	Ref(&'a str),
+	Ref(Cow<'a, str>),
 	Object(SchemaNodeObject<'a>),
 	Union(Vec<SchemaNode<'a>>),
 }
 
 #[derive(serde_derive::Deserialize)]
+#[serde(bound = "'a: 'de")]
 pub(super) struct SchemaNodeObject<'a> {
 	pub(super) type_: Type,
 	#[serde(skip_serializing)]
@@ -42,7 +43,8 @@ pub(super) struct SchemaNodeObject<'a> {
 }
 
 #[derive(serde_derive::Deserialize)]
-struct Field<'a> {
+#[serde(bound = "'a: 'de")]
+pub(super) struct Field<'a> {
 	#[serde(borrow)]
 	pub(super) name: Cow<'a, str>,
 	#[serde(rename = "type")]
@@ -65,18 +67,14 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 				)
 			}
 
-			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+			fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
 			where
-				E: Error,
+				A: MapAccess<'de>,
 			{
-				// That's a type right away, or a ref.
-				Ok(
-					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
-					{
-						Ok(type_) => SchemaNode::TypeOnly(type_),
-						Err(FailedDeserialization) => SchemaNode::Ref(v),
-					},
-				)
+				// That's an object.
+				Ok(SchemaNode::Object(Deserialize::deserialize(
+					serde::de::value::MapAccessDeserializer::new(map),
+				)?))
 			}
 
 			fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
@@ -89,14 +87,47 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 				)?))
 			}
 
-			fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
 			where
-				A: MapAccess<'de>,
+				E: Error,
 			{
-				// That's an object.
-				Ok(SchemaNode::Object(Deserialize::deserialize(
-					serde::de::value::MapAccessDeserializer::new(map),
-				)?))
+				// That's a type right away, or a ref.
+				Ok(
+					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
+					{
+						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Err(FailedDeserialization) => SchemaNode::Ref(v.to_owned().into()),
+					},
+				)
+			}
+
+			fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+			where
+				E: Error,
+			{
+				// That's a type right away, or a ref.
+				Ok(
+					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
+					{
+						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Err(FailedDeserialization) => SchemaNode::Ref(v.into()),
+					},
+				)
+			}
+
+			fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+			where
+				E: Error,
+			{
+				// That's a type right away, or a ref.
+				Ok(
+					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(
+						v.as_str(),
+					)) {
+						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Err(FailedDeserialization) => SchemaNode::Ref(v.into()),
+					},
+				)
 			}
 		}
 		deserializer.deserialize_any(SchemaNodeVisitor(std::marker::PhantomData))

@@ -221,9 +221,9 @@ impl From<super::safe::Schema> for Schema {
 		// invalid
 		let mut ret = Self {
 			nodes: (0..safe.nodes.len()).map(|_| SchemaNode::Null).collect(),
-			fingerprint: safe.fingerprint,
-			schema_json: safe.schema_json,
-			parsing_canonical_form: safe.parsing_canonical_form,
+			fingerprint: safe.canonical_form_rabin_fingerprint(),
+			parsing_canonical_form: safe.parsing_canonical_form(),
+			schema_json: safe.schema_json.unwrap_or_else(|| todo!()),
 		};
 		let len = ret.nodes.len();
 		// Let's be extra-sure (second condition is for calls to add)

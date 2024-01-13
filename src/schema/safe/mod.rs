@@ -1,6 +1,7 @@
 //! Defines a fully-safe counterpart of the [`Schema`](crate::Schema) that is
 //! used for its initialization
 
+mod canonical_form;
 mod check_for_cycles;
 mod parsing;
 
@@ -20,8 +21,7 @@ pub use {check_for_cycles::UnconditionalCycle, parsing::*};
 pub struct Schema {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
-	pub(super) fingerprint: [u8; 8],
-	pub(super) schema_json: String,
+	pub(super) schema_json: Option<String>,
 }
 
 impl Schema {
@@ -30,11 +30,6 @@ impl Schema {
 	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
 	pub fn into_nodes(self) -> Vec<SchemaNode> {
 		self.nodes
-	}
-
-	/// Obtain the Rabin fingerprint of the schema
-	pub fn rabin_fingerprint(&self) -> &[u8; 8] {
-		&self.fingerprint
 	}
 }
 
