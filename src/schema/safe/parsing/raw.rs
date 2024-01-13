@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use serde::de::*;
 
 #[derive(serde_derive::Deserialize, Clone, Copy, Debug)]
@@ -22,7 +20,7 @@ pub(super) enum Type {
 
 pub(super) enum SchemaNode<'a> {
 	TypeOnly(Type),
-	Ref(Cow<'a, str>),
+	Ref(std::borrow::Cow<'a, str>),
 	Object(SchemaNodeObject<'a>),
 	Union(Vec<SchemaNode<'a>>),
 }
@@ -30,26 +28,40 @@ pub(super) enum SchemaNode<'a> {
 #[derive(serde_derive::Deserialize)]
 #[serde(bound = "'a: 'de")]
 pub(super) struct SchemaNodeObject<'a> {
+	#[serde(rename = "type")]
 	pub(super) type_: Type,
-	#[serde(skip_serializing)]
 	pub(super) logical_type: Option<&'a str>,
-	pub(super) name: Option<String>,
-	pub(super) namespace: Option<String>,
+	/// For named type
+	pub(super) name: Option<BorrowedCowIfPossible<'a>>,
+	/// For named type
+	pub(super) namespace: Option<BorrowedCowIfPossible<'a>>,
+	/// For record type
 	pub(super) fields: Option<Vec<Field<'a>>>,
-	pub(super) symbols: Option<Vec<String>>,
+	/// For enum type
+	pub(super) symbols: Option<Vec<BorrowedCowIfPossible<'a>>>,
+	/// For array type
 	pub(super) items: Option<Box<SchemaNode<'a>>>,
+	/// For map type
 	pub(super) values: Option<Box<SchemaNode<'a>>>,
+	/// For fixed type
 	pub(super) size: Option<usize>,
+	/// For decimal logical type
+	pub(super) precision: Option<usize>,
+	/// For decimal logical type
+	pub(super) scale: Option<u32>,
 }
 
 #[derive(serde_derive::Deserialize)]
 #[serde(bound = "'a: 'de")]
 pub(super) struct Field<'a> {
 	#[serde(borrow)]
-	pub(super) name: Cow<'a, str>,
+	pub(super) name: BorrowedCowIfPossible<'a>,
 	#[serde(rename = "type")]
 	pub(super) type_: SchemaNode<'a>,
 }
+
+#[derive(serde_derive::Deserialize)]
+pub(super) struct BorrowedCowIfPossible<'a>(#[serde(borrow)] pub(crate) std::borrow::Cow<'a, str>);
 
 impl<'de> Deserialize<'de> for SchemaNode<'de> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

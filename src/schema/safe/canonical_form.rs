@@ -14,7 +14,6 @@ impl EditableSchema {
 	/// valid JSON (there's no escaping in the json generation...)
 	/// See https://issues.apache.org/jira/browse/AVRO-1721
 	pub(crate) fn parsing_canonical_form(&self) -> Result<String, SchemaError> {
-		let mut buf = String::new();
 		let mut state = WriteCanonicalFormState {
 			buf: String::new(),
 			named_type_written: vec![false; self.nodes.len()],
@@ -100,27 +99,27 @@ impl WriteCanonicalFormState {
 			}
 			SchemaType::Union(ref union) => {
 				self.buf.push('[');
-				for variant in union.variants {
+				for &variant in &union.variants {
 					if !first_time {
 						self.buf.push(',');
 					} else {
 						first_time = false;
 					}
-					self.write_canonical_form(schema, variant);
+					self.write_canonical_form(schema, variant)?;
 				}
 				self.buf.push(']');
 			}
 			SchemaType::Array(array_items) => {
 				self.buf.push_str("{\"type\":\"array\",\"items\":");
-				self.write_canonical_form(schema, array_items);
+				self.write_canonical_form(schema, array_items)?;
 				self.buf.push('}');
 			}
 			SchemaType::Map(map_values) => {
 				self.buf.push_str("{\"type\":\"map\",\"values\":");
-				self.write_canonical_form(schema, map_values);
+				self.write_canonical_form(schema, map_values)?;
 				self.buf.push('}');
 			}
-			SchemaType::Enum(enum_) => {
+			SchemaType::Enum(ref enum_) => {
 				if !should_not_write_only_name(&enum_.name, self) {
 					self.buf.push_str("{\"name\":\"");
 					self.buf.push_str(enum_.name.fully_qualified_name());
@@ -139,7 +138,7 @@ impl WriteCanonicalFormState {
 					self.buf.push('}');
 				}
 			}
-			SchemaType::Fixed(fixed) => {
+			SchemaType::Fixed(ref fixed) => {
 				if !should_not_write_only_name(&fixed.name, self) {
 					self.buf.push_str("{\"name\":\"");
 					self.buf.push_str(fixed.name.fully_qualified_name());
@@ -148,7 +147,7 @@ impl WriteCanonicalFormState {
 					self.buf.push('}');
 				}
 			}
-			SchemaType::Record(record) => {
+			SchemaType::Record(ref record) => {
 				if !should_not_write_only_name(&record.name, self) {
 					self.buf.push_str("{\"name\":\"");
 					self.buf.push_str(record.name.fully_qualified_name());
@@ -162,7 +161,7 @@ impl WriteCanonicalFormState {
 						self.buf.push_str("{\"name\":\"");
 						self.buf.push_str(&field.name);
 						self.buf.push_str("\",\"type\":");
-						self.write_canonical_form(schema, field.schema);
+						self.write_canonical_form(schema, field.schema)?;
 						self.buf.push('}');
 					}
 					self.buf.push_str("]}");

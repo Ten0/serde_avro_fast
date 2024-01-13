@@ -1,26 +1,16 @@
 mod raw;
 
-use crate::schema::{
-	safe::{
-		EditableSchema, Enum, Record, RecordField, SchemaKey, SchemaType, UnconditionalCycle, Union,
-	},
-	Decimal, DecimalRepr, Fixed, Name, SchemaError,
-};
+use crate::schema::{safe::*, SchemaError};
 
 use std::collections::HashMap;
 
-/// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON
-/// `&str`
-#[derive(thiserror::Error, Debug)]
-#[non_exhaustive]
-pub enum ParseSchemaErrorOld {
-	#[error("The Schema contains a Decimal whose representation is neither Bytes nor Fixed")]
-	IncorrectDecimalRepr,
-	#[error("The Schema contains an unreasonably large `scale` for a Decimal")]
-	DecimalScaleTooLarge { scale_value: usize },
-}
-
 const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
+
+struct SchemaConstructionState<'a> {
+	nodes: Vec<SchemaNode>,
+	names: HashMap<NameKey<'a>, usize>,
+	unresolved_names: Vec<NameKey<'a>>,
+}
 
 impl std::str::FromStr for EditableSchema {
 	type Err = SchemaError;
@@ -36,6 +26,7 @@ impl std::str::FromStr for EditableSchema {
 
 		state.register_node(&raw_schema, None)?;
 
+		// Support for unordered definitions
 		if !state.unresolved_names.is_empty() {
 			let resolved_names: Vec<SchemaKey> = state
 				.unresolved_names
@@ -48,7 +39,7 @@ impl std::str::FromStr for EditableSchema {
 							"The Schema contains an unknown reference: {}",
 							name,
 						)))
-						.map(|&idx| SchemaKey::reference(idx))
+						.map(|&idx| SchemaKey { idx })
 				})
 				.collect::<Result<_, _>>()?;
 			let fix_key = |key: &mut SchemaKey| {
@@ -57,19 +48,14 @@ impl std::str::FromStr for EditableSchema {
 				}
 			};
 			for schema_node in &mut state.nodes {
-				match schema_node {
+				match &mut schema_node.type_ {
 					SchemaType::Array(key) | SchemaType::Map(key) => fix_key(key),
 					SchemaType::Union(union) => union.variants.iter_mut().for_each(fix_key),
 					SchemaType::Record(record) => record
 						.fields
 						.iter_mut()
 						.for_each(|f| fix_key(&mut f.schema)),
-					SchemaType::Decimal(Decimal {
-						repr: DecimalRepr::Bytes | DecimalRepr::Fixed(Fixed { size: _, name: _ }),
-						precision: _,
-						scale: _,
-					})
-					| SchemaType::Null
+					SchemaType::Null
 					| SchemaType::Boolean
 					| SchemaType::Int
 					| SchemaType::Long
@@ -81,14 +67,7 @@ impl std::str::FromStr for EditableSchema {
 						symbols: _,
 						name: _,
 					})
-					| SchemaType::Fixed(Fixed { size: _, name: _ })
-					| SchemaType::Uuid
-					| SchemaType::Date
-					| SchemaType::TimeMillis
-					| SchemaType::TimeMicros
-					| SchemaType::TimestampMillis
-					| SchemaType::TimestampMicros
-					| SchemaType::Duration => {}
+					| SchemaType::Fixed(Fixed { size: _, name: _ }) => {}
 				}
 			}
 		}
@@ -122,12 +101,6 @@ impl std::str::FromStr for EditableSchema {
 	}
 }
 
-struct SchemaConstructionState<'a> {
-	nodes: Vec<SchemaType>,
-	names: HashMap<NameKey<'a>, usize>,
-	unresolved_names: Vec<NameKey<'a>>,
-}
-
 impl<'a> SchemaConstructionState<'a> {
 	fn register_node(
 		&mut self,
@@ -159,17 +132,22 @@ impl<'a> SchemaConstructionState<'a> {
 					}
 				};
 				return Ok(match self.names.get(&name_key) {
-					Some(&idx) => SchemaKey::reference(idx),
+					Some(&idx) => SchemaKey { idx },
 					None => {
 						let idx = self.unresolved_names.len();
 						self.unresolved_names.push(name_key);
-						SchemaKey::reference(idx | REMAP_BIT)
+						SchemaKey {
+							idx: idx | REMAP_BIT,
+						}
 					}
 				});
 			}
 		};
 		let idx = self.nodes.len();
-		self.nodes.push(SchemaType::Null); // Reserve the spot for us
+		self.nodes.push(SchemaNode {
+			type_: SchemaType::Null,
+			logical_type: None,
+		}); // Reserve the spot for us
 
 		// Register name->node idx to the name HashMap
 		let name_key = if let Some(
@@ -178,7 +156,7 @@ impl<'a> SchemaConstructionState<'a> {
 			},
 		) = object
 		{
-			let name = name.as_str();
+			let name: &str = &*name.0;
 			let name_key = if let Some((namespace, name)) = name.rsplit_once('.') {
 				NameKey {
 					namespace: Some(namespace),
@@ -186,7 +164,11 @@ impl<'a> SchemaConstructionState<'a> {
 				}
 			} else {
 				NameKey {
-					namespace: raw_schema.namespace.as_deref().or(enclosing_namespace),
+					namespace: raw_schema
+						.namespace
+						.as_ref()
+						.map(|c| &*c.0)
+						.or(enclosing_namespace),
 					name: &name,
 				}
 			};
@@ -236,7 +218,7 @@ impl<'a> SchemaConstructionState<'a> {
 
 					raw::Type::Enum => SchemaType::Enum(Enum {
 						name: name()?.0,
-						symbols: field!(symbols).to_owned(),
+						symbols: field!(symbols).iter().map(|e| (*e.0).to_owned()).collect(),
 					}),
 					raw::Type::Fixed => SchemaType::Fixed(Fixed {
 						name: name()?.0,
@@ -249,7 +231,7 @@ impl<'a> SchemaConstructionState<'a> {
 								.iter()
 								.map(|field| {
 									Ok(RecordField {
-										name: (*field.name).to_owned(),
+										name: (*field.name.0).to_owned(),
 										schema: self
 											.register_node(&field.type_, name_key.namespace)?,
 									})
@@ -270,8 +252,49 @@ impl<'a> SchemaConstructionState<'a> {
 			}
 		};
 
-		self.nodes[idx] = new_node; // Fill the spot we have previously reserved
-		Ok(SchemaKey::reference(idx))
+		self.nodes[idx] = SchemaNode {
+			type_: new_node,
+			logical_type: match object {
+				Some(raw::SchemaNodeObject {
+					logical_type: Some(logical_type),
+					..
+				}) => {
+					macro_rules! field {
+						($name: ident) => {
+							match object {
+								Some(raw::SchemaNodeObject { $name: Some(v), .. }) => *v,
+								_ => {
+									return Err(SchemaError::msg(format_args!(
+										concat!(
+											"Missing field `",
+											stringify!($name),
+											"` on logical type {:?}",
+										),
+										logical_type
+									)));
+								}
+							}
+						};
+					}
+					match *logical_type {
+						"decimal" => Some(LogicalType::Decimal(Decimal {
+							precision: field!(precision),
+							scale: field!(scale),
+						})),
+						"uuid" => Some(LogicalType::Uuid),
+						"date" => Some(LogicalType::Date),
+						"time-millis" => Some(LogicalType::TimeMillis),
+						"time-micros" => Some(LogicalType::TimeMicros),
+						"timestamp-millis" => Some(LogicalType::TimestampMillis),
+						"timestamp-micros" => Some(LogicalType::TimestampMicros),
+						"duration" => Some(LogicalType::Duration),
+						_ => None,
+					}
+				}
+				_ => None,
+			},
+		}; // Fill the spot we have previously reserved
+		Ok(SchemaKey { idx })
 	}
 }
 

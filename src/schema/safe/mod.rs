@@ -8,7 +8,7 @@ mod serialize;
 
 use super::{Fixed, Name, SchemaError};
 
-pub use {check_for_cycles::UnconditionalCycle, parsing::*};
+pub use check_for_cycles::UnconditionalCycle;
 
 /// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for
 /// its initialization
@@ -52,7 +52,6 @@ impl EditableSchema {
 #[derive(Copy, Clone, Debug)]
 pub struct SchemaKey {
 	pub(super) idx: usize,
-	pub(super) is_ref: bool,
 }
 
 impl SchemaKey {
@@ -61,18 +60,18 @@ impl SchemaKey {
 	// This will not be serialized as a reference, instead the full type will be
 	// serialized.
 	pub fn from_idx(idx: usize) -> Self {
-		Self { idx, is_ref: false }
+		Self { idx }
 	}
 	pub fn idx(self) -> usize {
 		self.idx
 	}
 }
-/*impl std::ops::Index<SchemaKey> for EditableSchema {
+impl std::ops::Index<SchemaKey> for EditableSchema {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
 		&self.nodes[key.idx]
 	}
-}*/
+}
 
 /// A node of an avro schema, stored in an [`EditableSchema`].
 ///
