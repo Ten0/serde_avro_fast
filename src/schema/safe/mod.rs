@@ -44,14 +44,25 @@ impl Schema {
 #[derive(Copy, Clone, Debug)]
 pub struct SchemaKey {
 	pub(super) idx: usize,
+	pub(super) is_ref: bool,
 }
 
 impl SchemaKey {
+	// Construct a new SchemaKey
+	//
+	// This will not be serialized as a reference, instead the full type will be
+	// serialized.
 	pub fn from_idx(idx: usize) -> Self {
-		Self { idx }
+		Self { idx, is_ref: false }
+	}
+	pub fn reference(idx: usize) -> Self {
+		Self { idx, is_ref: true }
 	}
 	pub fn idx(self) -> usize {
 		self.idx
+	}
+	pub fn is_ref(self) -> bool {
+		self.is_ref
 	}
 }
 impl std::ops::Index<SchemaKey> for Schema {

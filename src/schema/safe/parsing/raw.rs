@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 use serde::de::*;
 
-#[derive(serde_derive::Deserialize)]
+#[derive(serde_derive::Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "kebab-case")]
-pub enum Type<'a> {
+pub(super) enum Type {
 	Null,
 	Boolean,
 	Int,
@@ -13,23 +15,38 @@ pub enum Type<'a> {
 	String,
 	Array,
 	Map,
-	Union,
 	Record,
 	Enum,
 	Fixed,
-	Other(&'a str), // TODO this probably doesn't work
 }
 
-pub(super) struct SchemaNode<'a> {
-	pub(super) type_: &'a str,
+pub(super) enum SchemaNode<'a> {
+	TypeOnly(Type),
+	Ref(&'a str),
+	Object(SchemaNodeObject<'a>),
+	Union(Vec<SchemaNode<'a>>),
+}
+
+#[derive(serde_derive::Deserialize)]
+pub(super) struct SchemaNodeObject<'a> {
+	pub(super) type_: Type,
+	#[serde(skip_serializing)]
 	pub(super) logical_type: Option<&'a str>,
 	pub(super) name: Option<String>,
 	pub(super) namespace: Option<String>,
-	pub(super) fields: Option<String>,
-	pub(super) symbols: Option<String>,
-	pub(super) items: Option<String>,
-	pub(super) values: Option<String>,
-	pub(super) size: Option<String>,
+	pub(super) fields: Option<Vec<Field<'a>>>,
+	pub(super) symbols: Option<Vec<String>>,
+	pub(super) items: Option<Box<SchemaNode<'a>>>,
+	pub(super) values: Option<Box<SchemaNode<'a>>>,
+	pub(super) size: Option<usize>,
+}
+
+#[derive(serde_derive::Deserialize)]
+struct Field<'a> {
+	#[serde(borrow)]
+	pub(super) name: Cow<'a, str>,
+	#[serde(rename = "type")]
+	pub(super) type_: SchemaNode<'a>,
 }
 
 impl<'de> Deserialize<'de> for SchemaNode<'de> {

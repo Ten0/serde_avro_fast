@@ -14,7 +14,8 @@ use {
 /// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON
 /// `&str`
 #[derive(thiserror::Error, Debug)]
-pub enum ParseSchemaError {
+#[non_exhaustive]
+pub enum ParseSchemaErrorOld {
 	#[error("Invalid Schema JSON: {0}")]
 	Json(#[from] serde_json::Error),
 	#[error("The Schema contains an unknown reference: {}", .0.fully_qualified_name())]
@@ -29,27 +30,20 @@ pub enum ParseSchemaError {
 	UnconditionalCycle,
 }
 
-struct SchemaDeserializerState<'a> {
-	nodes: Vec<SchemaNode>,
-	names: HashMap<NameKey<'a>, usize>,
-	unresolved_names: Vec<NameKey<'a>>,
+#[derive(thiserror::Error, Debug)]
+#[error("Invalid Schema JSON: {inner}")]
+pub struct ParseSchemaError {
+	#[from]
+	inner: serde_json::Error,
 }
-
-struct SchemaDeserializerSeed<'a, 's> {
-	state: &'s mut SchemaDeserializerState<'a>,
-	enclosing_namespace: Option<&'a str>,
-}
-
-impl<'de, 's> de::DeserializeSeed<'de> for SchemaDeserializerSeed<'de, 's> {
-	type Value = SchemaKey;
-
-	fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		todo!()
+impl ParseSchemaError {
+	fn msg(msg: impl std::fmt::Display) -> Self {
+		Self {
+			inner: <serde_json::Error as de::Error>::custom(msg),
+		}
 	}
 }
+
 const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 
 impl std::str::FromStr for Schema {
@@ -61,197 +55,18 @@ impl std::str::FromStr for Schema {
 			unresolved_names: Vec::new(),
 		};
 
+		/*de::DeserializeSeed::deserialize(
+			SchemaDeserializerSeed {
+				state: &mut state,
+				enclosing_namespace: None,
+			},
+			&mut serde_json::Deserializer::from_str(s),
+		)
+		.map_err(|inner| ParseSchemaError { inner })?;*/
+
 		let raw_schema: raw::SchemaNode = serde_json::from_str(s)?;
 
-		let mut names: HashMap<Name, usize> = HashMap::new();
-		let mut nodes = Vec::new();
-
-		let mut unresolved_names: Vec<Name> = Vec::new();
-		raw_schema_node_to_node(
-			&mut nodes,
-			&mut names,
-			&mut unresolved_names,
-			&raw_schema,
-			None,
-		)?;
-		fn raw_schema_node_to_node<'a>(
-			nodes: &mut Vec<SchemaNode>,
-			names: &mut HashMap<NameKey, usize>,
-			unresolved_names: &mut Vec<NameKey>,
-			raw_schema: &'a raw::SchemaNode,
-			enclosing_namespace: Option<&str>,
-		) -> Result<SchemaKey, ParseSchemaError> {
-			let idx = nodes.len();
-			nodes.push(SchemaNode::Null); // Reserve the spot for us
-
-			// Register name->node idx to the name HashMap
-			let name = if let Some(name) = raw_schema.name.as_deref() {
-				let name_key = if let Some((namespace, name)) = name.rsplit_once('.') {
-					NameKey {
-						namespace: Some(namespace),
-						name,
-					}
-				} else {
-					NameKey {
-						namespace: raw_schema.namespace.as_deref().or(enclosing_namespace),
-						name: &name,
-					}
-				};
-				let name = match name_key.namespace {
-					None => Name {
-						fully_qualified_name: name_key.name.to_owned(),
-						namespace_delimiter_idx: None,
-					},
-					Some(namespace) => Name {
-						fully_qualified_name: format!("{}.{}", namespace, name_key.name),
-						namespace_delimiter_idx: Some(namespace.len()),
-					},
-				};
-				if let Some(_) = names.insert(name_key, idx) {
-					return Err(ParseSchemaError::DuplicateName(name));
-				}
-				Some(name)
-			} else {
-				None
-			};
-
-			let new_node = match raw_schema.type_ {
-				apache_avro::Schema::Ref { name } => {
-					nodes.pop().unwrap();
-					let idx = unresolved_names.len();
-					unresolved_names.push(name.fully_qualified_name(enclosing_namespace));
-					return Ok(SchemaKey {
-						idx: REMAP_BIT | idx,
-					});
-				}
-				apache_avro::Schema::Array(apache_schema) => {
-					SchemaNode::Array(raw_schema_node_to_node(
-						nodes,
-						names,
-						unresolved_names,
-						apache_schema,
-						enclosing_namespace,
-					)?)
-				}
-				apache_avro::Schema::Map(apache_schema) => {
-					SchemaNode::Map(raw_schema_node_to_node(
-						nodes,
-						names,
-						unresolved_names,
-						apache_schema,
-						enclosing_namespace,
-					)?)
-				}
-				apache_avro::Schema::Union(union_schemas) => SchemaNode::Union(Union {
-					variants: union_schemas
-						.variants()
-						.iter()
-						.map(|s| {
-							raw_schema_node_to_node(
-								nodes,
-								names,
-								unresolved_names,
-								s,
-								enclosing_namespace,
-							)
-						})
-						.collect::<Result<_, _>>()?,
-				}),
-				apache_avro::Schema::Enum { name, symbols, .. } => SchemaNode::Enum(Enum {
-					name: register_name(name)?,
-					symbols: symbols.clone(),
-				}),
-				apache_avro::Schema::Fixed { name, size, .. } => SchemaNode::Fixed(Fixed {
-					name: register_name(name)?,
-					size: *size,
-				}),
-				apache_avro::Schema::Record { name, fields, .. } => {
-					let namespace = match &name.namespace {
-						namespace @ Some(_) => namespace,
-						None => enclosing_namespace,
-					};
-					let name = register_name(name)?;
-					SchemaNode::Record(Record {
-						fields: fields
-							.iter()
-							.map(|field| {
-								Ok(RecordField {
-									name: field.name.clone(),
-									schema: raw_schema_node_to_node(
-										nodes,
-										names,
-										unresolved_names,
-										&field.schema,
-										namespace,
-									)?,
-								})
-							})
-							.collect::<Result<_, ParseSchemaError>>()?,
-						name,
-					})
-				}
-				apache_avro::Schema::Decimal {
-					precision,
-					scale,
-					inner,
-				} => SchemaNode::Decimal(Decimal {
-					precision: *precision,
-					scale: {
-						let scale_value = *scale;
-						scale_value
-							.try_into()
-							.map_err(|_| ParseSchemaError::DecimalScaleTooLarge { scale_value })?
-					},
-					repr: match &**inner {
-						apache_avro::Schema::Bytes => DecimalRepr::Bytes,
-						apache_avro::Schema::Fixed {
-							name,
-							aliases: _,
-							doc: _,
-							size,
-						} => DecimalRepr::Fixed(Fixed {
-							name: register_name(name)?,
-							size: *size,
-						}),
-						_ => return Err(ParseSchemaError::IncorrectDecimalRepr),
-					},
-				}),
-				apache_avro::Schema::Null => SchemaNode::Null,
-				apache_avro::Schema::Boolean => SchemaNode::Boolean,
-				apache_avro::Schema::Int => SchemaNode::Int,
-				apache_avro::Schema::Long => SchemaNode::Long,
-				apache_avro::Schema::Float => SchemaNode::Float,
-				apache_avro::Schema::Double => SchemaNode::Double,
-				apache_avro::Schema::Bytes => SchemaNode::Bytes,
-				apache_avro::Schema::String => SchemaNode::String,
-				apache_avro::Schema::Uuid => SchemaNode::Uuid,
-				apache_avro::Schema::Date => SchemaNode::Date,
-				apache_avro::Schema::TimeMillis => SchemaNode::TimeMillis,
-				apache_avro::Schema::TimeMicros => SchemaNode::TimeMicros,
-				apache_avro::Schema::TimestampMillis => SchemaNode::TimestampMillis,
-				apache_avro::Schema::TimestampMicros => SchemaNode::TimestampMicros,
-				apache_avro::Schema::Duration => SchemaNode::Duration,
-				reference => {
-					// Any other type is supposed to be the fullname of a
-					// previous named type. According to the spec the type
-					// definition should always be parsed before, but we support
-					// even if it's unordered because we're not in 1980 anymore.
-					let name_key = if let Some((namespace, name)) = reference.rsplit_once('.') {
-						NameKey {
-							namespace: Some(namespace),
-							name,
-						}
-					} else {
-						NameKey {
-							namespace: raw_schema.namespace.as_deref().or(enclosing_namespace),
-							name: &name,
-						}
-					};
-				}
-			};
-			nodes[idx] = new_node; // Fill the spot we have previously reserved
-			Ok(SchemaKey { idx })
-		}
+		state.register_node(&raw_schema, None)?;
 
 		let resolved_names: Vec<SchemaKey> = unresolved_names
 			.into_iter()
@@ -326,8 +141,208 @@ impl std::str::FromStr for Schema {
 	}
 }
 
-#[derive(PartialEq, Eq, Hash)]
+struct SchemaDeserializerState<'a> {
+	nodes: Vec<SchemaNode>,
+	names: HashMap<NameKey<'a>, usize>,
+	unresolved_names: Vec<NameKey<'a>>,
+}
+
+impl<'a> SchemaDeserializerState<'a> {
+	fn register_node(
+		&mut self,
+		raw_schema: &raw::SchemaNode<'a>,
+		enclosing_namespace: Option<&str>,
+	) -> Result<SchemaKey, ParseSchemaError> {
+		enum TypeOrUnion<'r, 'a> {
+			Type(raw::Type),
+			Union(&'r Vec<raw::SchemaNode<'a>>),
+		}
+		let (type_, object) = match *raw_schema {
+			raw::SchemaNode::TypeOnly(type_) => (TypeOrUnion::Type(type_), None),
+			raw::SchemaNode::Object(ref object) => (TypeOrUnion::Type(object.type_), Some(object)),
+			raw::SchemaNode::Union(ref union_schemas) => (TypeOrUnion::Union(union_schemas), None),
+			raw::SchemaNode::Ref(reference) => {
+				// This is supposed to be the fullname of a
+				// previous named type. According to the spec the type
+				// definition should always be parsed before, but we support
+				// even if it's unordered because we're not in 1980 anymore.
+				let name_key = if let Some((namespace, name)) = reference.rsplit_once('.') {
+					NameKey {
+						namespace: Some(namespace),
+						name,
+					}
+				} else {
+					NameKey {
+						namespace: None,
+						name: reference,
+					}
+				};
+				return Ok(match self.names.get(&name_key) {
+					Some(&idx) => SchemaKey::reference(idx),
+					None => {
+						let idx = self.unresolved_names.len();
+						self.unresolved_names.push(name_key);
+						SchemaKey::reference(idx | REMAP_BIT)
+					}
+				});
+			}
+		};
+		let idx = self.nodes.len();
+		self.nodes.push(SchemaNode::Null); // Reserve the spot for us
+
+		// Register name->node idx to the name HashMap
+		let name_key = if let Some(
+			raw_schema @ raw::SchemaNodeObject {
+				name: Some(name), ..
+			},
+		) = object
+		{
+			let name = name.as_str();
+			let name_key = if let Some((namespace, name)) = name.rsplit_once('.') {
+				NameKey {
+					namespace: Some(namespace),
+					name,
+				}
+			} else {
+				NameKey {
+					namespace: raw_schema.namespace.as_deref().or(enclosing_namespace),
+					name: &name,
+				}
+			};
+			if let Some(_) = self.names.insert(name_key, idx) {
+				return Err(ParseSchemaError::msg(format_args!(
+					"The Schema contains duplicate definitions for {}",
+					name_key.name().fully_qualified_name()
+				)));
+			}
+			Some(name_key)
+		} else {
+			None
+		};
+		let name = || match name_key {
+			None => Err(ParseSchemaError::msg("Missing name")),
+			Some(name_key) => Ok(name_key.name()),
+		};
+
+		let new_node = match type_ {
+			TypeOrUnion::Union(union_schemas) => SchemaNode::Union(Union {
+				variants: union_schemas
+					.iter()
+					.map(|schema| self.register_node(schema, enclosing_namespace))
+					.collect::<Result<_, _>>()?,
+			}),
+			TypeOrUnion::Type(type_) => {
+				macro_rules! field {
+					($name: ident) => {
+						match object {
+							Some(raw::SchemaNodeObject { $name: Some(v), .. }) => v,
+							_ => {
+								return Err(ParseSchemaError::msg(format_args!(
+									concat!("Missing field `", stringify!($name), "` on type {:?}",),
+									type_
+								)));
+							}
+						}
+					};
+				}
+				match type_ {
+					raw::Type::Array => {
+						SchemaNode::Array(self.register_node(field!(items), enclosing_namespace)?)
+					}
+					raw::Type::Map => {
+						SchemaNode::Map(self.register_node(field!(values), enclosing_namespace)?)
+					}
+
+					raw::Type::Enum => SchemaNode::Enum(Enum {
+						name: name()?,
+						symbols: field!(symbols).to_owned(),
+					}),
+					raw::Type::Fixed => SchemaNode::Fixed(Fixed {
+						name: name()?,
+						size: *field!(size),
+					}),
+					raw::Type::Record => {
+						let name = name()?;
+						SchemaNode::Record(Record {
+							fields: field!(fields)
+								.iter()
+								.map(|field| {
+									Ok(RecordField {
+										name: (*field.name).to_owned(),
+										schema: self
+											.register_node(&field.type_, name.namespace())?,
+									})
+								})
+								.collect::<Result<_, ParseSchemaError>>()?,
+							name,
+						})
+					}
+					raw::Type::Null => SchemaNode::Null,
+					raw::Type::Boolean => SchemaNode::Boolean,
+					raw::Type::Int => SchemaNode::Int,
+					raw::Type::Long => SchemaNode::Long,
+					raw::Type::Float => SchemaNode::Float,
+					raw::Type::Double => SchemaNode::Double,
+					raw::Type::Bytes => SchemaNode::Bytes,
+					raw::Type::String => SchemaNode::String,
+				}
+			}
+		};
+		self.nodes[idx] = new_node; // Fill the spot we have previously reserved
+		Ok(SchemaKey::reference(idx))
+	}
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 struct NameKey<'a> {
 	namespace: Option<&'a str>,
 	name: &'a str,
+}
+impl NameKey<'_> {
+	fn name(&self) -> Name {
+		match self.namespace {
+			None => Name {
+				fully_qualified_name: self.name.to_owned(),
+				namespace_delimiter_idx: None,
+			},
+			Some(namespace) => Name {
+				fully_qualified_name: format!("{}.{}", namespace, self.name),
+				namespace_delimiter_idx: Some(namespace.len()),
+			},
+		}
+	}
+}
+
+struct SchemaDeserializerSeed<'a, 's> {
+	state: &'s mut SchemaDeserializerState<'a>,
+	enclosing_namespace: Option<&'a str>,
+}
+
+impl<'de, 's> de::DeserializeSeed<'de> for SchemaDeserializerSeed<'de, 's> {
+	type Value = SchemaKey;
+
+	fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		deserializer.deserialize_any(self)
+	}
+}
+impl<'de, 's> de::Visitor<'de> for SchemaDeserializerSeed<'de, 's> {
+	type Value = ();
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "A string or an object with a `type` field")
+	}
+
+	fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+	where
+		A: de::MapAccess<'de>,
+	{
+		let raw_schema_node: RawSchemaNode =
+			de::Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))?;
+
+		let idx = self.state.nodes.len();
+		self.state.nodes.push(SchemaNode::Null); // Reserve the spot for us
+	}
 }
