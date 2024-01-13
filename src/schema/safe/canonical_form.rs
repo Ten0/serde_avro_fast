@@ -1,4 +1,4 @@
-use crate::schema::safe::{Schema, SchemaKey, SchemaNode};
+use crate::schema::safe::{self as s, Schema, SchemaKey, SchemaNode};
 
 impl Schema {
 	/// This function is not public because you shouldn't use that schema
@@ -59,7 +59,11 @@ fn write_canonical_form(
 			SchemaNode::Boolean => {
 				buf.push_str("\"boolean\"");
 			}
-			SchemaNode::Bytes => {
+			SchemaNode::Bytes
+			| SchemaNode::Decimal(s::Decimal {
+				repr: s::DecimalRepr::Bytes,
+				..
+			}) => {
 				buf.push_str("\"bytes\"");
 			}
 			SchemaNode::Double => {
@@ -116,7 +120,11 @@ fn write_canonical_form(
 				buf.push(']');
 				buf.push('}');
 			}
-			SchemaNode::Fixed(fixed) => {
+			SchemaNode::Fixed(fixed)
+			| SchemaNode::Decimal(s::Decimal {
+				repr: s::DecimalRepr::Fixed(fixed),
+				..
+			}) => {
 				buf.push_str("{\"name\":\"");
 				buf.push_str(fixed.name.fully_qualified_name());
 				buf.push_str("\",\"type\":\"fixed\",\"size\":");

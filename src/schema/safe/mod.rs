@@ -5,7 +5,7 @@ mod canonical_form;
 mod check_for_cycles;
 mod parsing;
 
-use super::{Decimal, Fixed, Name};
+use super::{Decimal, DecimalRepr, Fixed, Name};
 
 pub use {check_for_cycles::UnconditionalCycle, parsing::*};
 
