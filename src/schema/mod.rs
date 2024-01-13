@@ -51,7 +51,7 @@ pub enum DecimalRepr {
 }
 
 /// Schema component for named variants of a [`SchemaNode`]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Name {
 	fully_qualified_name: String,
 	namespace_delimiter_idx: Option<usize>,

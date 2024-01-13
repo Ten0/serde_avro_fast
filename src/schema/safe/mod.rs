@@ -22,7 +22,6 @@ pub struct Schema {
 	pub(super) nodes: Vec<SchemaNode>,
 	pub(super) fingerprint: [u8; 8],
 	pub(super) schema_json: String,
-	pub(super) parsing_canonical_form: String,
 }
 
 impl Schema {
@@ -31,13 +30,6 @@ impl Schema {
 	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
 	pub fn into_nodes(self) -> Vec<SchemaNode> {
 		self.nodes
-	}
-
-	/// Obtain the
-	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
-	/// of the schema
-	pub fn parsing_canonical_form(&self) -> &str {
-		&&self.parsing_canonical_form
 	}
 
 	/// Obtain the Rabin fingerprint of the schema
@@ -60,6 +52,12 @@ impl SchemaKey {
 	}
 	pub fn idx(self) -> usize {
 		self.idx
+	}
+}
+impl std::ops::Index<SchemaKey> for Schema {
+	type Output = SchemaNode;
+	fn index(&self, key: SchemaKey) -> &Self::Output {
+		&self.nodes[key.idx]
 	}
 }
 
