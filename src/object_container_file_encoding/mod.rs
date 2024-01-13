@@ -173,8 +173,10 @@ struct Metadata<S, M> {
 	#[serde(flatten)]
 	user_metadata: M,
 }
-const METADATA_SCHEMA: &crate::schema::SchemaNode =
-	&crate::schema::SchemaNode::Map(&crate::schema::SchemaNode::Bytes);
+const METADATA_SCHEMA: &crate::schema::self_referential::SchemaNode =
+	&crate::schema::self_referential::SchemaNode::Map(
+		&crate::schema::self_referential::SchemaNode::Bytes,
+	);
 
 #[test]
 fn compression_codec_serializes_properly() {

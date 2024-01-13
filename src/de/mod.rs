@@ -74,7 +74,7 @@ pub mod read;
 use read::*;
 pub use {deserializer::*, error::DeError};
 
-use crate::schema::{RecordField, Schema, SchemaNode, Union};
+use crate::schema::self_referential::*;
 
 use serde::de::*;
 
@@ -115,7 +115,7 @@ impl<'s> DeserializerConfig<'s> {
 	pub fn new(schema: &'s Schema) -> Self {
 		Self::from_schema_node(schema.root())
 	}
-	pub fn from_schema_node(schema_root: &'s SchemaNode<'s>) -> Self {
+	pub(crate) fn from_schema_node(schema_root: &'s SchemaNode<'s>) -> Self {
 		Self {
 			schema_root,
 			max_seq_size: 1_000_000_000,
@@ -129,7 +129,7 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 		Self::from_schema_node(r, schema.root())
 	}
 
-	pub fn from_schema_node(r: R, schema_root: &'s SchemaNode<'s>) -> Self {
+	pub(crate) fn from_schema_node(r: R, schema_root: &'s SchemaNode<'s>) -> Self {
 		Self::with_config(r, DeserializerConfig::from_schema_node(schema_root))
 	}
 

@@ -1,18 +1,19 @@
 //! Navigate, modify and initialize the [`Schema`]
 
+pub mod error;
 pub mod safe;
-mod self_referential;
+pub(crate) mod self_referential;
 mod union_variants_per_type_lookup;
 
-pub use {safe::ParseSchemaError, self_referential::*};
+pub use {error::SchemaError, safe::*, self_referential::Schema};
 
 pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 
 impl std::str::FromStr for Schema {
-	type Err = ParseSchemaError;
+	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let safe_schema: safe::Schema = s.parse()?;
-		Ok(safe_schema.into())
+		let safe_schema: safe::EditableSchema = s.parse()?;
+		safe_schema.try_into()
 	}
 }
 
@@ -21,19 +22,6 @@ impl std::str::FromStr for Schema {
 pub struct Fixed {
 	pub size: usize,
 	pub name: Name,
-}
-
-/// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
-pub struct Decimal {
-	pub precision: usize,
-	pub scale: u32,
-	pub repr: DecimalRepr,
-}
-#[derive(Clone, Debug)]
-pub enum DecimalRepr {
-	Bytes,
-	Fixed(Fixed),
 }
 
 /// Schema component for named variants of a [`SchemaNode`]

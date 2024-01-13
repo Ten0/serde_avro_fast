@@ -90,7 +90,7 @@ pub enum FailedToInitializeReader {
 	#[error("Failed to validate avro object container file header: {}", _0)]
 	FailedToDeserializeHeader(DeError),
 	#[error("Failed to parse schema in avro object container file: {}", _0)]
-	FailedToParseSchema(schema::ParseSchemaError),
+	FailedToParseSchema(schema::SchemaError),
 }
 
 impl<'a> Reader<de::read::SliceRead<'a>> {
@@ -178,10 +178,11 @@ where
 		// This is useful to be able to store a DeserializerState directly in here,
 		// which will avoid additional &mut levels, allowing for highest performance and
 		// ergonomics
-		let schema_root: &'static schema::SchemaNode<'static> = unsafe {
+		let schema_root: &'static schema::self_referential::SchemaNode<'static> = unsafe {
 			let schema = &*(&*schema as *const Schema);
-			let a: *const schema::SchemaNode<'_> = schema.root() as *const schema::SchemaNode<'_>;
-			let b: *const schema::SchemaNode<'static> = a as *const _;
+			let a: *const schema::self_referential::SchemaNode<'_> =
+				schema.root() as *const schema::self_referential::SchemaNode<'_>;
+			let b: *const schema::self_referential::SchemaNode<'static> = a as *const _;
 			&*b
 		};
 

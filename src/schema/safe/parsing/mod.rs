@@ -1,49 +1,29 @@
 mod raw;
 
 use crate::schema::{
-	safe::{Enum, Record, RecordField, Schema, SchemaKey, SchemaNode, UnconditionalCycle, Union},
-	Decimal, DecimalRepr, Fixed, Name,
+	safe::{
+		EditableSchema, Enum, Record, RecordField, SchemaKey, SchemaType, UnconditionalCycle, Union,
+	},
+	Decimal, DecimalRepr, Fixed, Name, SchemaError,
 };
 
-use {serde::de, std::collections::HashMap};
+use std::collections::HashMap;
 
 /// Any error that may happen when [`parse`](str::parse)ing a schema from a JSON
 /// `&str`
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum ParseSchemaErrorOld {
-	#[error("Invalid Schema JSON: {0}")]
-	Json(#[from] serde_json::Error),
-	#[error("The Schema contains an unknown reference: {}", .0.fully_qualified_name())]
-	InvalidReference(Name),
-	#[error("The Schema contains duplicate definitions for {}", .0.fully_qualified_name())]
-	DuplicateName(Name),
 	#[error("The Schema contains a Decimal whose representation is neither Bytes nor Fixed")]
 	IncorrectDecimalRepr,
 	#[error("The Schema contains an unreasonably large `scale` for a Decimal")]
 	DecimalScaleTooLarge { scale_value: usize },
-	#[error("The schema contains a record that ends up always containing itself")]
-	UnconditionalCycle,
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error("Invalid Schema JSON: {inner}")]
-pub struct ParseSchemaError {
-	#[from]
-	inner: serde_json::Error,
-}
-impl ParseSchemaError {
-	fn msg(msg: impl std::fmt::Display) -> Self {
-		Self {
-			inner: <serde_json::Error as de::Error>::custom(msg),
-		}
-	}
 }
 
 const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 
-impl std::str::FromStr for Schema {
-	type Err = ParseSchemaError;
+impl std::str::FromStr for EditableSchema {
+	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let mut state = SchemaConstructionState {
 			nodes: Vec::new(),
@@ -51,7 +31,8 @@ impl std::str::FromStr for Schema {
 			unresolved_names: Vec::new(),
 		};
 
-		let raw_schema: raw::SchemaNode = serde_json::from_str(s)?;
+		let raw_schema: raw::SchemaNode =
+			serde_json::from_str(s).map_err(SchemaError::serde_json)?;
 
 		state.register_node(&raw_schema, None)?;
 
@@ -63,7 +44,7 @@ impl std::str::FromStr for Schema {
 					state
 						.names
 						.get(&name)
-						.ok_or(ParseSchemaError::msg(format_args!(
+						.ok_or(SchemaError::msg(format_args!(
 							"The Schema contains an unknown reference: {}",
 							name,
 						)))
@@ -77,37 +58,37 @@ impl std::str::FromStr for Schema {
 			};
 			for schema_node in &mut state.nodes {
 				match schema_node {
-					SchemaNode::Array(key) | SchemaNode::Map(key) => fix_key(key),
-					SchemaNode::Union(union) => union.variants.iter_mut().for_each(fix_key),
-					SchemaNode::Record(record) => record
+					SchemaType::Array(key) | SchemaType::Map(key) => fix_key(key),
+					SchemaType::Union(union) => union.variants.iter_mut().for_each(fix_key),
+					SchemaType::Record(record) => record
 						.fields
 						.iter_mut()
 						.for_each(|f| fix_key(&mut f.schema)),
-					SchemaNode::Decimal(Decimal {
+					SchemaType::Decimal(Decimal {
 						repr: DecimalRepr::Bytes | DecimalRepr::Fixed(Fixed { size: _, name: _ }),
 						precision: _,
 						scale: _,
 					})
-					| SchemaNode::Null
-					| SchemaNode::Boolean
-					| SchemaNode::Int
-					| SchemaNode::Long
-					| SchemaNode::Float
-					| SchemaNode::Double
-					| SchemaNode::Bytes
-					| SchemaNode::String
-					| SchemaNode::Enum(Enum {
+					| SchemaType::Null
+					| SchemaType::Boolean
+					| SchemaType::Int
+					| SchemaType::Long
+					| SchemaType::Float
+					| SchemaType::Double
+					| SchemaType::Bytes
+					| SchemaType::String
+					| SchemaType::Enum(Enum {
 						symbols: _,
 						name: _,
 					})
-					| SchemaNode::Fixed(Fixed { size: _, name: _ })
-					| SchemaNode::Uuid
-					| SchemaNode::Date
-					| SchemaNode::TimeMillis
-					| SchemaNode::TimeMicros
-					| SchemaNode::TimestampMillis
-					| SchemaNode::TimestampMicros
-					| SchemaNode::Duration => {}
+					| SchemaType::Fixed(Fixed { size: _, name: _ })
+					| SchemaType::Uuid
+					| SchemaType::Date
+					| SchemaType::TimeMillis
+					| SchemaType::TimeMicros
+					| SchemaType::TimestampMillis
+					| SchemaType::TimestampMicros
+					| SchemaType::Duration => {}
 				}
 			}
 		}
@@ -121,17 +102,20 @@ impl std::str::FromStr for Schema {
 					serde_transcode::transcode(
 						&mut serde_json::Deserializer::from_str(s),
 						&mut serializer,
-					)?;
+					)
+					.map_err(SchemaError::serde_json)?;
 					serializer.into_inner()
 				})
-				.expect("serde_json should not emit invalid UTF-8"),
+				.map_err(|e| {
+					SchemaError::msg(format_args!(
+						"serde_json should not emit invalid UTF-8 but got {e}"
+					))
+				})?,
 			),
 		};
 
 		schema.check_for_cycles().map_err(|_: UnconditionalCycle| {
-			ParseSchemaError::msg(
-				"The schema contains a record that ends up always containing itself",
-			)
+			SchemaError::msg("The schema contains a record that ends up always containing itself")
 		})?;
 
 		Ok(schema)
@@ -139,7 +123,7 @@ impl std::str::FromStr for Schema {
 }
 
 struct SchemaConstructionState<'a> {
-	nodes: Vec<SchemaNode>,
+	nodes: Vec<SchemaType>,
 	names: HashMap<NameKey<'a>, usize>,
 	unresolved_names: Vec<NameKey<'a>>,
 }
@@ -149,7 +133,7 @@ impl<'a> SchemaConstructionState<'a> {
 		&mut self,
 		raw_schema: &'a raw::SchemaNode<'a>,
 		enclosing_namespace: Option<&'a str>,
-	) -> Result<SchemaKey, ParseSchemaError> {
+	) -> Result<SchemaKey, SchemaError> {
 		enum TypeOrUnion<'r, 'a> {
 			Type(raw::Type),
 			Union(&'r Vec<raw::SchemaNode<'a>>),
@@ -185,7 +169,7 @@ impl<'a> SchemaConstructionState<'a> {
 			}
 		};
 		let idx = self.nodes.len();
-		self.nodes.push(SchemaNode::Null); // Reserve the spot for us
+		self.nodes.push(SchemaType::Null); // Reserve the spot for us
 
 		// Register name->node idx to the name HashMap
 		let name_key = if let Some(
@@ -207,7 +191,7 @@ impl<'a> SchemaConstructionState<'a> {
 				}
 			};
 			if let Some(_) = self.names.insert(name_key, idx) {
-				return Err(ParseSchemaError::msg(format_args!(
+				return Err(SchemaError::msg(format_args!(
 					"The Schema contains duplicate definitions for {}",
 					name_key
 				)));
@@ -217,12 +201,12 @@ impl<'a> SchemaConstructionState<'a> {
 			None
 		};
 		let name = || match name_key {
-			None => Err(ParseSchemaError::msg("Missing name")),
+			None => Err(SchemaError::msg("Missing name")),
 			Some(name_key) => Ok((name_key.name(), name_key)),
 		};
 
 		let new_node = match type_ {
-			TypeOrUnion::Union(union_schemas) => SchemaNode::Union(Union {
+			TypeOrUnion::Union(union_schemas) => SchemaType::Union(Union {
 				variants: union_schemas
 					.iter()
 					.map(|schema| self.register_node(schema, enclosing_namespace))
@@ -234,7 +218,7 @@ impl<'a> SchemaConstructionState<'a> {
 						match object {
 							Some(raw::SchemaNodeObject { $name: Some(v), .. }) => v,
 							_ => {
-								return Err(ParseSchemaError::msg(format_args!(
+								return Err(SchemaError::msg(format_args!(
 									concat!("Missing field `", stringify!($name), "` on type {:?}",),
 									type_
 								)));
@@ -244,23 +228,23 @@ impl<'a> SchemaConstructionState<'a> {
 				}
 				match type_ {
 					raw::Type::Array => {
-						SchemaNode::Array(self.register_node(field!(items), enclosing_namespace)?)
+						SchemaType::Array(self.register_node(field!(items), enclosing_namespace)?)
 					}
 					raw::Type::Map => {
-						SchemaNode::Map(self.register_node(field!(values), enclosing_namespace)?)
+						SchemaType::Map(self.register_node(field!(values), enclosing_namespace)?)
 					}
 
-					raw::Type::Enum => SchemaNode::Enum(Enum {
+					raw::Type::Enum => SchemaType::Enum(Enum {
 						name: name()?.0,
 						symbols: field!(symbols).to_owned(),
 					}),
-					raw::Type::Fixed => SchemaNode::Fixed(Fixed {
+					raw::Type::Fixed => SchemaType::Fixed(Fixed {
 						name: name()?.0,
 						size: *field!(size),
 					}),
 					raw::Type::Record => {
 						let (name, name_key) = name()?;
-						SchemaNode::Record(Record {
+						SchemaType::Record(Record {
 							fields: field!(fields)
 								.iter()
 								.map(|field| {
@@ -270,18 +254,18 @@ impl<'a> SchemaConstructionState<'a> {
 											.register_node(&field.type_, name_key.namespace)?,
 									})
 								})
-								.collect::<Result<_, ParseSchemaError>>()?,
+								.collect::<Result<_, SchemaError>>()?,
 							name,
 						})
 					}
-					raw::Type::Null => SchemaNode::Null,
-					raw::Type::Boolean => SchemaNode::Boolean,
-					raw::Type::Int => SchemaNode::Int,
-					raw::Type::Long => SchemaNode::Long,
-					raw::Type::Float => SchemaNode::Float,
-					raw::Type::Double => SchemaNode::Double,
-					raw::Type::Bytes => SchemaNode::Bytes,
-					raw::Type::String => SchemaNode::String,
+					raw::Type::Null => SchemaType::Null,
+					raw::Type::Boolean => SchemaType::Boolean,
+					raw::Type::Int => SchemaType::Int,
+					raw::Type::Long => SchemaType::Long,
+					raw::Type::Float => SchemaType::Float,
+					raw::Type::Double => SchemaType::Double,
+					raw::Type::Bytes => SchemaType::Bytes,
+					raw::Type::String => SchemaType::String,
 				}
 			}
 		};

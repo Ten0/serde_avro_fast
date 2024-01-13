@@ -1,19 +1,26 @@
-use crate::schema::safe::{self as s, Schema, SchemaKey, SchemaNode};
+use crate::schema::{
+	safe::{self as s, EditableSchema, SchemaKey, SchemaType},
+	SchemaError,
+};
 
-impl Schema {
+impl EditableSchema {
+	/// Obtain the
+	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
+	/// of the schema
+	///
 	/// This function is not public because you shouldn't use that schema
 	/// when transmitting the schema to other people, notably because it loses
 	/// the logical types information, and additionally because it may not be
 	/// valid JSON (there's no escaping in the json generation...)
 	/// See https://issues.apache.org/jira/browse/AVRO-1721
-	pub(crate) fn parsing_canonical_form(&self) -> Result<String, FingerprintingError> {
+	pub(crate) fn parsing_canonical_form(&self) -> Result<String, SchemaError> {
 		let mut buf = String::new();
 		write_canonical_form(self, SchemaKey::from_idx(0), &mut buf)?;
 		Ok(buf)
 	}
 
 	/// Obtain the Rabin fingerprint of the schema
-	pub fn canonical_form_rabin_fingerprint(&self) -> Result<[u8; 8], FingerprintingError> {
+	pub fn canonical_form_rabin_fingerprint(&self) -> Result<[u8; 8], SchemaError> {
 		// TODO replace with a local implementation
 		Ok(<apache_avro::rabin::Rabin as digest::Digest>::digest(
 			self.parsing_canonical_form()?.as_bytes(),
@@ -26,26 +33,26 @@ impl Schema {
 /// implementation in Java. According to the java code, this is not guaranteed
 /// to actually be valid JSON (no escaping...)
 fn write_canonical_form(
-	schema: &Schema,
+	schema: &EditableSchema,
 	key: SchemaKey,
 	buf: &mut String,
-) -> Result<(), FingerprintingError> {
+) -> Result<(), SchemaError> {
 	use std::fmt::Write;
 
 	let mut first_time = true;
 	let node = schema
 		.nodes
 		.get(key.idx)
-		.ok_or_else(|| format!("SchemaKey refers to non-existing node"))?;
+		.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
 	if key.is_ref {
 		let name = match node {
-			SchemaNode::Enum(enum_) => &enum_.name,
-			SchemaNode::Fixed(fixed) => &fixed.name,
-			SchemaNode::Record(record) => &record.name,
+			SchemaType::Enum(enum_) => &enum_.name,
+			SchemaType::Fixed(fixed) => &fixed.name,
+			SchemaType::Record(record) => &record.name,
 			_ => {
-				return Err("SchemaKey::reference refers to non-named node"
-					.to_owned()
-					.into())
+				return Err(SchemaError::new(
+					"SchemaKey::reference refers to non-named node",
+				))
 			}
 		};
 		buf.push('"');
@@ -53,35 +60,35 @@ fn write_canonical_form(
 		buf.push('"');
 	} else {
 		match *node {
-			SchemaNode::Null => {
+			SchemaType::Null => {
 				buf.push_str("\"null\"");
 			}
-			SchemaNode::Boolean => {
+			SchemaType::Boolean => {
 				buf.push_str("\"boolean\"");
 			}
-			SchemaNode::Bytes
-			| SchemaNode::Decimal(s::Decimal {
+			SchemaType::Bytes
+			| SchemaType::Decimal(s::Decimal {
 				repr: s::DecimalRepr::Bytes,
 				..
 			}) => {
 				buf.push_str("\"bytes\"");
 			}
-			SchemaNode::Double => {
+			SchemaType::Double => {
 				buf.push_str("\"double\"");
 			}
-			SchemaNode::Float => {
+			SchemaType::Float => {
 				buf.push_str("\"float\"");
 			}
-			SchemaNode::Int => {
+			SchemaType::Int => {
 				buf.push_str("\"int\"");
 			}
-			SchemaNode::Long => {
+			SchemaType::Long => {
 				buf.push_str("\"long\"");
 			}
-			SchemaNode::String => {
+			SchemaType::String => {
 				buf.push_str("\"string\"");
 			}
-			SchemaNode::Union(ref union) => {
+			SchemaType::Union(ref union) => {
 				buf.push('[');
 				for variant in union.variants {
 					if !first_time {
@@ -93,17 +100,17 @@ fn write_canonical_form(
 				}
 				buf.push(']');
 			}
-			SchemaNode::Array(array_items) => {
+			SchemaType::Array(array_items) => {
 				buf.push_str("{\"type\":\"array\",\"items\":");
 				write_canonical_form(schema, array_items, buf);
 				buf.push('}');
 			}
-			SchemaNode::Map(map_values) => {
+			SchemaType::Map(map_values) => {
 				buf.push_str("{\"type\":\"map\",\"values\":");
 				write_canonical_form(schema, map_values, buf);
 				buf.push('}');
 			}
-			SchemaNode::Enum(enum_) => {
+			SchemaType::Enum(enum_) => {
 				buf.push_str("{\"name\":\"");
 				buf.push_str(enum_.name.fully_qualified_name());
 				buf.push_str("\",\"type\":\"enum\",\"symbols\":[");
@@ -120,8 +127,8 @@ fn write_canonical_form(
 				buf.push(']');
 				buf.push('}');
 			}
-			SchemaNode::Fixed(fixed)
-			| SchemaNode::Decimal(s::Decimal {
+			SchemaType::Fixed(fixed)
+			| SchemaType::Decimal(s::Decimal {
 				repr: s::DecimalRepr::Fixed(fixed),
 				..
 			}) => {
@@ -131,7 +138,7 @@ fn write_canonical_form(
 				write!(buf, "{}", fixed.size).unwrap();
 				buf.push('}');
 			}
-			SchemaNode::Record(record) => {
+			SchemaType::Record(record) => {
 				buf.push_str("{\"name\":\"");
 				buf.push_str(record.name.fully_qualified_name());
 				buf.push_str("\",\"type\":\"record\",\"fields\":[");
@@ -152,22 +159,4 @@ fn write_canonical_form(
 		}
 	}
 	Ok(())
-}
-
-#[derive(thiserror::Error)]
-#[error("Fingerprinting error: {inner}")]
-pub(crate) struct FingerprintingError {
-	inner: String,
-}
-impl<T: Into<String>> From<T> for FingerprintingError {
-	fn from(inner: T) -> Self {
-		Self {
-			inner: inner.into(),
-		}
-	}
-}
-impl std::fmt::Debug for FingerprintingError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self, f)
-	}
 }

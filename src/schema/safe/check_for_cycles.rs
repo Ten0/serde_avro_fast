@@ -1,6 +1,6 @@
-use super::{Schema, SchemaNode};
+use super::{EditableSchema, SchemaType};
 
-impl Schema {
+impl EditableSchema {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
 	///
 	/// This is called by the parsing functions already, so this may only be
@@ -21,7 +21,7 @@ impl Schema {
 		let mut visited_nodes = vec![false; self.nodes.len()];
 		let mut checked_nodes = vec![false; self.nodes.len()];
 		for (idx, node) in self.nodes.iter().enumerate() {
-			if matches!(node, SchemaNode::Record(_)) && !checked_nodes[idx] {
+			if matches!(node, SchemaType::Record(_)) && !checked_nodes[idx] {
 				check_no_zero_sized_cycle_inner(self, idx, &mut visited_nodes, &mut checked_nodes)?;
 			}
 		}
@@ -39,17 +39,17 @@ pub struct UnconditionalCycle {
 	_private: (),
 }
 fn check_no_zero_sized_cycle_inner(
-	schema: &Schema,
+	schema: &EditableSchema,
 	node_idx: usize,
 	visited_nodes: &mut Vec<bool>,
 	checked_nodes: &mut Vec<bool>,
 ) -> Result<(), UnconditionalCycle> {
 	visited_nodes[node_idx] = true;
 	for field in match &schema.nodes[node_idx] {
-		SchemaNode::Record(record) => &record.fields,
+		SchemaType::Record(record) => &record.fields,
 		_ => unreachable!(),
 	} {
-		if let SchemaNode::Record(_) = &schema.nodes[field.schema.idx] {
+		if let SchemaType::Record(_) = &schema.nodes[field.schema.idx] {
 			if visited_nodes[field.schema.idx] {
 				return Err(UnconditionalCycle { _private: () });
 			} else {

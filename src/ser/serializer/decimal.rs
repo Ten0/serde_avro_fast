@@ -1,5 +1,3 @@
-use crate::schema::Decimal;
-
 use super::*;
 
 pub(super) fn serialize<'r, 'c, 's, W>(
