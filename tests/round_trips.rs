@@ -253,8 +253,9 @@ fn test_decimal() {
 		*editable_schema.root(),
 		SchemaNode::LogicalType {
 			logical_type: LogicalType::Decimal(Decimal {
-				precision: 4,
 				scale: 1,
+				precision: 4,
+				..
 			}),
 			inner
 		} if matches!(editable_schema[inner], SchemaNode::RegularType(SchemaType::Bytes))

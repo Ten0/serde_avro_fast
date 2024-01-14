@@ -22,6 +22,16 @@ impl std::str::FromStr for Schema {
 pub struct Fixed {
 	pub size: usize,
 	pub name: Name,
+	pub(crate) _private: (),
+}
+impl Fixed {
+	pub fn new(name: Name, size: usize) -> Self {
+		Self {
+			size,
+			name,
+			_private: (),
+		}
+	}
 }
 
 /// Schema component for named nodes of a [`SchemaMut`]

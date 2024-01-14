@@ -202,6 +202,15 @@ pub enum SchemaType {
 #[derive(Clone, Debug)]
 pub struct Union {
 	pub variants: Vec<SchemaKey>,
+	pub(crate) _private: (),
+}
+impl Union {
+	pub fn new(variants: Vec<SchemaKey>) -> Self {
+		Self {
+			variants,
+			_private: (),
+		}
+	}
 }
 
 /// Component of a [`SchemaMut`]
@@ -209,6 +218,16 @@ pub struct Union {
 pub struct Record {
 	pub fields: Vec<RecordField>,
 	pub name: Name,
+	pub(crate) _private: (),
+}
+impl Record {
+	pub fn new(name: Name, fields: Vec<RecordField>) -> Self {
+		Self {
+			fields,
+			name,
+			_private: (),
+		}
+	}
 }
 
 /// Component of a [`SchemaMut`]
@@ -216,6 +235,16 @@ pub struct Record {
 pub struct RecordField {
 	pub name: String,
 	pub schema: SchemaKey,
+	pub(crate) _private: (),
+}
+impl RecordField {
+	pub fn new(name: String, schema: SchemaKey) -> Self {
+		Self {
+			name,
+			schema,
+			_private: (),
+		}
+	}
 }
 
 /// Component of a [`SchemaMut`]
@@ -223,6 +252,16 @@ pub struct RecordField {
 pub struct Enum {
 	pub symbols: Vec<String>,
 	pub name: Name,
+	pub(crate) _private: (),
+}
+impl Enum {
+	pub fn new(name: Name, symbols: Vec<String>) -> Self {
+		Self {
+			symbols,
+			name,
+			_private: (),
+		}
+	}
 }
 
 /// Logical type
@@ -287,8 +326,18 @@ pub enum LogicalType {
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Decimal {
-	pub precision: usize,
 	pub scale: u32,
+	pub precision: usize,
+	pub(crate) _private: (),
+}
+impl Decimal {
+	pub fn new(scale: u32, precision: usize) -> Self {
+		Self {
+			precision,
+			scale,
+			_private: (),
+		}
+	}
 }
 
 impl LogicalType {

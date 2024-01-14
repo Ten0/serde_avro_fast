@@ -67,8 +67,13 @@ impl std::str::FromStr for SchemaMut {
 						| SchemaType::Enum(Enum {
 							symbols: _,
 							name: _,
+							_private: (),
 						})
-						| SchemaType::Fixed(Fixed { size: _, name: _ }) => {}
+						| SchemaType::Fixed(Fixed {
+							size: _,
+							name: _,
+							_private: (),
+						}) => {}
 					},
 					SchemaNode::LogicalType {
 						inner: _,
@@ -212,11 +217,13 @@ impl<'a> SchemaConstructionState<'a> {
 									.iter()
 									.map(|e| (*e.0).to_owned())
 									.collect(),
+								_private: (),
 							}),
 							raw::SchemaNode::Type(t @ raw::Type::Fixed) => {
 								SchemaType::Fixed(Fixed {
 									name: name(t)?.0,
 									size: *field!(t size),
+									_private: (),
 								})
 							}
 							raw::SchemaNode::Type(t @ raw::Type::Record) => {
@@ -232,10 +239,12 @@ impl<'a> SchemaConstructionState<'a> {
 													name_key.namespace,
 													None,
 												)?,
+												_private: (),
 											})
 										})
 										.collect::<Result<_, SchemaError>>()?,
 									name,
+									_private: (),
 								})
 							}
 							ref inner_type @ (raw::SchemaNode::Type(
@@ -324,6 +333,7 @@ impl<'a> SchemaConstructionState<'a> {
 										"decimal" => LogicalType::Decimal(Decimal {
 											precision: field!(precision),
 											scale: field!(scale),
+											_private: (),
 										}),
 										"uuid" => LogicalType::Uuid,
 										"date" => LogicalType::Date,
@@ -355,6 +365,7 @@ impl<'a> SchemaConstructionState<'a> {
 						.iter()
 						.map(|schema| self.register_node(schema, enclosing_namespace, None))
 						.collect::<Result<_, _>>()?,
+					_private: (),
 				}));
 				self.nodes[idx] = new_node;
 				SchemaKey { idx }
