@@ -6,7 +6,7 @@ use {
 	lazy_static::lazy_static,
 	pretty_assertions::assert_eq,
 	rand::prelude::*,
-	serde_avro_fast::ser::SerializerConfig,
+	serde_avro_fast::{schema::SchemaMut, ser::SerializerConfig},
 };
 
 lazy_static! {
@@ -97,7 +97,7 @@ fn test_round_trip_apache_fast<T: serde::de::DeserializeOwned + serde::Serialize
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
 	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
@@ -109,18 +109,15 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
 
 	let mut encoded = Vec::new();
-	match (serde_json::to_value(&json_for_value), &fast_schema.root()) {
-		(
-			Ok(serde_json::Value::Object(obj)),
-			serde_avro_fast::schema::SchemaNode::Record { .. },
-		) => {
+	match (serde_json::to_value(&json_for_value), &schema) {
+		(Ok(serde_json::Value::Object(obj)), Schema::Record { .. }) => {
 			// Test that it works with random ordering
 			let mut keys: Vec<(_, _)> = obj.into_iter().collect();
 			let mut prev = None;
@@ -150,12 +147,33 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	assert_eq!(*value, decoded);
 }
 
+fn test_schema_fingerprint_and_parse_round_trip<T>(&(raw_schema, _): &(&str, Value)) {
+	let schema = Schema::parse_str(raw_schema).unwrap();
+	let apache_finterprint = schema.fingerprint::<apache_avro::rabin::Rabin>().bytes;
+	let mut fast_schema: SchemaMut = raw_schema.parse().unwrap();
+	let fast_fingerprint = fast_schema.canonical_form_rabin_fingerprint().unwrap();
+	assert_eq!(apache_finterprint, fast_fingerprint);
+
+	fast_schema.nodes_mut(); // Forget original json
+	let serialized_schema = serde_json::to_string(&fast_schema).unwrap();
+	let fast_schema_2: SchemaMut = serialized_schema.parse().unwrap();
+	let serialized_schema_2 = serde_json::to_string(&fast_schema_2).unwrap();
+	assert_eq!(serialized_schema, serialized_schema_2);
+	assert_eq!(
+		fast_schema_2.canonical_form_rabin_fingerprint().unwrap(),
+		fast_fingerprint
+	);
+
+	let apache_from_serialized = Schema::parse_str(&serialized_schema).unwrap();
+	assert_eq!(apache_from_serialized, schema);
+}
+
 fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	&(raw_schema, ref value): &(&str, Value),
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
@@ -205,6 +223,13 @@ macro_rules! tests {
 						test_round_trip_fast_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
+
+				$(
+					#[test]
+					fn [<test_schema_fingerprint_and_parse_round_trip_ $name $idx>]() {
+						test_schema_fingerprint_and_parse_round_trip::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+					}
+				)*
 			)*
 		}
 
@@ -231,21 +256,25 @@ enum AB {
 
 #[test]
 fn test_decimal() {
-	let schema: serde_avro_fast::Schema =
+	use serde_avro_fast::schema::*;
+	let editable_schema: SchemaMut =
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();
-	let serializer_config = &mut SerializerConfig::new(&schema);
-	use serde_avro_fast::schema::{DecimalRepr, SchemaNode};
-	dbg!(schema.root());
+	dbg!(editable_schema.root());
 	assert!(matches!(
-		schema.root(),
-		SchemaNode::Decimal(serde_avro_fast::schema::Decimal {
-			precision: 4,
-			scale: 1,
-			repr: DecimalRepr::Bytes
-		})
+		*editable_schema.root(),
+		SchemaNode::LogicalType {
+			logical_type: LogicalType::Decimal(Decimal {
+				scale: 1,
+				precision: 4,
+				..
+			}),
+			inner
+		} if matches!(editable_schema[inner], SchemaNode::RegularType(SchemaType::Bytes))
 	));
+	let schema = editable_schema.try_into().unwrap();
+	let serializer_config = &mut SerializerConfig::new(&schema);
 
 	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
@@ -276,10 +305,10 @@ fn test_decimal() {
 
 #[test]
 fn test_bytes_with_serde_json_value() {
-	let (schema, value) = &SCHEMAS_TO_VALIDATE[3];
-	let schema = Schema::parse_str(schema).unwrap();
+	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[3];
+	let schema = Schema::parse_str(raw_schema).unwrap();
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
 		Value::Bytes(b) => b.into_iter().map(|b| *b as u64).collect(),
@@ -297,10 +326,10 @@ fn test_bytes_with_serde_json_value() {
 
 #[test]
 fn test_fixed_with_serde_json_value() {
-	let (schema, value) = &SCHEMAS_TO_VALIDATE[8];
-	let schema = Schema::parse_str(schema).unwrap();
+	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[8];
+	let schema = Schema::parse_str(raw_schema).unwrap();
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
 		Value::Fixed(_, b) => b.into_iter().map(|b| *b as u64).collect(),

@@ -1,5 +1,3 @@
-use crate::schema::Record;
-
 use super::*;
 
 pub struct SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {

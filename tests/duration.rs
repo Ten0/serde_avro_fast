@@ -42,11 +42,10 @@ impl std::fmt::Debug for Duration {
 
 #[test]
 fn decimal() {
-	let apache_schema = apache_avro::Schema::parse_str(
-		r#"{"type":{"name":"duration","type":"fixed","size":12},"logicalType":"duration"}"#,
-	)
-	.unwrap();
-	let schema: Schema = Schema::from_apache_schema(&apache_schema).unwrap();
+	let raw_schema =
+		r#"{"type":{"name":"duration","type":"fixed","size":12},"logicalType":"duration"}"#;
+	let apache_schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
+	let schema: Schema = raw_schema.parse().unwrap();
 
 	test(
 		&(1..13).collect::<Vec<u8>>(),

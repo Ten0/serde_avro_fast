@@ -7,7 +7,7 @@
 
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
-use super::*;
+use super::self_referential::*;
 
 /// Indexes for union variants that can be obtained directly from the type
 ///

@@ -1,21 +1,23 @@
 use super::{
-	safe::SchemaNode as SafeSchemaNode,
-	union_variants_per_type_lookup::PerTypeLookup as UnionVariantsPerTypeLookup, Decimal, Fixed,
-	Name,
+	safe::{LogicalType, SchemaNode as SafeSchemaNode, SchemaType as SafeSchemaType},
+	union_variants_per_type_lookup::PerTypeLookup as UnionVariantsPerTypeLookup,
+	SchemaError,
 };
 
 use std::collections::HashMap;
 
-/// The most performant and easiest to navigate version of an Avro schema
+pub(crate) use super::{Fixed, Name};
+
+/// Main Schema type, opaque representation of an Avro schema
 ///
-/// Navigated through [`SchemaNode`] via [`.root`](Schema::root).
+/// This is the fully pre-computed type used by the serializer and deserializer.
 ///
 /// To achieve the ideal performance and ease of use via self-referencing
-/// [`SchemaNode`]s all held in the [`Schema`], it is built using `unsafe`, so
-/// it can only be built through
-/// [its safe counterpart](crate::schema::safe::Schema) (via [`From`]) because
-/// it makes the conversion code simple enough that we can reasonably guarantee
-/// its correctness despite the usage of `unsafe`.
+/// nodes, it is built using `unsafe`, so it can only be built through
+/// [its safe counterpart](crate::schema::SchemaMut) (via
+/// [`.freeze()`](crate::schema::SchemaMut::freeze) or [`TryFrom`]) because it
+/// makes the conversion code simple enough that we can reasonably guarantee its
+/// correctness despite the usage of `unsafe`.
 ///
 /// It is useful to implement it this way because, due to how referencing via
 /// [Names](https://avro.apache.org/docs/current/specification/#names) works in Avro,
@@ -30,15 +32,18 @@ pub struct Schema {
 	nodes: Vec<SchemaNode<'static>>,
 	fingerprint: [u8; 8],
 	schema_json: String,
-	parsing_canonical_form: String,
 }
 
 impl Schema {
-	/// The Avro schema is represented internally as a directed graph of nodes,
-	/// all stored in [`Schema`].
+	/// This is private API, you probably intended to call that on an
+	/// [`SchemaMut`](crate::schema::SchemaMut) instead of `Schema`.
+	///
+	/// The Avro schema
+	/// is represented internally as a directed graph of nodes, all stored in
+	/// [`Schema`].
 	///
 	/// The root node represents the whole schema.
-	pub fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
+	pub(crate) fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
 		// the signature of this function downgrades the fake 'static lifetime in a way
 		// that makes it correct
 		&self.nodes[0]
@@ -49,13 +54,6 @@ impl Schema {
 		&self.schema_json
 	}
 
-	/// Obtain the
-	/// [Parsing Canonical Form](https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas)
-	/// of the schema
-	pub fn parsing_canonical_form(&self) -> &str {
-		self.parsing_canonical_form.as_str()
-	}
-
 	/// Obtain the Rabin fingerprint of the schema
 	pub fn rabin_fingerprint(&self) -> &[u8; 8] {
 		&self.fingerprint
@@ -64,102 +62,38 @@ impl Schema {
 
 /// A node of an avro schema, borrowed from a [`Schema`].
 ///
-/// More information about Avro schemas can be found in the
-/// [Avro Specification](https://avro.apache.org/docs/current/specification/).
-///
 /// This enum is borrowed from a [`Schema`] and is used to navigate it.
+///
+/// For details about the meaning of the variants, see the
+/// [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[non_exhaustive]
-pub enum SchemaNode<'a> {
-	/// A `null` Avro schema.
+pub(crate) enum SchemaNode<'a> {
 	Null,
-	/// A `boolean` Avro schema.
 	Boolean,
-	/// An `int` Avro schema.
 	Int,
-	/// A `long` Avro schema.
 	Long,
-	/// A `float` Avro schema.
 	Float,
-	/// A `double` Avro schema.
 	Double,
-	/// A `bytes` Avro schema.
-	/// `Bytes` represents a sequence of 8-bit unsigned bytes.
 	Bytes,
-	/// A `string` Avro schema.
-	/// `String` represents a unicode character sequence.
 	String,
-	/// A `array` Avro schema. Avro arrays are required to have the same type
-	/// for each element. This variant holds the `Schema` for the array element
-	/// type.
 	Array(&'a SchemaNode<'a>),
-	/// A `map` Avro schema.
-	/// `Map` holds a pointer to the `Schema` of its values, which must all be
-	/// the same schema. `Map` keys are assumed to be `string`.
 	Map(&'a SchemaNode<'a>),
-	/// A `union` Avro schema.
-	///
-	/// These can be deserialized into rust enums, where the variant name
-	/// should match:
-	/// - If it's not a named type, the PascalCase of the type (e.g. `String`,
-	///   `Uuid`...)
-	/// - If it's a named type, the fully qualified name of the type (e.g for a
-	///   record `{"namespace": "foo", "name": "bar"}`, `foo.bar`)
-	///
-	/// See the `tests/unions.rs` file for more examples.
 	Union(Union<'a>),
-	/// A `record` Avro schema.
 	Record(Record<'a>),
-	/// An `enum` Avro schema.
-	///
-	/// These can be deserialized into rust enums, matching on the name
-	/// as defined in the schema.
 	Enum(Enum),
-	/// A `fixed` Avro schema.
 	Fixed(Fixed),
-	/// Logical type which represents `Decimal` values. The underlying type is
-	/// serialized and deserialized as `Schema::Bytes` or `Schema::Fixed`.
-	///
-	/// `scale` defaults to 0 and is an integer greater than or equal to 0 and
-	/// `precision` is an integer greater than 0.
-	///
-	/// <https://avro.apache.org/docs/current/specification/#decimal>
-	Decimal(Decimal),
-	/// A universally unique identifier, annotating a string.
+	Decimal(Decimal<'a>),
 	Uuid,
-	/// Logical type which represents the number of days since the unix epoch.
-	/// Serialization format is `Schema::Int`.
 	Date,
-	/// The time of day in number of milliseconds after midnight with no
-	/// reference any calendar, time zone or date in particular.
 	TimeMillis,
-	/// The time of day in number of microseconds after midnight with no
-	/// reference any calendar, time zone or date in particular.
 	TimeMicros,
-	/// An instant in time represented as the number of milliseconds after the
-	/// UNIX epoch.
-	///
-	/// You probably want to use
-	/// [`TimestampMilliSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMilliSeconds.html)
-	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMillis,
-	/// An instant in time represented as the number of microseconds after the
-	/// UNIX epoch.
-	///
-	/// You probably want to use
-	/// [`TimestampMicroSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMicroSeconds.html)
-	/// from [`serde_with`](https://docs.rs/serde_with/latest/serde_with/index.html#examples) when deserializing this.
 	TimestampMicros,
-	/// An amount of time defined by a number of months, days and milliseconds.
-	///
-	/// This deserializes to a struct that has the `months`, `days`, and
-	/// `milliseconds` fields declared as `u32`s, or to a `(u32, u32, u32)`
-	/// tuple, or to its raw representation [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
-	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
 }
 
-/// Component of a [`SchemaNode`]
-pub struct Union<'a> {
+/// Component of a [`SchemaMut`]
+pub(crate) struct Union<'a> {
 	pub variants: Vec<&'a SchemaNode<'a>>,
 	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
 }
@@ -173,8 +107,8 @@ impl std::fmt::Debug for Union<'_> {
 	}
 }
 
-/// Component of a [`SchemaNode`]
-pub struct Record<'a> {
+/// Component of a [`SchemaMut`]
+pub(crate) struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 	pub name: Name,
 	pub per_name_lookup: HashMap<String, usize>,
@@ -190,16 +124,16 @@ impl<'a> std::fmt::Debug for Record<'a> {
 	}
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Debug)]
-pub struct RecordField<'a> {
+pub(crate) struct RecordField<'a> {
 	pub name: String,
 	pub schema: &'a SchemaNode<'a>,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone)]
-pub struct Enum {
+pub(crate) struct Enum {
 	pub symbols: Vec<String>,
 	pub name: Name,
 	pub per_name_lookup: HashMap<String, usize>,
@@ -215,29 +149,145 @@ impl std::fmt::Debug for Enum {
 	}
 }
 
-impl From<super::safe::Schema> for Schema {
-	fn from(safe: super::safe::Schema) -> Self {
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Decimal<'a> {
+	pub precision: usize,
+	pub scale: u32,
+	pub repr: DecimalRepr<'a>,
+}
+#[derive(Clone, Debug)]
+pub enum DecimalRepr<'a> {
+	Bytes,
+	Fixed(&'a Fixed),
+}
+
+impl TryFrom<super::safe::SchemaMut> for Schema {
+	type Error = SchemaError;
+	fn try_from(safe: super::safe::SchemaMut) -> Result<Self, SchemaError> {
+		if safe.nodes().is_empty() {
+			return Err(SchemaError::new(
+				"Schema must have at least one node (the root)",
+			));
+		}
+
+		// Pre-compute logical types
+		enum LogicalTypeResolution {
+			NotLogicalType,
+			UnresolvedRemapped(usize),
+			Resolved(SchemaNode<'static>),
+		}
+		let mut logical_types = Vec::with_capacity(safe.nodes.len());
+		let mut set_decimal_repr_to_fixed: Vec<(usize, usize)> = Vec::new();
+		for (i, n) in safe.nodes.iter().enumerate() {
+			logical_types.push(match n {
+				SafeSchemaNode::LogicalType {
+					logical_type,
+					inner,
+				} => {
+					let inner_type = match safe.nodes.get(inner.idx).ok_or_else(|| {
+						SchemaError::new("Logical type refers to node that doesn't exist")
+					})? {
+						SafeSchemaNode::RegularType(inner) => inner,
+						SafeSchemaNode::LogicalType {
+							logical_type: inner_logical_type,
+							..
+						} => {
+							return Err(SchemaError::msg(format_args!(
+								"Immediately-nested logical types: \
+									{inner_logical_type:?} in {logical_type:?}"
+							)))
+						}
+					};
+					match (logical_type, inner_type) {
+						(LogicalType::Decimal(decimal), SafeSchemaType::Bytes) => {
+							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
+								precision: decimal.precision,
+								scale: decimal.scale,
+								repr: DecimalRepr::Bytes,
+							}))
+						}
+						(LogicalType::Decimal(decimal), SafeSchemaType::Fixed(_)) => {
+							set_decimal_repr_to_fixed.push((i, inner.idx));
+							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
+								precision: decimal.precision,
+								scale: decimal.scale,
+								repr: DecimalRepr::Bytes,
+							}))
+						}
+						(LogicalType::Uuid, SafeSchemaType::String) => {
+							LogicalTypeResolution::Resolved(SchemaNode::Uuid)
+						}
+						(LogicalType::Date, SafeSchemaType::Int) => {
+							LogicalTypeResolution::Resolved(SchemaNode::Date)
+						}
+						(LogicalType::TimeMillis, SafeSchemaType::Int) => {
+							LogicalTypeResolution::Resolved(SchemaNode::TimeMillis)
+						}
+						(LogicalType::TimeMicros, SafeSchemaType::Long) => {
+							LogicalTypeResolution::Resolved(SchemaNode::TimeMicros)
+						}
+						(LogicalType::TimestampMillis, SafeSchemaType::Long) => {
+							LogicalTypeResolution::Resolved(SchemaNode::TimestampMillis)
+						}
+						(LogicalType::TimestampMicros, SafeSchemaType::Long) => {
+							LogicalTypeResolution::Resolved(SchemaNode::TimestampMicros)
+						}
+						(LogicalType::Duration, SafeSchemaType::Fixed(fixed))
+							if fixed.size == 12 =>
+						{
+							LogicalTypeResolution::Resolved(SchemaNode::Duration)
+						}
+						_ => LogicalTypeResolution::UnresolvedRemapped(inner.idx),
+					}
+				}
+				SafeSchemaNode::RegularType(_) => LogicalTypeResolution::NotLogicalType,
+			});
+		}
+
 		// The `nodes` allocation should never be moved otherwise references will become
 		// invalid
 		let mut ret = Self {
 			nodes: (0..safe.nodes.len()).map(|_| SchemaNode::Null).collect(),
-			fingerprint: safe.fingerprint,
-			schema_json: safe.schema_json,
-			parsing_canonical_form: safe.parsing_canonical_form,
+			fingerprint: safe.canonical_form_rabin_fingerprint()?,
+			schema_json: match safe.schema_json {
+				None => safe.serialize_to_json()?,
+				Some(json) => json,
+			},
 		};
 		let len = ret.nodes.len();
 		// Let's be extra-sure (second condition is for calls to add)
 		assert!(len > 0 && len == safe.nodes.len() && len <= (isize::MAX as usize));
 		let storage_start_ptr = ret.nodes.as_mut_ptr();
-		// unsafe closure used below in unsafe block
-		let key_to_node = |schema_key: super::safe::SchemaKey| -> &'static SchemaNode {
-			let idx = schema_key.idx;
-			assert!(idx < len);
-			unsafe { &*(storage_start_ptr.add(schema_key.idx)) }
+		let key_to_node = |schema_key: super::safe::SchemaKey,
+		                   logical_types: &[LogicalTypeResolution]|
+		 -> Result<&'static SchemaNode<'static>, SchemaError> {
+			let mut idx = schema_key.idx;
+			if idx >= len {
+				return Err(SchemaError::msg(format_args!(
+					"SchemaKey index {} is out of bounds (len: {})",
+					idx, len
+				)));
+			}
+			if let LogicalTypeResolution::UnresolvedRemapped(remapped_idx) = logical_types[idx] {
+				idx = remapped_idx;
+				// There cannot be nested logical types so there cannot be a second remapping
+				// Also we know the index is low enough because that has been checked
+				// when loading inner_type above
+				// But we're doing unsafe so let's still make sure that is true
+				assert!(
+					idx < len,
+					"id should be low enough - bug in serde_avro_fast"
+				);
+			}
+			// SAFETY: see below
+			Ok(unsafe { &*(storage_start_ptr.add(idx)) })
 		};
+
+		// Now we can initialize the nodes
 		let mut curr_storage_node_ptr = storage_start_ptr;
-		for safe_node in safe.nodes {
-			// Safety:
+		for (i, safe_node) in safe.nodes.into_iter().enumerate() {
+			// SAFETY:
 			// - The nodes we create here are never moving in memory since the entire vec is
 			//   preallocated, and even when moving a vec, the pointed space doesn't move.
 			// - The fake `'static` lifetimes are always downgraded before being made
@@ -246,25 +296,44 @@ impl From<super::safe::Schema> for Schema {
 			//   compiler will not have aliasing constraints.
 			// - We don't dereference the references we create in key_to_node until they
 			//   they are all initialized.
-			unsafe {
-				*curr_storage_node_ptr = match safe_node {
-					SafeSchemaNode::Null => SchemaNode::Null,
-					SafeSchemaNode::Boolean => SchemaNode::Boolean,
-					SafeSchemaNode::Int => SchemaNode::Int,
-					SafeSchemaNode::Long => SchemaNode::Long,
-					SafeSchemaNode::Float => SchemaNode::Float,
-					SafeSchemaNode::Double => SchemaNode::Double,
-					SafeSchemaNode::Bytes => SchemaNode::Bytes,
-					SafeSchemaNode::String => SchemaNode::String,
-					SafeSchemaNode::Array(schema_key) => SchemaNode::Array(key_to_node(schema_key)),
-					SafeSchemaNode::Map(schema_key) => SchemaNode::Map(key_to_node(schema_key)),
-					SafeSchemaNode::Union(union) => SchemaNode::Union({
+
+			let new_node = match safe_node {
+				SafeSchemaNode::LogicalType { .. } => match &mut logical_types[i] {
+					LogicalTypeResolution::Resolved(ref mut resolved) => {
+						// We can take it, nobody but us reads it
+						std::mem::replace(resolved, SchemaNode::Null)
+					}
+					LogicalTypeResolution::NotLogicalType => unreachable!(),
+					LogicalTypeResolution::UnresolvedRemapped(_) => {
+						// We're remapping all nodes pointing to this node to another node
+						// so we can leave Null here, that won't be used.
+						SchemaNode::Null
+					}
+				},
+				SafeSchemaNode::RegularType(regular_type) => match regular_type {
+					SafeSchemaType::Null => SchemaNode::Null,
+					SafeSchemaType::Boolean => SchemaNode::Boolean,
+					SafeSchemaType::Int => SchemaNode::Int,
+					SafeSchemaType::Long => SchemaNode::Long,
+					SafeSchemaType::Float => SchemaNode::Float,
+					SafeSchemaType::Double => SchemaNode::Double,
+					SafeSchemaType::Bytes => SchemaNode::Bytes,
+					SafeSchemaType::String => SchemaNode::String,
+					SafeSchemaType::Array(array) => {
+						SchemaNode::Array(key_to_node(array.items, &logical_types)?)
+					}
+					SafeSchemaType::Map(map) => {
+						SchemaNode::Map(key_to_node(map.values, &logical_types)?)
+					}
+					SafeSchemaType::Union(union) => SchemaNode::Union({
 						Union {
-							variants: union
-								.variants
-								.into_iter()
-								.map(|schema_key| key_to_node(schema_key))
-								.collect(),
+							variants: {
+								let mut variants = Vec::with_capacity(union.variants.len());
+								for schema_key in union.variants {
+									variants.push(key_to_node(schema_key, &logical_types)?);
+								}
+								variants
+							},
 							per_type_lookup: {
 								// Can't be initialized just yet because other nodes
 								// may not have been initialized
@@ -272,24 +341,26 @@ impl From<super::safe::Schema> for Schema {
 							},
 						}
 					}),
-					SafeSchemaNode::Record(record) => SchemaNode::Record(Record {
+					SafeSchemaType::Record(record) => SchemaNode::Record(Record {
 						per_name_lookup: record
 							.fields
 							.iter()
 							.enumerate()
 							.map(|(i, v)| (v.name.clone(), i))
 							.collect(),
-						fields: record
-							.fields
-							.into_iter()
-							.map(|f| RecordField {
-								name: f.name,
-								schema: key_to_node(f.schema),
-							})
-							.collect(),
+						fields: {
+							let mut fields = Vec::with_capacity(record.fields.len());
+							for field in record.fields {
+								fields.push(RecordField {
+									name: field.name,
+									schema: key_to_node(field.type_, &logical_types)?,
+								});
+							}
+							fields
+						},
 						name: record.name,
 					}),
-					SafeSchemaNode::Enum(enum_) => SchemaNode::Enum(Enum {
+					SafeSchemaType::Enum(enum_) => SchemaNode::Enum(Enum {
 						per_name_lookup: enum_
 							.symbols
 							.iter()
@@ -299,21 +370,35 @@ impl From<super::safe::Schema> for Schema {
 						symbols: enum_.symbols,
 						name: enum_.name,
 					}),
-					SafeSchemaNode::Fixed(fixed) => SchemaNode::Fixed(fixed),
-					SafeSchemaNode::Decimal(decimal) => SchemaNode::Decimal(decimal),
-					SafeSchemaNode::Uuid => SchemaNode::Uuid,
-					SafeSchemaNode::Date => SchemaNode::Date,
-					SafeSchemaNode::TimeMillis => SchemaNode::TimeMillis,
-					SafeSchemaNode::TimeMicros => SchemaNode::TimeMicros,
-					SafeSchemaNode::TimestampMillis => SchemaNode::TimestampMillis,
-					SafeSchemaNode::TimestampMicros => SchemaNode::TimestampMicros,
-					SafeSchemaNode::Duration => SchemaNode::Duration,
-				};
+					SafeSchemaType::Fixed(fixed) => SchemaNode::Fixed(fixed),
+				},
+			};
+			unsafe {
+				*curr_storage_node_ptr = new_node;
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			};
 		}
-		// Now that all the nodes have been initialized (except their `per_type_lookup`
-		// tables) we can initialize the `per_type_lookup` tables
+		// Now that all the nodes have been partially we can set the references to
+		// `Fixed` for `Decimal` nodes
+		for (i, to) in set_decimal_repr_to_fixed {
+			// SAFETY: indexes are valid
+			unsafe {
+				match *storage_start_ptr.add(i) {
+					SchemaNode::Decimal(ref mut decimal) => match *storage_start_ptr.add(to) {
+						SchemaNode::Fixed(ref fixed) => {
+							decimal.repr = DecimalRepr::Fixed(fixed);
+						}
+						_ => unreachable!(),
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+		// Now that all the nodes have been **fully** initialized (except their
+		// `per_type_lookup` tables) we can initialize the `per_type_lookup` tables
+		// Note that this has to be done after all nodes have been initialized because
+		// the `per_type_lookup` table may read even the late-initialized fields such as
+		// decimal repr.
 		curr_storage_node_ptr = storage_start_ptr;
 		for _ in 0..len {
 			// Safety:
@@ -334,7 +419,7 @@ impl From<super::safe::Schema> for Schema {
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			}
 		}
-		ret
+		Ok(ret)
 	}
 }
 

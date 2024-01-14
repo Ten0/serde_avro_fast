@@ -71,9 +71,7 @@ mod serializer;
 
 pub use {error::SerError, serializer::*};
 
-use crate::schema::{
-	DecimalRepr, Enum, Fixed, RecordField, Schema, SchemaNode, Union, UnionVariantLookupKey,
-};
+use crate::schema::{self_referential::*, UnionVariantLookupKey};
 
 use {integer_encoding::VarIntWriter, serde::ser::*, std::io::Write};
 

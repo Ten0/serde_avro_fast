@@ -171,18 +171,28 @@ struct AddressApache {
 	zip: String,
 }
 
-fn make_small_record() -> anyhow::Result<(apache_avro::Schema, apache_avro::types::Value)> {
+fn make_small_record() -> anyhow::Result<(
+	apache_avro::Schema,
+	serde_avro_fast::Schema,
+	apache_avro::types::Value,
+)> {
 	let small_schema = apache_avro::Schema::parse_str(RAW_SMALL_SCHEMA)?;
+	let fast_schema = RAW_SMALL_SCHEMA.parse()?;
 	let small_record = {
 		let mut small_record = apache_avro::types::Record::new(&small_schema).unwrap();
 		small_record.put("field", "foo");
 		small_record.into()
 	};
-	Ok((small_schema, small_record))
+	Ok((small_schema, fast_schema, small_record))
 }
 
-fn make_big_record() -> anyhow::Result<(apache_avro::Schema, apache_avro::types::Value)> {
+fn make_big_record() -> anyhow::Result<(
+	apache_avro::Schema,
+	serde_avro_fast::Schema,
+	apache_avro::types::Value,
+)> {
 	let big_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA)?;
+	let fast_schema = RAW_BIG_SCHEMA.parse()?;
 	let address_schema = apache_avro::Schema::parse_str(RAW_ADDRESS_SCHEMA)?;
 	let mut address = apache_avro::types::Record::new(&address_schema).unwrap();
 	address.put("street", "street");
@@ -201,11 +211,11 @@ fn make_big_record() -> anyhow::Result<(apache_avro::Schema, apache_avro::types:
 		big_record.into()
 	};
 
-	Ok((big_schema, big_record))
+	Ok((big_schema, fast_schema, big_record))
 }
 
 fn bench_small_schema_read_record(c: &mut Criterion) {
-	let (schema, record) = make_small_record().unwrap();
+	let (schema, fast_schema, record) = make_small_record().unwrap();
 	let datum = apache_avro::to_avro_datum(&schema, record).unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("apache_avro", "small"),
@@ -217,7 +227,6 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 			})
 		},
 	);
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "small"),
 		&datum.as_slice(),
@@ -230,7 +239,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 }
 
 fn bench_big_schema_read_record(c: &mut Criterion) {
-	let (schema, record) = make_big_record().unwrap();
+	let (schema, fast_schema, record) = make_big_record().unwrap();
 	let datum = apache_avro::to_avro_datum(&schema, record).unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("apache_avro", "big"),
@@ -242,7 +251,6 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 			})
 		},
 	);
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "big"),
 		&datum.as_slice(),

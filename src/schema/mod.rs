@@ -1,57 +1,41 @@
 //! Navigate, modify and initialize the [`Schema`]
 
-pub mod safe;
-mod self_referential;
+mod error;
+mod safe;
+pub(crate) mod self_referential;
 mod union_variants_per_type_lookup;
 
-pub use {
-	safe::{BuildSchemaFromApacheSchemaError, ParseSchemaError},
-	self_referential::*,
-};
+pub use {error::SchemaError, safe::*, self_referential::Schema};
 
 pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 
 impl std::str::FromStr for Schema {
-	type Err = ParseSchemaError;
+	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let safe_schema: safe::Schema = s.parse()?;
-		Ok(safe_schema.into())
+		let safe_schema: safe::SchemaMut = s.parse()?;
+		safe_schema.try_into()
 	}
 }
 
-impl Schema {
-	/// Attempt to convert a [`Schema`](apache_avro::Schema) from the
-	/// `apache-avro` crate into a [`Schema`]
-	pub fn from_apache_schema(
-		apache_schema: &apache_avro::Schema,
-	) -> Result<Self, BuildSchemaFromApacheSchemaError> {
-		let safe_schema = safe::Schema::from_apache_schema(apache_schema)?;
-		Ok(safe_schema.into())
-	}
-}
-
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Fixed {
 	pub size: usize,
 	pub name: Name,
+	pub(crate) _private: (),
+}
+impl Fixed {
+	pub fn new(name: Name, size: usize) -> Self {
+		Self {
+			size,
+			name,
+			_private: (),
+		}
+	}
 }
 
-/// Component of a [`SchemaNode`]
-#[derive(Clone, Debug)]
-pub struct Decimal {
-	pub precision: usize,
-	pub scale: u32,
-	pub repr: DecimalRepr,
-}
-#[derive(Clone, Debug)]
-pub enum DecimalRepr {
-	Bytes,
-	Fixed(Fixed),
-}
-
-/// Schema component for named variants of a [`SchemaNode`]
-#[derive(Clone)]
+/// Schema component for named nodes of a [`SchemaMut`]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Name {
 	fully_qualified_name: String,
 	namespace_delimiter_idx: Option<usize>,
@@ -64,6 +48,9 @@ impl std::fmt::Debug for Name {
 }
 
 impl Name {
+	/// The rightmost component of the fully qualified name
+	///
+	/// e.g. in `a.b.c` it's `c`
 	pub fn name(&self) -> &str {
 		match self.namespace_delimiter_idx {
 			None => &self.fully_qualified_name,
@@ -71,12 +58,26 @@ impl Name {
 		}
 	}
 
+	/// The namespace component of the fully qualified name
+	///
+	/// e.g. in `a.b.c` it's `a.b`
 	pub fn namespace(&self) -> Option<&str> {
 		self.namespace_delimiter_idx
 			.map(|idx| &self.fully_qualified_name[..idx])
 	}
 
+	/// The fully qualified name
+	///
+	/// e.g. in `a.b.c` it's `a.b.c`
 	pub fn fully_qualified_name(&self) -> &str {
 		&self.fully_qualified_name
+	}
+
+	/// Build a [`Name`] from a fully qualified name
+	pub fn from_fully_qualified_name(fully_qualified_name: String) -> Self {
+		Self {
+			namespace_delimiter_idx: fully_qualified_name.rfind('.'),
+			fully_qualified_name,
+		}
 	}
 }

@@ -1,5 +1,3 @@
-use crate::schema::{Decimal, DecimalRepr};
-
 use super::*;
 
 use {rust_decimal::prelude::ToPrimitive as _, std::marker::PhantomData};
@@ -16,7 +14,7 @@ where
 {
 	let size = match decimal.repr {
 		DecimalRepr::Bytes => read_len(state)?,
-		DecimalRepr::Fixed(ref fixed) => fixed.size,
+		DecimalRepr::Fixed(fixed) => fixed.size,
 	};
 	let mut buf = [0u8; 16];
 	let start = buf.len().checked_sub(size).ok_or_else(|| {

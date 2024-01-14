@@ -48,9 +48,6 @@
 //! apache_avro/big         time:   [1.8618 µs 1.8652 µs 1.8701 µs]
 //! serde_avro_fast/big     time:   [165.87 ns 166.92 ns 168.09 ns] <- x11 improvement
 //! ```
-//!
-//! It currently has a dependency on [`apache_avro`], to parse the schema and
-//! obtain its fingerprint.
 
 pub mod de;
 pub mod schema;
@@ -64,10 +61,6 @@ pub use single_object_encoding::{
 };
 
 pub mod object_container_file_encoding;
-
-/// Because we use some of its types (namely, schema), reexport it in case
-/// interop is needed by users
-pub use apache_avro;
 
 /// Deserialize from an avro "datum" (raw data, no headers...) slice
 ///

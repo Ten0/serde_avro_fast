@@ -1,14 +1,14 @@
-use super::{Schema, SchemaNode};
+use super::{SchemaMut, SchemaNode, SchemaType};
 
-impl Schema {
+impl SchemaMut {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
 	///
 	/// This is called by the parsing functions already, so this may only be
-	/// useful if you've manally edited the [`safe::Schema`](Schema) graph.
+	/// useful if you've manally edited the [`SchemaMut`] graph.
 	///
 	/// Note that deserialization functions otherwise already prevent stack
 	/// overflows by limiting the recursion depth.
-	pub fn check_for_cycles(&self) -> Result<(), UnconditionalCycle> {
+	pub(crate) fn check_for_cycles(&self) -> Result<(), UnconditionalCycle> {
 		// Zero-size cycles (that would trigger infinite recursion when parsing, without
 		// consuming any input) can only happen with records that end up containing
 		// themselves ~immediately (that is, only through record paths).
@@ -21,7 +21,8 @@ impl Schema {
 		let mut visited_nodes = vec![false; self.nodes.len()];
 		let mut checked_nodes = vec![false; self.nodes.len()];
 		for (idx, node) in self.nodes.iter().enumerate() {
-			if matches!(node, SchemaNode::Record(_)) && !checked_nodes[idx] {
+			if matches!(node, SchemaNode::RegularType(SchemaType::Record(_))) && !checked_nodes[idx]
+			{
 				check_no_zero_sized_cycle_inner(self, idx, &mut visited_nodes, &mut checked_nodes)?;
 			}
 		}
@@ -39,23 +40,23 @@ pub struct UnconditionalCycle {
 	_private: (),
 }
 fn check_no_zero_sized_cycle_inner(
-	schema: &Schema,
+	schema: &SchemaMut,
 	node_idx: usize,
 	visited_nodes: &mut Vec<bool>,
 	checked_nodes: &mut Vec<bool>,
 ) -> Result<(), UnconditionalCycle> {
 	visited_nodes[node_idx] = true;
 	for field in match &schema.nodes[node_idx] {
-		SchemaNode::Record(record) => &record.fields,
+		SchemaNode::RegularType(SchemaType::Record(record)) => &record.fields,
 		_ => unreachable!(),
 	} {
-		if let SchemaNode::Record(_) = &schema.nodes[field.schema.idx] {
-			if visited_nodes[field.schema.idx] {
+		if let SchemaNode::RegularType(SchemaType::Record(_)) = &schema.nodes[field.type_.idx] {
+			if visited_nodes[field.type_.idx] {
 				return Err(UnconditionalCycle { _private: () });
 			} else {
 				check_no_zero_sized_cycle_inner(
 					schema,
-					field.schema.idx,
+					field.type_.idx,
 					visited_nodes,
 					checked_nodes,
 				)?;
