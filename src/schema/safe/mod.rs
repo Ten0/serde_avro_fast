@@ -72,7 +72,10 @@ impl SchemaMut {
 
 /// The location of a node in a [`SchemaMut`]
 ///
-/// This can be used to [`Index`](std::ops::Index) into the [`Schema`].
+/// This can be used to [`Index`](std::ops::Index) into the [`SchemaMut`].
+///
+/// (Note that `Index`ing into a `SchemaMut` with an invalid index would cause a
+/// panic.)
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SchemaKey {
 	pub(super) idx: usize,
