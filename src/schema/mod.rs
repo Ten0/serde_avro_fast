@@ -1,7 +1,7 @@
 //! Navigate, modify and initialize the [`Schema`]
 
-pub mod error;
-pub mod safe;
+mod error;
+mod safe;
 pub(crate) mod self_referential;
 mod union_variants_per_type_lookup;
 

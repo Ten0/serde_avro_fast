@@ -62,7 +62,7 @@ impl EditableSchema {
 	}
 }
 
-/// The location of a node in the [`Schema`]
+/// The location of a node in an [`EditableSchema`]
 ///
 /// This can be used to [`Index`](std::ops::Index) into the [`Schema`].
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

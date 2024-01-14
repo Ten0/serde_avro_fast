@@ -8,16 +8,15 @@ use std::collections::HashMap;
 
 pub(crate) use super::{Fixed, Name};
 
-/// The most performant and easiest to navigate version of an Avro schema
+/// The most performant representation of an Avro schema
 ///
-/// Navigated through [`SchemaNode`] via [`.root`](Schema::root).
+/// This is an opaque type used by the serializer and deserializer.
 ///
 /// To achieve the ideal performance and ease of use via self-referencing
-/// [`SchemaNode`]s all held in the [`Schema`], it is built using `unsafe`, so
-/// it can only be built through
-/// [its safe counterpart](crate::schema::safe::Schema) (via [`From`]) because
-/// it makes the conversion code simple enough that we can reasonably guarantee
-/// its correctness despite the usage of `unsafe`.
+/// nodes, it is built using `unsafe`, so it can only be built through
+/// [its safe counterpart](crate::schema::EditableSchema) (via [`TryFrom`])
+/// because it makes the conversion code simple enough that we can reasonably
+/// guarantee its correctness despite the usage of `unsafe`.
 ///
 /// It is useful to implement it this way because, due to how referencing via
 /// [Names](https://avro.apache.org/docs/current/specification/#names) works in Avro,
