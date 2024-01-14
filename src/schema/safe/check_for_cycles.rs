@@ -50,13 +50,13 @@ fn check_no_zero_sized_cycle_inner(
 		SchemaNode::RegularType(SchemaType::Record(record)) => &record.fields,
 		_ => unreachable!(),
 	} {
-		if let SchemaNode::RegularType(SchemaType::Record(_)) = &schema.nodes[field.schema.idx] {
-			if visited_nodes[field.schema.idx] {
+		if let SchemaNode::RegularType(SchemaType::Record(_)) = &schema.nodes[field.type_.idx] {
+			if visited_nodes[field.type_.idx] {
 				return Err(UnconditionalCycle { _private: () });
 			} else {
 				check_no_zero_sized_cycle_inner(
 					schema,
-					field.schema.idx,
+					field.type_.idx,
 					visited_nodes,
 					checked_nodes,
 				)?;

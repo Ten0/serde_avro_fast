@@ -234,14 +234,14 @@ impl Record {
 #[derive(Clone, Debug)]
 pub struct RecordField {
 	pub name: String,
-	pub schema: SchemaKey,
+	pub type_: SchemaKey,
 	pub(crate) _private: (),
 }
 impl RecordField {
 	pub fn new(name: String, schema: SchemaKey) -> Self {
 		Self {
 			name,
-			schema,
+			type_: schema,
 			_private: (),
 		}
 	}
@@ -318,8 +318,8 @@ pub enum LogicalType {
 	///
 	/// Logical types of this variant may turn into known logical types from one
 	/// release to another, as new logical types get added, so if you need to
-	/// check for a specific logical type, you should use [`name`](Self::name)
-	/// instead.
+	/// check for a specific logical type, you should use
+	/// [`as_str`](Self::as_str) instead.
 	Unknown(String),
 }
 
@@ -347,7 +347,7 @@ impl LogicalType {
 	/// logical type.
 	///
 	/// For example, the `Decimal` logical type is named `decimal`.
-	pub fn name(&self) -> &str {
+	pub fn as_str(&self) -> &str {
 		match self {
 			LogicalType::Decimal(_) => "decimal",
 			LogicalType::Uuid => "uuid",

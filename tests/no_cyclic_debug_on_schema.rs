@@ -21,7 +21,7 @@ fn test_no_cyclic_debug_on_schema() {
 	.unwrap();
 	let root = schema.root();
 	let sub_root = match &root {
-		SchemaNode::RegularType(SchemaType::Record(Record { fields, .. })) => fields[1].schema,
+		SchemaNode::RegularType(SchemaType::Record(Record { fields, .. })) => fields[1].type_,
 		_ => panic!(),
 	};
 	let sub_root_some = match &schema[sub_root] {

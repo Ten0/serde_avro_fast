@@ -36,9 +36,9 @@ pub(super) struct SchemaNodeObject<'a> {
 	#[serde(rename = "type")]
 	pub(super) type_: SchemaNode<'a>,
 	pub(super) logical_type: Option<BorrowedCowIfPossible<'a>>,
-	/// For named type
+	/// For named types
 	pub(super) name: Option<BorrowedCowIfPossible<'a>>,
-	/// For named type
+	/// For named types
 	pub(super) namespace: Option<BorrowedCowIfPossible<'a>>,
 	/// For record type
 	pub(super) fields: Option<Vec<Field<'a>>>,

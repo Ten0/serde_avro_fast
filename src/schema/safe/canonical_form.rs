@@ -161,7 +161,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 								self.w.write_str("{\"name\":\"")?;
 								self.w.write_str(&field.name)?;
 								self.w.write_str("\",\"type\":")?;
-								self.write_canonical_form(schema, field.schema)?;
+								self.write_canonical_form(schema, field.type_)?;
 								self.w.write_char('}')?;
 							}
 							self.w.write_str("]}")?;

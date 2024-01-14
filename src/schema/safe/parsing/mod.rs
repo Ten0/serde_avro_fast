@@ -52,10 +52,9 @@ impl std::str::FromStr for SchemaMut {
 					SchemaNode::RegularType(schema_type) => match schema_type {
 						SchemaType::Array(key) | SchemaType::Map(key) => fix_key(key),
 						SchemaType::Union(union) => union.variants.iter_mut().for_each(fix_key),
-						SchemaType::Record(record) => record
-							.fields
-							.iter_mut()
-							.for_each(|f| fix_key(&mut f.schema)),
+						SchemaType::Record(record) => {
+							record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
+						}
 						SchemaType::Null
 						| SchemaType::Boolean
 						| SchemaType::Int
@@ -234,7 +233,7 @@ impl<'a> SchemaConstructionState<'a> {
 										.map(|field| {
 											Ok(RecordField {
 												name: (*field.name.0).to_owned(),
-												schema: self.register_node(
+												type_: self.register_node(
 													&field.type_,
 													name_key.namespace,
 													None,

@@ -353,7 +353,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 							for field in record.fields {
 								fields.push(RecordField {
 									name: field.name,
-									schema: key_to_node(field.schema, &logical_types)?,
+									schema: key_to_node(field.type_, &logical_types)?,
 								});
 							}
 							fields
