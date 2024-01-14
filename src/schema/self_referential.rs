@@ -8,15 +8,16 @@ use std::collections::HashMap;
 
 pub(crate) use super::{Fixed, Name};
 
-/// The most performant representation of an Avro schema
+/// Main Schema type, opaque representation of an Avro schema
 ///
-/// This is an opaque type used by the serializer and deserializer.
+/// This is the fully pre-computed type used by the serializer and deserializer.
 ///
 /// To achieve the ideal performance and ease of use via self-referencing
 /// nodes, it is built using `unsafe`, so it can only be built through
-/// [its safe counterpart](crate::schema::EditableSchema) (via [`TryFrom`])
-/// because it makes the conversion code simple enough that we can reasonably
-/// guarantee its correctness despite the usage of `unsafe`.
+/// [its safe counterpart](crate::schema::SchemaMut) (via
+/// [`.freeze()`](crate::schema::SchemaMut::freeze) or [`TryFrom`]) because it
+/// makes the conversion code simple enough that we can reasonably guarantee its
+/// correctness despite the usage of `unsafe`.
 ///
 /// It is useful to implement it this way because, due to how referencing via
 /// [Names](https://avro.apache.org/docs/current/specification/#names) works in Avro,
@@ -35,7 +36,7 @@ pub struct Schema {
 
 impl Schema {
 	/// This is private API, you probably intended to call that on an
-	/// [`EditableSchema`](crate::schema::EditableSchema) instead of `Schema`.
+	/// [`SchemaMut`](crate::schema::SchemaMut) instead of `Schema`.
 	///
 	/// The Avro schema
 	/// is represented internally as a directed graph of nodes, all stored in
@@ -161,9 +162,9 @@ pub enum DecimalRepr<'a> {
 	Fixed(&'a Fixed),
 }
 
-impl TryFrom<super::safe::EditableSchema> for Schema {
+impl TryFrom<super::safe::SchemaMut> for Schema {
 	type Error = SchemaError;
-	fn try_from(safe: super::safe::EditableSchema) -> Result<Self, SchemaError> {
+	fn try_from(safe: super::safe::SchemaMut) -> Result<Self, SchemaError> {
 		if safe.nodes().is_empty() {
 			return Err(SchemaError::new(
 				"Schema must have at least one node (the root)",

@@ -12,7 +12,7 @@ pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 impl std::str::FromStr for Schema {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let safe_schema: safe::EditableSchema = s.parse()?;
+		let safe_schema: safe::SchemaMut = s.parse()?;
 		safe_schema.try_into()
 	}
 }

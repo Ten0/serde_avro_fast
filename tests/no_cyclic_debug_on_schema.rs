@@ -2,7 +2,7 @@ use serde_avro_fast::schema::*;
 
 #[test]
 fn test_no_cyclic_debug_on_schema() {
-	let schema: EditableSchema = r#"{
+	let schema: SchemaMut = r#"{
       "type": "record",
       "name": "test",
       "fields": [

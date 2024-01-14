@@ -1,5 +1,5 @@
 use serde_avro_fast::{
-	from_single_object_reader, from_single_object_slice, schema::EditableSchema, Schema,
+	from_single_object_reader, from_single_object_slice, schema::SchemaMut, Schema,
 };
 
 use apache_avro::types::Value;
@@ -32,7 +32,7 @@ const SCHEMA_STR: &str = r#"
 
 lazy_static! {
 	static ref SCHEMA: Schema = SCHEMA_STR.parse().unwrap();
-	static ref EDITABLE_SCHEMA: EditableSchema = SCHEMA_STR.parse().unwrap();
+	static ref EDITABLE_SCHEMA: SchemaMut = SCHEMA_STR.parse().unwrap();
 	static ref APACHE_SCHEMA: apache_avro::Schema =
 		apache_avro::Schema::parse_str(SCHEMA_STR).unwrap();
 }

@@ -1,11 +1,11 @@
 use crate::schema::{
-	safe::{self as s, rabin::Rabin, EditableSchema, SchemaKey, SchemaType},
+	safe::{self as s, rabin::Rabin, SchemaKey, SchemaMut, SchemaType},
 	SchemaError,
 };
 
 use std::fmt::Write;
 
-impl EditableSchema {
+impl SchemaMut {
 	/// Obtain the Rabin fingerprint of the schema
 	///
 	/// This is what is used for avro [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding)
@@ -37,7 +37,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 	/// guaranteed to actually be valid JSON (no escaping...)
 	fn write_canonical_form(
 		&mut self,
-		schema: &EditableSchema,
+		schema: &SchemaMut,
 		key: SchemaKey,
 	) -> Result<(), SchemaError> {
 		let node = schema

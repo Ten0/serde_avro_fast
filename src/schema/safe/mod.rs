@@ -11,8 +11,7 @@ use super::{Fixed, Name, SchemaError};
 
 pub use check_for_cycles::UnconditionalCycle;
 
-/// A fully-safe counterpart of the [`Schema`](crate::Schema) that is used for
-/// its initialization
+/// An editable representation of an Avro schema
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`Schema`].
@@ -20,13 +19,13 @@ pub use check_for_cycles::UnconditionalCycle;
 /// For details about the meaning of the fields, see the
 /// [`SchemaNode`](crate::schema::SchemaNode) documentation.
 #[derive(Clone, Debug)]
-pub struct EditableSchema {
+pub struct SchemaMut {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
 	pub(super) schema_json: Option<String>,
 }
 
-impl EditableSchema {
+impl SchemaMut {
 	/// Obtain the underlying graph storage
 	///
 	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
@@ -60,9 +59,13 @@ impl EditableSchema {
 				in such a way that all of its nodes were removed?",
 		)
 	}
+
+	pub fn freeze(self) -> Result<super::Schema, SchemaError> {
+		self.try_into()
+	}
 }
 
-/// The location of a node in an [`EditableSchema`]
+/// The location of a node in a [`SchemaMut`]
 ///
 /// This can be used to [`Index`](std::ops::Index) into the [`Schema`].
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -82,7 +85,7 @@ impl SchemaKey {
 		self.idx
 	}
 }
-impl std::ops::Index<SchemaKey> for EditableSchema {
+impl std::ops::Index<SchemaKey> for SchemaMut {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
 		&self.nodes[key.idx]
@@ -94,13 +97,13 @@ impl std::fmt::Debug for SchemaKey {
 	}
 }
 
-/// A node of an avro schema, stored in an [`EditableSchema`].
+/// A node of an avro schema, stored in a [`SchemaMut`].
 ///
 /// More information about Avro schemas can be found in the
 /// [Avro Specification](https://avro.apache.org/docs/current/specification/).
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
-/// allow to index into [`EditableSchema`].
+/// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
 pub enum SchemaNode {
 	RegularType(SchemaType),
@@ -116,7 +119,7 @@ pub enum SchemaNode {
 /// [Avro Specification](https://avro.apache.org/docs/current/specification/).
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
-/// allow to index into [`EditableSchema`].
+/// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
 pub enum SchemaType {
 	/// A `null` Avro schema.

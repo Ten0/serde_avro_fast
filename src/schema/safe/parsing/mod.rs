@@ -12,7 +12,7 @@ struct SchemaConstructionState<'a> {
 	unresolved_names: Vec<NameKey<'a>>,
 }
 
-impl std::str::FromStr for EditableSchema {
+impl std::str::FromStr for SchemaMut {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let mut state = SchemaConstructionState {

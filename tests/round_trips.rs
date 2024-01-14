@@ -150,7 +150,7 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 fn test_round_trip_fast_fast<T>(&(raw_schema, _): &(&str, Value)) {
 	let schema = Schema::parse_str(raw_schema).unwrap();
 	let apache_finterprint = schema.fingerprint::<apache_avro::rabin::Rabin>().bytes;
-	let fast_schema: serde_avro_fast::schema::EditableSchema = raw_schema.parse().unwrap();
+	let fast_schema: serde_avro_fast::schema::SchemaMut = raw_schema.parse().unwrap();
 	let fast_fingerprint = fast_schema.canonical_form_rabin_fingerprint().unwrap();
 	assert_eq!(apache_finterprint, fast_fingerprint);
 }
@@ -244,7 +244,7 @@ enum AB {
 #[test]
 fn test_decimal() {
 	use serde_avro_fast::schema::*;
-	let editable_schema: EditableSchema =
+	let editable_schema: SchemaMut =
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();

@@ -1,6 +1,6 @@
-use super::{EditableSchema, SchemaNode, SchemaType};
+use super::{SchemaMut, SchemaNode, SchemaType};
 
-impl EditableSchema {
+impl SchemaMut {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
 	///
 	/// This is called by the parsing functions already, so this may only be
@@ -40,7 +40,7 @@ pub struct UnconditionalCycle {
 	_private: (),
 }
 fn check_no_zero_sized_cycle_inner(
-	schema: &EditableSchema,
+	schema: &SchemaMut,
 	node_idx: usize,
 	visited_nodes: &mut Vec<bool>,
 	checked_nodes: &mut Vec<bool>,
