@@ -269,9 +269,10 @@ impl<'a> SchemaConstructionState<'a> {
 							}
 							raw::SchemaNode::Union(_) => {
 								return Err(SchemaError::new(
-								"Expected complex type name, but got a union as type in a type \
-									object and there is no logical type in that type object.",
-							));
+									"Expected complex type name, but got a union as type \
+										in a type object and there is no logical type \
+										in that type object.",
+								));
 							}
 						}
 					}),
