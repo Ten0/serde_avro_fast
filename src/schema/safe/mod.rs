@@ -102,9 +102,12 @@ impl std::fmt::Debug for SchemaKey {
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`EditableSchema`].
 #[derive(Clone, Debug)]
-pub struct SchemaNode {
-	pub type_: SchemaType,
-	pub logical_type: Option<LogicalType>,
+pub enum SchemaNode {
+	RegularType(SchemaType),
+	LogicalType {
+		inner: SchemaKey,
+		logical_type: LogicalType,
+	},
 }
 
 /// A primitive or complex type of an avro schema, stored in a [`SchemaNode`].
@@ -210,6 +213,12 @@ pub enum LogicalType {
 	/// tuple, or to its raw representation [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
 	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
+	/// An logical type that is not known or not handled in any particular way
+	/// by this library.
+	///
+	/// Logical types of this variant may turn into known logical types from one
+	/// release to another, as new logical types get added.
+	Unknown(String),
 }
 
 /// Component of a [`SchemaNode`]

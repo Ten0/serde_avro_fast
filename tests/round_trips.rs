@@ -235,14 +235,14 @@ fn test_decimal() {
 			.unwrap();
 	dbg!(editable_schema.root());
 	assert!(matches!(
-		editable_schema.root(),
-		SchemaNode {
-			type_: SchemaType::Bytes,
-			logical_type: Some(LogicalType::Decimal(Decimal {
+		*editable_schema.root(),
+		SchemaNode::LogicalType {
+			logical_type: LogicalType::Decimal(Decimal {
 				precision: 4,
 				scale: 1,
-			}))
-		}
+			}),
+			inner
+		} if matches!(editable_schema[inner], SchemaNode::RegularType(SchemaType::Bytes))
 	));
 	let schema = editable_schema.try_into().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&schema);

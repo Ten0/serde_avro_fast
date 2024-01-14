@@ -19,7 +19,11 @@ impl SchemaError {
 		}
 	}
 
-	pub(crate) fn msg(s: impl std::fmt::Display) -> Self {
+	pub(crate) fn msg(s: std::fmt::Arguments<'_>) -> Self {
+		Self::display(s)
+	}
+
+	pub(crate) fn display(s: impl std::fmt::Display) -> Self {
 		Self {
 			inner: Box::new(ErrorInner::Other(Cow::Owned(s.to_string()))),
 		}

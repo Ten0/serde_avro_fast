@@ -1,8 +1,16 @@
 use serde::de::*;
 
+pub(super) enum SchemaNode<'a> {
+	Type(Type),
+	Ref(std::borrow::Cow<'a, str>),
+	Object(Box<SchemaNodeObject<'a>>),
+	Union(Vec<SchemaNode<'a>>),
+}
+
 #[derive(serde_derive::Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub(super) enum Type {
+	// Primitive types
 	Null,
 	Boolean,
 	Int,
@@ -11,6 +19,7 @@ pub(super) enum Type {
 	Double,
 	Bytes,
 	String,
+	// Complex types
 	Array,
 	Map,
 	Record,
@@ -18,19 +27,15 @@ pub(super) enum Type {
 	Fixed,
 }
 
-pub(super) enum SchemaNode<'a> {
-	TypeOnly(Type),
-	Ref(std::borrow::Cow<'a, str>),
-	Object(SchemaNodeObject<'a>),
-	Union(Vec<SchemaNode<'a>>),
-}
-
 #[derive(serde_derive::Deserialize)]
-#[serde(bound = "'a: 'de")]
+#[serde(rename_all = "camelCase")]
+#[serde(bound = "'a: 'de, 'de: 'a")]
 pub(super) struct SchemaNodeObject<'a> {
+	/// If there is a logical type, this can be a primitive type or type object
+	/// but not a ComplexType, but if there is none it must be a ComplexType.
 	#[serde(rename = "type")]
-	pub(super) type_: Type,
-	pub(super) logical_type: Option<&'a str>,
+	pub(super) type_: SchemaNode<'a>,
+	pub(super) logical_type: Option<BorrowedCowIfPossible<'a>>,
 	/// For named type
 	pub(super) name: Option<BorrowedCowIfPossible<'a>>,
 	/// For named type
@@ -40,9 +45,9 @@ pub(super) struct SchemaNodeObject<'a> {
 	/// For enum type
 	pub(super) symbols: Option<Vec<BorrowedCowIfPossible<'a>>>,
 	/// For array type
-	pub(super) items: Option<Box<SchemaNode<'a>>>,
+	pub(super) items: Option<SchemaNode<'a>>,
 	/// For map type
-	pub(super) values: Option<Box<SchemaNode<'a>>>,
+	pub(super) values: Option<SchemaNode<'a>>,
 	/// For fixed type
 	pub(super) size: Option<usize>,
 	/// For decimal logical type
@@ -107,7 +112,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 				Ok(
 					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
 					{
-						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Ok(type_) => SchemaNode::Type(type_),
 						Err(FailedDeserialization) => SchemaNode::Ref(v.to_owned().into()),
 					},
 				)
@@ -121,7 +126,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 				Ok(
 					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(v))
 					{
-						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Ok(type_) => SchemaNode::Type(type_),
 						Err(FailedDeserialization) => SchemaNode::Ref(v.into()),
 					},
 				)
@@ -136,7 +141,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 					match Type::deserialize(value::StrDeserializer::<FailedDeserialization>::new(
 						v.as_str(),
 					)) {
-						Ok(type_) => SchemaNode::TypeOnly(type_),
+						Ok(type_) => SchemaNode::Type(type_),
 						Err(FailedDeserialization) => SchemaNode::Ref(v.into()),
 					},
 				)

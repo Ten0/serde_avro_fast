@@ -40,127 +40,137 @@ impl<W: Write> WriteCanonicalFormState<W> {
 		schema: &EditableSchema,
 		key: SchemaKey,
 	) -> Result<(), SchemaError> {
-		let mut first_time = true;
 		let node = schema
 			.nodes
 			.get(key.idx)
 			.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
 
-		let should_not_write_only_name =
-			|name: &s::Name, state: &mut WriteCanonicalFormState<W>| -> Result<bool, SchemaError> {
-				Ok(match &mut state.named_type_written[key.idx] {
-					b @ false => {
-						*b = true;
-						true
-					}
-					true => {
-						state.w.write_char('"')?;
-						state.w.write_str(name.fully_qualified_name())?;
-						state.w.write_char('"')?;
-						false
-					}
-				})
-			};
-
-		// In PCF, logical types are completely ignored
-		// https://issues.apache.org/jira/browse/AVRO-1721
-		match node.type_ {
-			SchemaType::Null => {
-				self.w.write_str("\"null\"")?;
+		match *node {
+			s::SchemaNode::LogicalType {
+				inner,
+				logical_type: _,
+			} => {
+				// In PCF, logical types are completely ignored
+				// https://issues.apache.org/jira/browse/AVRO-1721
+				self.write_canonical_form(schema, inner)
 			}
-			SchemaType::Boolean => {
-				self.w.write_str("\"boolean\"")?;
-			}
-			SchemaType::Bytes => {
-				self.w.write_str("\"bytes\"")?;
-			}
-			SchemaType::Double => {
-				self.w.write_str("\"double\"")?;
-			}
-			SchemaType::Float => {
-				self.w.write_str("\"float\"")?;
-			}
-			SchemaType::Int => {
-				self.w.write_str("\"int\"")?;
-			}
-			SchemaType::Long => {
-				self.w.write_str("\"long\"")?;
-			}
-			SchemaType::String => {
-				self.w.write_str("\"string\"")?;
-			}
-			SchemaType::Union(ref union) => {
-				self.w.write_char('[')?;
-				for &variant in &union.variants {
-					if !first_time {
-						self.w.write_char(',')?;
-					} else {
-						first_time = false;
-					}
-					self.write_canonical_form(schema, variant)?;
-				}
-				self.w.write_char(']')?;
-			}
-			SchemaType::Array(array_items) => {
-				self.w.write_str("{\"type\":\"array\",\"items\":")?;
-				self.write_canonical_form(schema, array_items)?;
-				self.w.write_char('}')?;
-			}
-			SchemaType::Map(map_values) => {
-				self.w.write_str("{\"type\":\"map\",\"values\":")?;
-				self.write_canonical_form(schema, map_values)?;
-				self.w.write_char('}')?;
-			}
-			SchemaType::Enum(ref enum_) => {
-				if !should_not_write_only_name(&enum_.name, self)? {
-					self.w.write_str("{\"name\":\"")?;
-					self.w.write_str(enum_.name.fully_qualified_name())?;
-					self.w.write_str("\",\"type\":\"enum\",\"symbols\":[")?;
-					for enum_symbol in enum_.symbols.iter() {
-						if !first_time {
-							self.w.write_char(',')?;
-						} else {
-							first_time = false;
+			s::SchemaNode::RegularType(ref type_) => {
+				let mut first_time = true;
+				let should_not_write_only_name = |name: &s::Name,
+				                                  state: &mut WriteCanonicalFormState<W>|
+				 -> Result<bool, SchemaError> {
+					Ok(match &mut state.named_type_written[key.idx] {
+						b @ false => {
+							*b = true;
+							true
 						}
-						self.w.write_char('"')?;
-						self.w.write_str(enum_symbol)?;
-						self.w.write_char('"')?;
-					}
-					self.w.write_char(']')?;
-					self.w.write_char('}')?;
-				}
-			}
-			SchemaType::Fixed(ref fixed) => {
-				if !should_not_write_only_name(&fixed.name, self)? {
-					self.w.write_str("{\"name\":\"")?;
-					self.w.write_str(fixed.name.fully_qualified_name())?;
-					self.w.write_str("\",\"type\":\"fixed\",\"size\":")?;
-					write!(self.w.0, "{}", fixed.size).map_err(convert_error)?;
-					self.w.write_char('}')?;
-				}
-			}
-			SchemaType::Record(ref record) => {
-				if !should_not_write_only_name(&record.name, self)? {
-					self.w.write_str("{\"name\":\"")?;
-					self.w.write_str(record.name.fully_qualified_name())?;
-					self.w.write_str("\",\"type\":\"record\",\"fields\":[")?;
-					for field in record.fields.iter() {
-						if !first_time {
-							self.w.write_char(',')?;
-						} else {
-							first_time = false;
+						true => {
+							state.w.write_char('"')?;
+							state.w.write_str(name.fully_qualified_name())?;
+							state.w.write_char('"')?;
+							false
 						}
-						self.w.write_str("{\"name\":\"")?;
-						self.w.write_str(&field.name)?;
-						self.w.write_str("\",\"type\":")?;
-						self.write_canonical_form(schema, field.schema)?;
+					})
+				};
+				match *type_ {
+					SchemaType::Null => {
+						self.w.write_str("\"null\"")?;
+					}
+					SchemaType::Boolean => {
+						self.w.write_str("\"boolean\"")?;
+					}
+					SchemaType::Bytes => {
+						self.w.write_str("\"bytes\"")?;
+					}
+					SchemaType::Double => {
+						self.w.write_str("\"double\"")?;
+					}
+					SchemaType::Float => {
+						self.w.write_str("\"float\"")?;
+					}
+					SchemaType::Int => {
+						self.w.write_str("\"int\"")?;
+					}
+					SchemaType::Long => {
+						self.w.write_str("\"long\"")?;
+					}
+					SchemaType::String => {
+						self.w.write_str("\"string\"")?;
+					}
+					SchemaType::Union(ref union) => {
+						self.w.write_char('[')?;
+						for &variant in &union.variants {
+							if !first_time {
+								self.w.write_char(',')?;
+							} else {
+								first_time = false;
+							}
+							self.write_canonical_form(schema, variant)?;
+						}
+						self.w.write_char(']')?;
+					}
+					SchemaType::Array(array_items) => {
+						self.w.write_str("{\"type\":\"array\",\"items\":")?;
+						self.write_canonical_form(schema, array_items)?;
 						self.w.write_char('}')?;
 					}
-					self.w.write_str("]}")?;
+					SchemaType::Map(map_values) => {
+						self.w.write_str("{\"type\":\"map\",\"values\":")?;
+						self.write_canonical_form(schema, map_values)?;
+						self.w.write_char('}')?;
+					}
+					SchemaType::Enum(ref enum_) => {
+						if !should_not_write_only_name(&enum_.name, self)? {
+							self.w.write_str("{\"name\":\"")?;
+							self.w.write_str(enum_.name.fully_qualified_name())?;
+							self.w.write_str("\",\"type\":\"enum\",\"symbols\":[")?;
+							for enum_symbol in enum_.symbols.iter() {
+								if !first_time {
+									self.w.write_char(',')?;
+								} else {
+									first_time = false;
+								}
+								self.w.write_char('"')?;
+								self.w.write_str(enum_symbol)?;
+								self.w.write_char('"')?;
+							}
+							self.w.write_char(']')?;
+							self.w.write_char('}')?;
+						}
+					}
+					SchemaType::Fixed(ref fixed) => {
+						if !should_not_write_only_name(&fixed.name, self)? {
+							self.w.write_str("{\"name\":\"")?;
+							self.w.write_str(fixed.name.fully_qualified_name())?;
+							self.w.write_str("\",\"type\":\"fixed\",\"size\":")?;
+							write!(self.w.0, "{}", fixed.size).map_err(convert_error)?;
+							self.w.write_char('}')?;
+						}
+					}
+					SchemaType::Record(ref record) => {
+						if !should_not_write_only_name(&record.name, self)? {
+							self.w.write_str("{\"name\":\"")?;
+							self.w.write_str(record.name.fully_qualified_name())?;
+							self.w.write_str("\",\"type\":\"record\",\"fields\":[")?;
+							for field in record.fields.iter() {
+								if !first_time {
+									self.w.write_char(',')?;
+								} else {
+									first_time = false;
+								}
+								self.w.write_str("{\"name\":\"")?;
+								self.w.write_str(&field.name)?;
+								self.w.write_str("\",\"type\":")?;
+								self.write_canonical_form(schema, field.schema)?;
+								self.w.write_char('}')?;
+							}
+							self.w.write_str("]}")?;
+						}
+					}
 				}
+				Ok(())
 			}
 		}
-		Ok(())
 	}
 }
 

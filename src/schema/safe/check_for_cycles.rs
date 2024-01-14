@@ -1,4 +1,4 @@
-use super::{EditableSchema, SchemaType};
+use super::{EditableSchema, SchemaNode, SchemaType};
 
 impl EditableSchema {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
@@ -21,7 +21,8 @@ impl EditableSchema {
 		let mut visited_nodes = vec![false; self.nodes.len()];
 		let mut checked_nodes = vec![false; self.nodes.len()];
 		for (idx, node) in self.nodes.iter().enumerate() {
-			if matches!(node.type_, SchemaType::Record(_)) && !checked_nodes[idx] {
+			if matches!(node, SchemaNode::RegularType(SchemaType::Record(_))) && !checked_nodes[idx]
+			{
 				check_no_zero_sized_cycle_inner(self, idx, &mut visited_nodes, &mut checked_nodes)?;
 			}
 		}
@@ -45,11 +46,11 @@ fn check_no_zero_sized_cycle_inner(
 	checked_nodes: &mut Vec<bool>,
 ) -> Result<(), UnconditionalCycle> {
 	visited_nodes[node_idx] = true;
-	for field in match &schema.nodes[node_idx].type_ {
-		SchemaType::Record(record) => &record.fields,
+	for field in match &schema.nodes[node_idx] {
+		SchemaNode::RegularType(SchemaType::Record(record)) => &record.fields,
 		_ => unreachable!(),
 	} {
-		if let SchemaType::Record(_) = &schema.nodes[field.schema.idx].type_ {
+		if let SchemaNode::RegularType(SchemaType::Record(_)) = &schema.nodes[field.schema.idx] {
 			if visited_nodes[field.schema.idx] {
 				return Err(UnconditionalCycle { _private: () });
 			} else {

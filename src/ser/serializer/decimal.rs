@@ -49,7 +49,7 @@ where
 				.map_err(SerError::io)?;
 			start
 		}
-		DecimalRepr::Fixed(ref fixed) => {
+		DecimalRepr::Fixed(fixed) => {
 			let size = fixed.size;
 			match buf.len().checked_sub(size) {
 				Some(start) => start,
