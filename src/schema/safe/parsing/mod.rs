@@ -4,7 +4,7 @@ use crate::schema::{safe::*, SchemaError};
 
 use std::collections::HashMap;
 
-const REMAP_BIT: usize = 1usize << (usize::BITS - 1);
+const LATE_NAME_LOOKUP_REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 
 struct SchemaConstructionState<'a> {
 	nodes: Vec<SchemaNode>,
@@ -26,7 +26,7 @@ impl std::str::FromStr for SchemaMut {
 
 		state.register_node(&raw_schema, None, None)?;
 
-		// Support for unordered definitions
+		// Support for unordered name definitions
 		if !state.unresolved_names.is_empty() {
 			let resolved_names: Vec<SchemaKey> = state
 				.unresolved_names
@@ -43,8 +43,8 @@ impl std::str::FromStr for SchemaMut {
 				})
 				.collect::<Result<_, _>>()?;
 			let fix_key = |key: &mut SchemaKey| {
-				if key.idx & REMAP_BIT != 0 {
-					*key = resolved_names[key.idx ^ REMAP_BIT];
+				if key.idx & LATE_NAME_LOOKUP_REMAP_BIT != 0 {
+					*key = resolved_names[key.idx ^ LATE_NAME_LOOKUP_REMAP_BIT];
 				}
 			};
 			for schema_node in &mut state.nodes {
@@ -391,7 +391,7 @@ impl<'a> SchemaConstructionState<'a> {
 						let idx = self.unresolved_names.len();
 						self.unresolved_names.push(name_key);
 						SchemaKey {
-							idx: idx | REMAP_BIT,
+							idx: idx | LATE_NAME_LOOKUP_REMAP_BIT,
 						}
 					}
 				}

@@ -8,7 +8,7 @@ impl SchemaMut {
 	///
 	/// Note that deserialization functions otherwise already prevent stack
 	/// overflows by limiting the recursion depth.
-	pub fn check_for_cycles(&self) -> Result<(), UnconditionalCycle> {
+	pub(crate) fn check_for_cycles(&self) -> Result<(), UnconditionalCycle> {
 		// Zero-size cycles (that would trigger infinite recursion when parsing, without
 		// consuming any input) can only happen with records that end up containing
 		// themselves ~immediately (that is, only through record paths).
