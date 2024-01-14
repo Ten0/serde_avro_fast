@@ -4,6 +4,7 @@
 mod canonical_form;
 mod check_for_cycles;
 mod parsing;
+mod rabin;
 mod serialize;
 
 use super::{Fixed, Name, SchemaError};
