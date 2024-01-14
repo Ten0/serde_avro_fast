@@ -259,7 +259,6 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		// Let's be extra-sure (second condition is for calls to add)
 		assert!(len > 0 && len == safe.nodes.len() && len <= (isize::MAX as usize));
 		let storage_start_ptr = ret.nodes.as_mut_ptr();
-		// unsafe closure used below in unsafe block
 		let key_to_node = |schema_key: super::safe::SchemaKey,
 		                   logical_types: &[LogicalTypeResolution]|
 		 -> Result<&'static SchemaNode<'static>, SchemaError> {
@@ -281,13 +280,14 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					"id should be low enough - bug in serde_avro_fast"
 				);
 			}
+			// SAFETY: see below
 			Ok(unsafe { &*(storage_start_ptr.add(idx)) })
 		};
 
 		// Now we can initialize the nodes
 		let mut curr_storage_node_ptr = storage_start_ptr;
 		for (i, safe_node) in safe.nodes.into_iter().enumerate() {
-			// Safety:
+			// SAFETY:
 			// - The nodes we create here are never moving in memory since the entire vec is
 			//   preallocated, and even when moving a vec, the pointed space doesn't move.
 			// - The fake `'static` lifetimes are always downgraded before being made
@@ -378,11 +378,29 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			};
 		}
-		// Now that all the nodes have been initialized (except their `per_type_lookup`
-		// tables) we can initialize the `per_type_lookup` tables
+		// Now that all the nodes have been partially we can set the references to
+		// `Fixed` for `Decimal` nodes
+		for (i, to) in set_decimal_repr_to_fixed {
+			// SAFETY: indexes are valid
+			unsafe {
+				match *storage_start_ptr.add(i) {
+					SchemaNode::Decimal(ref mut decimal) => match *storage_start_ptr.add(to) {
+						SchemaNode::Fixed(ref fixed) => {
+							decimal.repr = DecimalRepr::Fixed(fixed);
+						}
+						_ => unreachable!(),
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+		// Now that all the nodes have been **fully** initialized (except their
+		// `per_type_lookup` tables) we can initialize the `per_type_lookup` tables
+		// Note that this has to be done after all nodes have been initialized because
+		// the `per_type_lookup` table may read even the late-initialized fields such as
+		// decimal repr.
 		curr_storage_node_ptr = storage_start_ptr;
-		let mut set_decimal_repr_to_fixed = set_decimal_repr_to_fixed.iter();
-		for i in 0..len {
+		for _ in 0..len {
 			// Safety:
 			// - UnionVariantsPerTypeLookup won't ever read `per_type_lookup` of the other
 			//   nodes, so there are no aliasing issues. (Tbh I'm not even sure that would
@@ -396,28 +414,11 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					}) => {
 						*per_type_lookup = UnionVariantsPerTypeLookup::new(variants);
 					}
-					SchemaNode::Decimal(Decimal { ref mut repr, .. }) => {
-						if let Some(&(_, fixed_idx)) = set_decimal_repr_to_fixed
-							.as_slice()
-							.first()
-							.filter(|&&(idx, _)| idx == i)
-						{
-							assert_ne!(fixed_idx, i, "We would have two live mutable references");
-							match *storage_start_ptr.add(fixed_idx) {
-								SchemaNode::Fixed(ref fixed) => {
-									*repr = DecimalRepr::Fixed(fixed);
-								}
-								_ => unreachable!(),
-							}
-							set_decimal_repr_to_fixed.next().unwrap();
-						}
-					}
 					_ => {}
 				}
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			}
 		}
-		assert!(set_decimal_repr_to_fixed.next().is_none());
 		Ok(ret)
 	}
 }
