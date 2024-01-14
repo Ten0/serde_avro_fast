@@ -32,8 +32,8 @@ pub(crate) enum UnionVariantLookupKey {
 const N_VARIANTS: usize = 20;
 
 pub(crate) struct PerTypeLookup<'a> {
-	per_name: HashMap<Cow<'static, str>, (i64, &'a SchemaNode<'a>)>,
-	per_direct_union_variant: [Option<(i64, &'a SchemaNode<'a>)>; N_VARIANTS],
+	per_name: HashMap<Cow<'static, str>, (i64, NodeRef<'a>)>,
+	per_direct_union_variant: [Option<(i64, NodeRef<'a>)>; N_VARIANTS],
 }
 impl<'a> PerTypeLookup<'a> {
 	pub(crate) fn placeholder() -> Self {
@@ -47,10 +47,13 @@ impl<'a> PerTypeLookup<'a> {
 		&self,
 		variant: UnionVariantLookupKey,
 	) -> Option<(i64, &'a SchemaNode<'a>)> {
-		self.per_direct_union_variant[variant as usize]
+		self.per_direct_union_variant[variant as usize].map(|(i, n)| (i, n.as_ref()))
 	}
 	pub(crate) fn named(&self, name: &str) -> Option<(i64, &'a SchemaNode<'a>)> {
-		self.per_name.get(name).copied()
+		self.per_name
+			.get(name)
+			.copied()
+			.map(|(i, n)| (i, n.as_ref()))
 	}
 
 	/// Constructs the lookup table
@@ -59,13 +62,13 @@ impl<'a> PerTypeLookup<'a> {
 	/// relies on that this function:
 	/// - Does not read `per_type_lookup` of the other nodes (doesn't need to do
 	///   so anyway)
-	pub(crate) fn new(variants: &[&'a SchemaNode<'a>]) -> PerTypeLookup<'a> {
+	pub(crate) fn new(variants: &[NodeRef<'a>]) -> PerTypeLookup<'a> {
 		#[derive(Clone, Copy)]
 		enum NoneSomeOrConflict<'a> {
 			None,
 			Some {
 				priority: usize,
-				discriminant_and_schema_node: (i64, &'a SchemaNode<'a>),
+				discriminant_and_schema_node: (i64, NodeRef<'a>),
 			},
 			Conflict {
 				priority: usize,
@@ -138,7 +141,7 @@ impl<'a> PerTypeLookup<'a> {
 			// every `UnionVariantLookupKey` corresponds to one (or more) function
 			// of `Serializer`, and every `register` call corresponds to a capability
 			// of that function to serialize that type.
-			match schema_node {
+			match schema_node.as_ref() {
 				SchemaNode::Null => {
 					register_type_name("Null");
 					register(UnionVariantLookupKey::Null, 0);
@@ -221,8 +224,8 @@ impl<'a> PerTypeLookup<'a> {
 				SchemaNode::Decimal(Decimal { repr, .. }) => {
 					register_type_name("Decimal");
 					match repr {
-						DecimalRepr::Fixed(Fixed { name, .. }) => {
-							register_name(name);
+						DecimalRepr::Fixed(fixed) => {
+							register_name(&fixed.as_ref().name);
 						}
 						DecimalRepr::Bytes => {}
 					}

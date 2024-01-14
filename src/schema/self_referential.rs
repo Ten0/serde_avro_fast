@@ -4,7 +4,7 @@ use super::{
 	SchemaError,
 };
 
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 pub(crate) use super::{Fixed, Name};
 
@@ -46,7 +46,9 @@ impl Schema {
 	pub(crate) fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
 		// the signature of this function downgrades the fake 'static lifetime in a way
 		// that makes it correct
-		&self.nodes[0]
+		self.nodes
+			.first()
+			.expect("Schema must have at least one node (the root)")
 	}
 
 	/// Obtain the JSON for this schema
@@ -57,6 +59,67 @@ impl Schema {
 	/// Obtain the Rabin fingerprint of the schema
 	pub fn rabin_fingerprint(&self) -> &[u8; 8] {
 		&self.fingerprint
+	}
+}
+
+/// A `NodeRef` is a pointer to a node in a [`Schema`]
+///
+/// This is morally equivalent to `&'a SchemaNode<'a>`, only Rust will not
+/// assume as much when it comes to aliasing constraints.
+///
+/// For ease of use, it can be `Deref`d to a [`SchemaNode`],
+/// so this module is responsible for ensuring that no `NodeRef`
+/// is leaked that would be incorrect on that regard.
+///
+/// SAFETY: The invariant that we need to uphold is that with regards to
+/// lifetimes, this behaves the same as an `&'a SchemaNode<'a>`.
+///
+/// We don't directly use references because we need to update the pointees
+/// after creating refences to them when building the schema, and that doesn't
+/// pass Miri's Stacked Borrows checks.
+/// This abstraction should be reasonably ergonomic, but pass miri.
+pub(crate) struct NodeRef<'a, N = SchemaNode<'a>> {
+	node: std::ptr::NonNull<N>,
+	_spooky: PhantomData<&'a N>,
+}
+impl<'a, N> Copy for NodeRef<'a, N> {}
+impl<'a, N> Clone for NodeRef<'a, N> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+unsafe impl<T: Sync> Sync for NodeRef<'_, T> {}
+unsafe impl<T: Sync> Send for NodeRef<'_, T> {}
+impl<N> NodeRef<'static, N> {
+	const unsafe fn new(ptr: *mut N) -> Self {
+		Self {
+			node: std::ptr::NonNull::new_unchecked(ptr),
+			_spooky: PhantomData,
+		}
+	}
+	pub(crate) const fn from_static(actually_static: &'static N) -> Self {
+		// SAFETY: since it's actually 'static, it always upholds the invariant
+		// that we can turn it into a `&'static N`
+		unsafe {
+			Self {
+				node: std::ptr::NonNull::new_unchecked(actually_static as *const N as *mut N),
+				_spooky: PhantomData,
+			}
+		}
+	}
+}
+impl<'a, N> NodeRef<'a, N> {
+	/// Compared to `Deref`, this propagates the lifetime of the reference
+	pub(crate) fn as_ref(self) -> &'a N {
+		// SAFETY: this module is responsible for never leaking a `NodeRef` that
+		// isn't tied to the appropriate lifetime
+		unsafe { self.node.as_ref() }
+	}
+}
+impl<'a, N> std::ops::Deref for NodeRef<'a, N> {
+	type Target = N;
+	fn deref(&self) -> &Self::Target {
+		self.as_ref()
 	}
 }
 
@@ -76,8 +139,8 @@ pub(crate) enum SchemaNode<'a> {
 	Double,
 	Bytes,
 	String,
-	Array(&'a SchemaNode<'a>),
-	Map(&'a SchemaNode<'a>),
+	Array(NodeRef<'a>),
+	Map(NodeRef<'a>),
 	Union(Union<'a>),
 	Record(Record<'a>),
 	Enum(Enum),
@@ -94,7 +157,7 @@ pub(crate) enum SchemaNode<'a> {
 
 /// Component of a [`SchemaMut`]
 pub(crate) struct Union<'a> {
-	pub variants: Vec<&'a SchemaNode<'a>>,
+	pub variants: Vec<NodeRef<'a>>,
 	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
 }
 
@@ -128,7 +191,7 @@ impl<'a> std::fmt::Debug for Record<'a> {
 #[derive(Debug)]
 pub(crate) struct RecordField<'a> {
 	pub name: String,
-	pub schema: &'a SchemaNode<'a>,
+	pub schema: NodeRef<'a>,
 }
 
 /// Component of a [`SchemaMut`]
@@ -159,7 +222,7 @@ pub struct Decimal<'a> {
 #[derive(Clone, Debug)]
 pub enum DecimalRepr<'a> {
 	Bytes,
-	Fixed(&'a Fixed),
+	Fixed(NodeRef<'a, Fixed>),
 }
 
 impl TryFrom<super::safe::SchemaMut> for Schema {
@@ -259,9 +322,9 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		// Let's be extra-sure (second condition is for calls to add)
 		assert!(len > 0 && len == safe.nodes.len() && len <= (isize::MAX as usize));
 		let storage_start_ptr = ret.nodes.as_mut_ptr();
-		let key_to_node = |schema_key: super::safe::SchemaKey,
-		                   logical_types: &[LogicalTypeResolution]|
-		 -> Result<&'static SchemaNode<'static>, SchemaError> {
+		let key_to_ref = |schema_key: super::safe::SchemaKey,
+		                  logical_types: &[LogicalTypeResolution]|
+		 -> Result<NodeRef<'static>, SchemaError> {
 			let mut idx = schema_key.idx;
 			if idx >= len {
 				return Err(SchemaError::msg(format_args!(
@@ -281,7 +344,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 				);
 			}
 			// SAFETY: see below
-			Ok(unsafe { &*(storage_start_ptr.add(idx)) })
+			Ok(unsafe { NodeRef::new(storage_start_ptr.add(idx)) })
 		};
 
 		// Now we can initialize the nodes
@@ -320,17 +383,17 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					SafeSchemaType::Bytes => SchemaNode::Bytes,
 					SafeSchemaType::String => SchemaNode::String,
 					SafeSchemaType::Array(array) => {
-						SchemaNode::Array(key_to_node(array.items, &logical_types)?)
+						SchemaNode::Array(key_to_ref(array.items, &logical_types)?)
 					}
 					SafeSchemaType::Map(map) => {
-						SchemaNode::Map(key_to_node(map.values, &logical_types)?)
+						SchemaNode::Map(key_to_ref(map.values, &logical_types)?)
 					}
 					SafeSchemaType::Union(union) => SchemaNode::Union({
 						Union {
 							variants: {
 								let mut variants = Vec::with_capacity(union.variants.len());
 								for schema_key in union.variants {
-									variants.push(key_to_node(schema_key, &logical_types)?);
+									variants.push(key_to_ref(schema_key, &logical_types)?);
 								}
 								variants
 							},
@@ -353,7 +416,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 							for field in record.fields {
 								fields.push(RecordField {
 									name: field.name,
-									schema: key_to_node(field.type_, &logical_types)?,
+									schema: key_to_ref(field.type_, &logical_types)?,
 								});
 							}
 							fields
@@ -384,13 +447,17 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			// SAFETY: indexes are valid
 			unsafe {
 				match *storage_start_ptr.add(i) {
-					SchemaNode::Decimal(ref mut decimal) => match *storage_start_ptr.add(to) {
-						SchemaNode::Fixed(ref fixed) => {
-							decimal.repr = DecimalRepr::Fixed(fixed);
+					SchemaNode::Decimal(ref mut decimal) => {
+						assert_ne!(i, to, "That would violate aliasing rules");
+						match *storage_start_ptr.add(to) {
+							SchemaNode::Fixed(ref fixed) => {
+								decimal.repr =
+									DecimalRepr::Fixed(NodeRef::new(fixed as *const _ as *mut _));
+							}
+							_ => unreachable!("set_decimal_repr_to_fixed was built incorrectly"),
 						}
-						_ => unreachable!(),
-					},
-					_ => unreachable!(),
+					}
+					_ => unreachable!("set_decimal_repr_to_fixed was built incorrectly"),
 				}
 			}
 		}
@@ -429,6 +496,12 @@ impl std::fmt::Debug for Schema {
 	}
 }
 
+impl<N: std::fmt::Debug> std::fmt::Debug for NodeRef<'_, N> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		<N as std::fmt::Debug>::fmt(self.as_ref(), f)
+	}
+}
+
 impl<'a> std::fmt::Debug for SchemaNode<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
 		// Avoid going into stack overflow when rendering SchemaNode's debug impl, in
@@ -464,14 +537,14 @@ impl<'a> std::fmt::Debug for SchemaNode<'a> {
 			SchemaNode::Array(inner) => {
 				let mut d = f.debug_tuple("Array");
 				if depth < MAX_DEPTH {
-					d.field(inner);
+					d.field(inner.as_ref());
 				}
 				d.finish()
 			}
 			SchemaNode::Map(inner) => {
 				let mut d = f.debug_tuple("Map");
 				if depth < MAX_DEPTH {
-					d.field(inner);
+					d.field(inner.as_ref());
 				}
 				d.finish()
 			}

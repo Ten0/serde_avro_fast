@@ -175,7 +175,9 @@ struct Metadata<S, M> {
 }
 const METADATA_SCHEMA: &crate::schema::self_referential::SchemaNode =
 	&crate::schema::self_referential::SchemaNode::Map(
-		&crate::schema::self_referential::SchemaNode::Bytes,
+		crate::schema::self_referential::NodeRef::from_static(
+			&crate::schema::self_referential::SchemaNode::Bytes,
+		),
 	);
 
 #[test]

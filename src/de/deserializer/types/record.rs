@@ -27,7 +27,8 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {
 				.record_fields
 				.next()
 				.expect("Called next_value without seed returning Some before")
-				.schema,
+				.schema
+				.as_ref(),
 			state: self.state,
 			allowed_depth: self.allowed_depth,
 		})

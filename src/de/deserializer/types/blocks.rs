@@ -94,7 +94,7 @@ impl<'de, R: ReadSlice<'de>> SeqAccess<'de> for ArraySeqAccess<'_, '_, R> {
 
 pub(in super::super) struct MapMapAccess<'r, 's, R> {
 	pub(in super::super) block_reader: BlockReader<'r, 's, R>,
-	pub(in super::super) element_schema: &'s SchemaNode<'s>,
+	pub(in super::super) elements_schema: &'s SchemaNode<'s>,
 }
 impl<'de, R: ReadSlice<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 	type Error = DeError;
@@ -117,7 +117,7 @@ impl<'de, R: ReadSlice<'de>> MapAccess<'de> for MapMapAccess<'_, '_, R> {
 		V: DeserializeSeed<'de>,
 	{
 		seed.deserialize(DatumDeserializer {
-			schema_node: self.element_schema,
+			schema_node: self.elements_schema,
 			state: self.block_reader.reader,
 			allowed_depth: self.block_reader.allowed_depth,
 		})

@@ -411,7 +411,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				self.state, record,
 			)),
 			SchemaNode::Map(map) => {
-				SerializeMapAsRecordOrMapOrDuration::map(self.state, map, len.unwrap_or(0))
+				SerializeMapAsRecordOrMapOrDuration::map(self.state, map.as_ref(), len.unwrap_or(0))
 			}
 			SchemaNode::Duration => {
 				if len.map_or(false, |l| l != 3) {
@@ -635,7 +635,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 				),
 				SchemaNode::Map(map) => Ok(SerializeStructAsRecordOrMapOrDuration::map(
 					serializer.state,
-					map,
+					map.as_ref(),
 					len,
 				)?),
 				SchemaNode::Duration => {

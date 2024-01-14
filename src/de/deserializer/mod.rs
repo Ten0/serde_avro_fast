@@ -37,11 +37,11 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::Bytes => read_length_delimited(self.state, BytesVisitor(visitor)),
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				elements_schema,
+				elements_schema: elements_schema.as_ref(),
 				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Map(elements_schema) => visitor.visit_map(MapMapAccess {
-				element_schema: elements_schema,
+				elements_schema: elements_schema.as_ref(),
 				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Union(ref union) => Self {
@@ -206,14 +206,14 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				match union
 					.variants
 					.get(union_discriminant)
-					.map(|&schema_key| schema_key)
+					.map(|&schema_key| schema_key.as_ref())
 				{
 					None => Err(DeError::new("Could not find union discriminant in schema")),
 					Some(SchemaNode::Null) => visitor.visit_none(),
 					Some(variant_schema)
 						if union.variants.len() == 2
 							&& matches!(
-								union.variants[1 - union_discriminant],
+								*union.variants[1 - union_discriminant],
 								SchemaNode::Null
 							) =>
 					{
@@ -246,7 +246,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		// Until then, this can be worked around using the `serde-tuple-vec-map` crate
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				elements_schema,
+				elements_schema: elements_schema.as_ref(),
 				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration => visitor.visit_seq(DurationMapAndSeqAccess {
@@ -263,7 +263,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		// Allows deserializing Duration as (u32, u32, u32)
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
-				elements_schema,
+				elements_schema: elements_schema.as_ref(),
 				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration if len == 3 => visitor.visit_seq(DurationMapAndSeqAccess {

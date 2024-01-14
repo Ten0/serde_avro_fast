@@ -132,14 +132,14 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 								record.fields[current_idx].name.as_str()
 							))
 						};
-						match record.fields[current_idx].schema {
+						match *record.fields[current_idx].schema {
 							SchemaNode::Null => {
 								// Always-null fields can be skipped in source
 								// without erroring (although providing it with
 								// type `()` will result in better perf because
 								// we won't need to buffer)
 							}
-							SchemaNode::Union(union) => {
+							SchemaNode::Union(ref union) => {
 								match union.per_type_lookup.unnamed(UnionVariantLookupKey::Null) {
 									Some((discriminant, SchemaNode::Null)) => {
 										// Optional fields can be skipped in source
@@ -229,7 +229,7 @@ fn field_idx<'s>(
 		Some(first) => {
 			if first.name == field_name {
 				// Fast case: fields are ordered so we don't need to buffer nor hash-map lookup
-				Ok((record_state.current_idx, first.schema))
+				Ok((record_state.current_idx, first.schema.as_ref()))
 			} else {
 				let field_idx = *record_state
 					.record
@@ -237,9 +237,10 @@ fn field_idx<'s>(
 					.get(field_name)
 					.ok_or_else(key_does_not_exist)?;
 				match field_idx.cmp(&record_state.current_idx) {
-					std::cmp::Ordering::Greater => {
-						Ok((field_idx, record_state.record.fields[field_idx].schema))
-					}
+					std::cmp::Ordering::Greater => Ok((
+						field_idx,
+						record_state.record.fields[field_idx].schema.as_ref(),
+					)),
 					std::cmp::Ordering::Less => Err(serializing_same_field_name_twice(field_name)),
 					std::cmp::Ordering::Equal => panic!(
 						"We should have hit the `first.name == field_name` branch - \
