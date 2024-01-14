@@ -65,6 +65,12 @@ impl SchemaMut {
 		)
 	}
 
+	/// Turn this [`SchemaMut`] into a [`Schema`](crate::Schema)
+	///
+	/// [`Schema`](crate::Schema) is necessary for use with the serializer and
+	/// deserializer.
+	///
+	/// This will fail if the schema is invalid (e.g. incorrect [`SchemaKey`]`).
 	pub fn freeze(self) -> Result<super::Schema, SchemaError> {
 		self.try_into()
 	}
@@ -178,6 +184,33 @@ pub enum SchemaType {
 	Fixed(Fixed),
 }
 
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Union {
+	pub variants: Vec<SchemaKey>,
+}
+
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Record {
+	pub fields: Vec<RecordField>,
+	pub name: Name,
+}
+
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct RecordField {
+	pub name: String,
+	pub schema: SchemaKey,
+}
+
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Enum {
+	pub symbols: Vec<String>,
+	pub name: Name,
+}
+
 /// Logical type
 ///
 /// <https://avro.apache.org/docs/current/specification/#logical-types>
@@ -227,36 +260,14 @@ pub enum LogicalType {
 	/// An logical type that is not known or not handled in any particular way
 	/// by this library.
 	///
+	/// This is the string that is used in the schema JSON to refer to this
+	/// logical type.
+	///
 	/// Logical types of this variant may turn into known logical types from one
-	/// release to another, as new logical types get added.
+	/// release to another, as new logical types get added, so if you need to
+	/// check for a specific logical type, you should use [`name`](Self::name)
+	/// instead.
 	Unknown(String),
-}
-
-/// Component of a [`SchemaMut`]
-#[derive(Clone, Debug)]
-pub struct Union {
-	pub variants: Vec<SchemaKey>,
-}
-
-/// Component of a [`SchemaMut`]
-#[derive(Clone, Debug)]
-pub struct Record {
-	pub fields: Vec<RecordField>,
-	pub name: Name,
-}
-
-/// Component of a [`SchemaMut`]
-#[derive(Clone, Debug)]
-pub struct RecordField {
-	pub name: String,
-	pub schema: SchemaKey,
-}
-
-/// Component of a [`SchemaMut`]
-#[derive(Clone, Debug)]
-pub struct Enum {
-	pub symbols: Vec<String>,
-	pub name: Name,
 }
 
 /// Component of a [`SchemaMut`]
@@ -264,4 +275,26 @@ pub struct Enum {
 pub struct Decimal {
 	pub precision: usize,
 	pub scale: u32,
+}
+
+impl LogicalType {
+	/// The name of the logical type
+	///
+	/// This is the string that is used in the schema JSON to refer to this
+	/// logical type.
+	///
+	/// For example, the `Decimal` logical type is named `decimal`.
+	pub fn name(&self) -> &str {
+		match self {
+			LogicalType::Decimal(_) => "decimal",
+			LogicalType::Uuid => "uuid",
+			LogicalType::Date => "date",
+			LogicalType::TimeMillis => "time-millis",
+			LogicalType::TimeMicros => "time-micros",
+			LogicalType::TimestampMillis => "timestamp-millis",
+			LogicalType::TimestampMicros => "timestamp-micros",
+			LogicalType::Duration => "duration",
+			LogicalType::Unknown(name) => name,
+		}
+	}
 }
