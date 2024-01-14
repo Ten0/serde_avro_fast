@@ -92,7 +92,7 @@ pub(crate) enum SchemaNode<'a> {
 	Duration,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 pub(crate) struct Union<'a> {
 	pub variants: Vec<&'a SchemaNode<'a>>,
 	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
@@ -107,7 +107,7 @@ impl std::fmt::Debug for Union<'_> {
 	}
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 pub(crate) struct Record<'a> {
 	pub fields: Vec<RecordField<'a>>,
 	pub name: Name,
@@ -124,14 +124,14 @@ impl<'a> std::fmt::Debug for Record<'a> {
 	}
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Debug)]
 pub(crate) struct RecordField<'a> {
 	pub name: String,
 	pub schema: &'a SchemaNode<'a>,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone)]
 pub(crate) struct Enum {
 	pub symbols: Vec<String>,
@@ -149,7 +149,7 @@ impl std::fmt::Debug for Enum {
 	}
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Decimal<'a> {
 	pub precision: usize,

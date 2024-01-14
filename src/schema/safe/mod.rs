@@ -14,7 +14,12 @@ pub use check_for_cycles::UnconditionalCycle;
 /// An editable representation of an Avro schema
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
-/// allow to index into [`Schema`].
+/// allow to index into [`SchemaMut`].
+///
+/// It is useful to implement it this way because, due to how referencing via
+/// [Names](https://avro.apache.org/docs/current/specification/#names) works in Avro,
+/// the most performant representation of an Avro schema is not a tree but a
+/// possibly-cyclic general directed graph.
 ///
 /// For details about the meaning of the fields, see the
 /// [`SchemaNode`](crate::schema::SchemaNode) documentation.
@@ -224,34 +229,34 @@ pub enum LogicalType {
 	Unknown(String),
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Union {
 	pub variants: Vec<SchemaKey>,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Record {
 	pub fields: Vec<RecordField>,
 	pub name: Name,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct RecordField {
 	pub name: String,
 	pub schema: SchemaKey,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Enum {
 	pub symbols: Vec<String>,
 	pub name: Name,
 }
 
-/// Component of a [`SchemaNode`]
+/// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Decimal {
 	pub precision: usize,
