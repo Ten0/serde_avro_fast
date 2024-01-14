@@ -33,6 +33,8 @@ pub struct SchemaMut {
 impl SchemaMut {
 	/// Obtain the underlying graph storage
 	///
+	/// The first node (index `0`) is the root of the schema.
+	///
 	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
 	pub fn nodes(&self) -> &[SchemaNode] {
 		&self.nodes
@@ -43,6 +45,8 @@ impl SchemaMut {
 	/// This loses the original JSON. If obtaining it again (for e.g. object
 	/// container file encoding) it will be re-generated and will lose all
 	/// non-stored schema fields (`doc`, `aliases`, `default`, ...).
+	///
+	/// The first node (index `0`) is the root of the schema.
 	///
 	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
 	pub fn nodes_mut(&mut self) -> &mut Vec<SchemaNode> {
@@ -63,6 +67,16 @@ impl SchemaMut {
 			"Schema should have nodes - have you updated it \
 				in such a way that all of its nodes were removed?",
 		)
+	}
+
+	/// Initialize a [`SchemaMut`] from a set of nodes.
+	///
+	/// The first node (index `0`) is the root of the schema.
+	pub fn from_nodes(nodes: Vec<SchemaNode>) -> Self {
+		Self {
+			nodes,
+			schema_json: None,
+		}
 	}
 
 	/// Turn this [`SchemaMut`] into a [`Schema`](crate::Schema)
