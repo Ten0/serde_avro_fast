@@ -1,4 +1,6 @@
-use serde_avro_fast::{from_single_object_reader, from_single_object_slice, Schema};
+use serde_avro_fast::{
+	from_single_object_reader, from_single_object_slice, schema::EditableSchema, Schema,
+};
 
 use apache_avro::types::Value;
 
@@ -30,6 +32,7 @@ const SCHEMA_STR: &str = r#"
 
 lazy_static! {
 	static ref SCHEMA: Schema = SCHEMA_STR.parse().unwrap();
+	static ref EDITABLE_SCHEMA: EditableSchema = SCHEMA_STR.parse().unwrap();
 	static ref APACHE_SCHEMA: apache_avro::Schema =
 		apache_avro::Schema::parse_str(SCHEMA_STR).unwrap();
 }
@@ -54,7 +57,7 @@ impl From<TestSingleObjectReader> for Value {
 	}
 }
 
-fn encode(
+fn apache_encode(
 	value: impl Into<Value>,
 	schema: &apache_avro::Schema,
 	out: &mut Vec<u8>,
@@ -77,7 +80,8 @@ fn test_avro_3507_single_object_reader() {
 			.fingerprint::<apache_avro::rabin::Rabin>()
 			.bytes[..],
 	);
-	encode(expected_value.clone(), &APACHE_SCHEMA, &mut to_read).expect("Encode should succeed");
+	apache_encode(expected_value.clone(), &APACHE_SCHEMA, &mut to_read)
+		.expect("Encode should succeed");
 	let val: TestSingleObjectReader =
 		from_single_object_slice(to_read.as_slice(), &SCHEMA).unwrap();
 	assert_eq!(expected_value, val);
@@ -100,7 +104,8 @@ fn avro_3642_test_single_object_reader_incomplete_reads() {
 			.bytes[..],
 	);
 	let mut to_read_3 = Vec::<u8>::new();
-	encode(expected_value.clone(), &APACHE_SCHEMA, &mut to_read_3).expect("Encode should succeed");
+	apache_encode(expected_value.clone(), &APACHE_SCHEMA, &mut to_read_3)
+		.expect("Encode should succeed");
 	let to_read = (&to_read_1[..]).chain(&to_read_2[..]).chain(&to_read_3[..]);
 	let val: TestSingleObjectReader = from_single_object_reader(to_read, &SCHEMA).unwrap();
 	assert_eq!(expected_value, val);

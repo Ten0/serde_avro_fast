@@ -120,7 +120,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 						self.w.write_char('}')?;
 					}
 					SchemaType::Enum(ref enum_) => {
-						if !should_not_write_only_name(&enum_.name, self)? {
+						if should_not_write_only_name(&enum_.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(enum_.name.fully_qualified_name())?;
 							self.w.write_str("\",\"type\":\"enum\",\"symbols\":[")?;
@@ -139,7 +139,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 						}
 					}
 					SchemaType::Fixed(ref fixed) => {
-						if !should_not_write_only_name(&fixed.name, self)? {
+						if should_not_write_only_name(&fixed.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(fixed.name.fully_qualified_name())?;
 							self.w.write_str("\",\"type\":\"fixed\",\"size\":")?;
@@ -148,7 +148,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 						}
 					}
 					SchemaType::Record(ref record) => {
-						if !should_not_write_only_name(&record.name, self)? {
+						if should_not_write_only_name(&record.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(record.name.fully_qualified_name())?;
 							self.w.write_str("\",\"type\":\"record\",\"fields\":[")?;
