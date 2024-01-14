@@ -238,41 +238,58 @@ impl<'a> SchemaConstructionState<'a> {
 									name,
 								})
 							}
-							raw::SchemaNode::Type(
-								t @ (raw::Type::Null
+							ref inner_type @ (raw::SchemaNode::Type(
+								raw::Type::Null
 								| raw::Type::Boolean
 								| raw::Type::Int
 								| raw::Type::Long
 								| raw::Type::Float
 								| raw::Type::Double
 								| raw::Type::Bytes
-								| raw::Type::String),
-							) => {
-								return Err(SchemaError::msg(format_args!(
-								"Expected complex type name, but got {t:?} as type in a type object \
-									and there is no logical type in that type object.",
-							)));
-							}
-							raw::SchemaNode::Ref(ref t) => {
-								return Err(SchemaError::msg(format_args!(
-									"Expected complex type name, but got another type object \
-									(ref to {t}) as type in a type object \
-									and there is no logical type in that type object.",
-								)));
-							}
-							raw::SchemaNode::Object(_) => {
-								return Err(SchemaError::new(
-									"Expected complex type name, but got another type object \
-									({{ ... }}) as type in a type object \
-									and there is no logical type in that type object.",
-								));
-							}
-							raw::SchemaNode::Union(_) => {
-								return Err(SchemaError::new(
-									"Expected complex type name, but got a union as type \
-										in a type object and there is no logical type \
-										in that type object.",
-								));
+								| raw::Type::String,
+							)
+							| raw::SchemaNode::Ref(_)
+							| raw::SchemaNode::Object(_)
+							| raw::SchemaNode::Union(_)) => {
+								// We have to allow {"type": {"type": "string"}}
+								// (an object with an inner type and nothing
+								// else is a valid representation)
+								// However in that case we would ignore all keys
+								// that are set at our current level, so we check for this
+								// Let's just pass the namespace if overridden,
+								// that seems reasonable...
+								match object {
+									&raw::SchemaNodeObject {
+										type_: _,
+										logical_type: _,
+										name: _,
+										namespace: _,
+										fields: None,
+										symbols: None,
+										items: None,
+										values: None,
+										size: None,
+										precision: None,
+										scale: None,
+									} => {
+										self.nodes.pop().expect("We have just pushed");
+										return self.register_node(
+											inner_type,
+											name_key
+												.as_ref()
+												.and_then(|n| n.namespace)
+												.or(enclosing_namespace),
+											will_have_logical_type,
+										);
+									}
+									_ => {
+										return Err(SchemaError::new(
+											"Got unnecessarily-nested type, but \
+												local object properties are set \
+												- those would be ignored",
+										))
+									}
+								}
 							}
 						}
 					}),
@@ -358,7 +375,7 @@ impl<'a> SchemaConstructionState<'a> {
 						name: &reference,
 					}
 				};
-				return Ok(match self.names.get(&name_key) {
+				match self.names.get(&name_key) {
 					Some(&idx) => SchemaKey { idx },
 					None => {
 						let idx = self.unresolved_names.len();
@@ -367,7 +384,7 @@ impl<'a> SchemaConstructionState<'a> {
 							idx: idx | REMAP_BIT,
 						}
 					}
-				});
+				}
 			}
 		})
 	}
