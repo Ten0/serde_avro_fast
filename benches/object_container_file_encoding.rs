@@ -111,7 +111,7 @@ struct AddressOwned {
 
 fn bench_object_container_file_serialization(c: &mut Criterion) {
 	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&apache_schema).unwrap();
+	let schema: serde_avro_fast::Schema = RAW_BIG_SCHEMA.parse().unwrap();
 	let inputs: Vec<BigStruct> = (0..100000)
 		.map(|i| BigStruct {
 			username: "John Doe",
@@ -196,8 +196,7 @@ fn bench_object_container_file_serialization(c: &mut Criterion) {
 }
 
 fn bench_object_container_file_deserialization(c: &mut Criterion) {
-	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&apache_schema).unwrap();
+	let schema: serde_avro_fast::Schema = RAW_BIG_SCHEMA.parse().unwrap();
 	for &(name, codec) in &[
 		("null", Compression::Null),
 		#[cfg(feature = "deflate")]

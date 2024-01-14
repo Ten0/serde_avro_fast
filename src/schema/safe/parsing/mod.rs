@@ -93,9 +93,9 @@ impl std::str::FromStr for EditableSchema {
 			),
 		};
 
-		schema.check_for_cycles().map_err(|_: UnconditionalCycle| {
-			SchemaError::msg("The schema contains a record that ends up always containing itself")
-		})?;
+		schema
+			.check_for_cycles()
+			.map_err(|e: UnconditionalCycle| SchemaError::msg(e))?;
 
 		Ok(schema)
 	}

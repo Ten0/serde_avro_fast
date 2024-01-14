@@ -217,7 +217,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 			})
 		},
 	);
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = RAW_SMALL_SCHEMA.parse().unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "small"),
 		&datum.as_slice(),
@@ -242,7 +242,7 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 			})
 		},
 	);
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = RAW_BIG_SCHEMA.parse().unwrap();
 	c.bench_with_input(
 		BenchmarkId::new("serde_avro_fast", "big"),
 		&datum.as_slice(),

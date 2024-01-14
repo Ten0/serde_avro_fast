@@ -97,7 +97,7 @@ fn test_round_trip_apache_fast<T: serde::de::DeserializeOwned + serde::Serialize
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
 	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
@@ -109,18 +109,15 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
 	println!("{}", serde_json::to_string_pretty(&json_for_value).unwrap());
 
 	let mut encoded = Vec::new();
-	match (serde_json::to_value(&json_for_value), &fast_schema.root()) {
-		(
-			Ok(serde_json::Value::Object(obj)),
-			serde_avro_fast::schema::SchemaNode::Record { .. },
-		) => {
+	match (serde_json::to_value(&json_for_value), &schema) {
+		(Ok(serde_json::Value::Object(obj)), Schema::Record { .. }) => {
 			// Test that it works with random ordering
 			let mut keys: Vec<(_, _)> = obj.into_iter().collect();
 			let mut prev = None;
@@ -155,7 +152,7 @@ fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 ) {
 	println!("{raw_schema}");
 	let schema = Schema::parse_str(raw_schema).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&fast_schema);
 
 	let json_for_value = apache_avro::from_value::<T>(value).unwrap();
@@ -231,21 +228,24 @@ enum AB {
 
 #[test]
 fn test_decimal() {
-	let schema: serde_avro_fast::Schema =
+	use serde_avro_fast::schema::*;
+	let editable_schema: EditableSchema =
 		r#"{"type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 1}"#
 			.parse()
 			.unwrap();
-	let serializer_config = &mut SerializerConfig::new(&schema);
-	use serde_avro_fast::schema::{DecimalRepr, SchemaNode};
-	dbg!(schema.root());
+	dbg!(editable_schema.root());
 	assert!(matches!(
-		schema.root(),
-		SchemaNode::Decimal(serde_avro_fast::schema::Decimal {
-			precision: 4,
-			scale: 1,
-			repr: DecimalRepr::Bytes
-		})
+		editable_schema.root(),
+		SchemaNode {
+			type_: SchemaType::Bytes,
+			logical_type: Some(LogicalType::Decimal(Decimal {
+				precision: 4,
+				scale: 1,
+			}))
+		}
 	));
+	let schema = editable_schema.try_into().unwrap();
+	let serializer_config = &mut SerializerConfig::new(&schema);
 
 	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
@@ -276,10 +276,10 @@ fn test_decimal() {
 
 #[test]
 fn test_bytes_with_serde_json_value() {
-	let (schema, value) = &SCHEMAS_TO_VALIDATE[3];
-	let schema = Schema::parse_str(schema).unwrap();
+	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[3];
+	let schema = Schema::parse_str(raw_schema).unwrap();
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
 		Value::Bytes(b) => b.into_iter().map(|b| *b as u64).collect(),
@@ -297,10 +297,10 @@ fn test_bytes_with_serde_json_value() {
 
 #[test]
 fn test_fixed_with_serde_json_value() {
-	let (schema, value) = &SCHEMAS_TO_VALIDATE[8];
-	let schema = Schema::parse_str(schema).unwrap();
+	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[8];
+	let schema = Schema::parse_str(raw_schema).unwrap();
 	let encoded = apache_avro::to_avro_datum(&schema, value.clone()).unwrap();
-	let schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
 		Value::Fixed(_, b) => b.into_iter().map(|b| *b as u64).collect(),

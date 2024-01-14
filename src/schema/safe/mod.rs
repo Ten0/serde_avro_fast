@@ -45,12 +45,27 @@ impl EditableSchema {
 		self.schema_json = None;
 		&mut self.nodes
 	}
+
+	/// Obtain the root of the Schema
+	///
+	/// It is the first node of the `nodes` `Vec`.
+	///
+	/// Panics if the `nodes` `Vec` is empty.
+	/// This can only happen if you have updated it through
+	/// [`nodes_mut`](Self::nodes_mut), as parsing otherwise guarantees that
+	/// this cannot happen.
+	pub fn root(&self) -> &SchemaNode {
+		self.nodes.first().expect(
+			"Schema should have nodes - have you updated it \
+				in such a way that all of its nodes were removed?",
+		)
+	}
 }
 
 /// The location of a node in the [`Schema`]
 ///
 /// This can be used to [`Index`](std::ops::Index) into the [`Schema`].
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SchemaKey {
 	pub(super) idx: usize,
 }
@@ -71,6 +86,11 @@ impl std::ops::Index<SchemaKey> for EditableSchema {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
 		&self.nodes[key.idx]
+	}
+}
+impl std::fmt::Debug for SchemaKey {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Debug::fmt(&self.idx, f)
 	}
 }
 

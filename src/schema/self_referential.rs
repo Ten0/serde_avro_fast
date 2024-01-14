@@ -35,8 +35,12 @@ pub struct Schema {
 }
 
 impl Schema {
-	/// The Avro schema is represented internally as a directed graph of nodes,
-	/// all stored in [`Schema`].
+	/// This is private API, you probably intended to call that on an
+	/// [`EditableSchema`](crate::schema::EditableSchema) instead of `Schema`.
+	///
+	/// The Avro schema
+	/// is represented internally as a directed graph of nodes, all stored in
+	/// [`Schema`].
 	///
 	/// The root node represents the whole schema.
 	pub(crate) fn root<'a>(&'a self) -> &'a SchemaNode<'a> {

@@ -168,7 +168,7 @@ fn big_record() {
 	let datum = apache_avro::to_avro_datum(&schema, record).unwrap();
 	let value = apache_avro::from_avro_datum(&schema, &mut &*datum, None).unwrap();
 	let _deserialized: BigStructApache = apache_avro::from_value(&value).unwrap();
-	let fast_schema = serde_avro_fast::Schema::from_apache_schema(&schema).unwrap();
+	let fast_schema: serde_avro_fast::Schema = RAW_BIG_SCHEMA.parse().unwrap();
 	let my_big: BigStruct = serde_avro_fast::from_datum_slice(&datum, &fast_schema).unwrap();
 	assert_eq!(my_big.address.state_prov, "state_prov");
 	// This is fine notably because there are no uknown-size-block-encoded values in

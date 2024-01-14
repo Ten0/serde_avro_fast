@@ -1,7 +1,4 @@
-use serde_avro_fast::{
-	schema::{BuildSchemaFromApacheSchemaError, ParseSchemaError},
-	Schema,
-};
+use serde_avro_fast::Schema;
 
 #[test]
 fn forbids_zero_sized_cycles() {
@@ -25,10 +22,8 @@ fn forbids_zero_sized_cycles() {
 			}
 		]
 	}"#;
-	assert!(matches!(
-		schema.parse::<Schema>(),
-		Err(ParseSchemaError::ApacheToFast(
-			BuildSchemaFromApacheSchemaError::UnconditionalCycle
-		))
-	));
+	assert_eq!(
+		schema.parse::<Schema>().unwrap_err().to_string(),
+		"The schema contains a record that ends up always containing itself"
+	);
 }
