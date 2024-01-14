@@ -147,7 +147,15 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	assert_eq!(*value, decoded);
 }
 
-fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
+fn test_round_trip_fast_fast<T>(&(raw_schema, _): &(&str, Value)) {
+	let schema = Schema::parse_str(raw_schema).unwrap();
+	let apache_finterprint = schema.fingerprint::<apache_avro::rabin::Rabin>().bytes;
+	let fast_schema: serde_avro_fast::schema::EditableSchema = raw_schema.parse().unwrap();
+	let fast_fingerprint = fast_schema.canonical_form_rabin_fingerprint().unwrap();
+	assert_eq!(apache_finterprint, fast_fingerprint);
+}
+
+fn test_schema_fingerprint<T: serde::de::DeserializeOwned + serde::Serialize>(
 	&(raw_schema, ref value): &(&str, Value),
 ) {
 	println!("{raw_schema}");
@@ -200,6 +208,13 @@ macro_rules! tests {
 					#[test]
 					fn [<test_round_trip_fast_fast_ $name $idx>]() {
 						test_round_trip_fast_fast::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+					}
+				)*
+
+				$(
+					#[test]
+					fn [<test_schema_fingerprint_ $name $idx>]() {
+						test_schema_fingerprint::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
 					}
 				)*
 			)*
