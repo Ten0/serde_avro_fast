@@ -13,7 +13,7 @@ impl SchemaMut {
 	/// There is no public function to obtain a `String` version of the parsing
 	/// canonical form because one shouldn't use that when transmitting the
 	/// schema to other people, notably because it loses the logical types
-	/// information (see https://issues.apache.org/jira/browse/AVRO-1721), and additionally
+	/// information (see <https://issues.apache.org/jira/browse/AVRO-1721>), and additionally
 	/// because it may be invalid JSON (there's no escaping in the JSON in the
 	/// reference Java implementation)
 	pub fn canonical_form_rabin_fingerprint(&self) -> Result<[u8; 8], SchemaError> {

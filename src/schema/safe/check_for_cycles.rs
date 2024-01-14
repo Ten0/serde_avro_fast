@@ -4,7 +4,7 @@ impl SchemaMut {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
 	///
 	/// This is called by the parsing functions already, so this may only be
-	/// useful if you've manally edited the [`safe::Schema`](Schema) graph.
+	/// useful if you've manally edited the [`SchemaMut`] graph.
 	///
 	/// Note that deserialization functions otherwise already prevent stack
 	/// overflows by limiting the recursion depth.
