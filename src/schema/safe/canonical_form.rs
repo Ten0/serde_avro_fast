@@ -109,14 +109,14 @@ impl<W: Write> WriteCanonicalFormState<W> {
 						}
 						self.w.write_char(']')?;
 					}
-					SchemaType::Array(array_items) => {
+					SchemaType::Array(ref array) => {
 						self.w.write_str("{\"type\":\"array\",\"items\":")?;
-						self.write_canonical_form(schema, array_items)?;
+						self.write_canonical_form(schema, array.items)?;
 						self.w.write_char('}')?;
 					}
-					SchemaType::Map(map_values) => {
+					SchemaType::Map(ref map) => {
 						self.w.write_str("{\"type\":\"map\",\"values\":")?;
-						self.write_canonical_form(schema, map_values)?;
+						self.write_canonical_form(schema, map.values)?;
 						self.w.write_char('}')?;
 					}
 					SchemaType::Enum(ref enum_) => {

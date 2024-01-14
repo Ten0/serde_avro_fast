@@ -58,16 +58,16 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				SchemaType::Double => serializer.serialize_str("double"),
 				SchemaType::Bytes => serializer.serialize_str("bytes"),
 				SchemaType::String => serializer.serialize_str("string"),
-				SchemaType::Array(array_elements) => {
+				SchemaType::Array(Array { items, _private }) => {
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "array")?;
-					map.serialize_entry("items", &self.serializable(array_elements))?;
+					map.serialize_entry("items", &self.serializable(items))?;
 					map.end()
 				}
-				SchemaType::Map(map_elements) => {
+				SchemaType::Map(Map { values, _private }) => {
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "map")?;
-					map.serialize_entry("values", &self.serializable(map_elements))?;
+					map.serialize_entry("values", &self.serializable(values))?;
 					map.end()
 				}
 				SchemaType::Union(Union {

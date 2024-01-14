@@ -48,7 +48,7 @@ impl SchemaMut {
 	///
 	/// The first node (index `0`) is the root of the schema.
 	///
-	/// [`SchemaKey`]s can be converted to indexes of this `Vec`.
+	/// [`SchemaKey`]s can be converted to/from indexes of this `Vec`.
 	pub fn nodes_mut(&mut self) -> &mut Vec<SchemaNode> {
 		self.schema_json = None;
 		&mut self.nodes
@@ -102,13 +102,19 @@ pub struct SchemaKey {
 }
 
 impl SchemaKey {
-	// Construct a new SchemaKey
-	//
-	// This will not be serialized as a reference, instead the full type will be
-	// serialized.
+	/// Construct a new SchemaKey
+	///
+	/// This is expected to be an index in the [`nodes`](SchemaMut::nodes_mut)
+	/// `Vec` of a [`SchemaMut`].
+	///
+	///
+	/// (Note that [`Index`](std::ops::Index)ing into a `SchemaMut` with an
+	/// invalid index would cause a panic.)
 	pub fn from_idx(idx: usize) -> Self {
 		Self { idx }
 	}
+	/// Obtain the index in the [`nodes`](SchemaMut::nodes) `Vec` of a
+	/// [`SchemaMut`] that this [`SchemaKey`] points to.
 	pub fn idx(self) -> usize {
 		self.idx
 	}
@@ -171,11 +177,11 @@ pub enum SchemaType {
 	/// A `array` Avro schema. Avro arrays are required to have the same type
 	/// for each element. This variant holds the `Schema` for the array element
 	/// type.
-	Array(SchemaKey),
+	Array(Array),
 	/// A `map` Avro schema.
 	/// `Map` holds a pointer to the `Schema` of its values, which must all be
 	/// the same schema. `Map` keys are assumed to be `string`.
-	Map(SchemaKey),
+	Map(Map),
 	/// A `union` Avro schema.
 	///
 	/// These can be deserialized into rust enums, where the variant name
@@ -196,6 +202,36 @@ pub enum SchemaType {
 	Enum(Enum),
 	/// A `fixed` Avro schema.
 	Fixed(Fixed),
+}
+
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Array {
+	pub items: SchemaKey,
+	pub(crate) _private: (),
+}
+impl Array {
+	pub fn new(items: SchemaKey) -> Self {
+		Self {
+			items,
+			_private: (),
+		}
+	}
+}
+
+/// Component of a [`SchemaMut`]
+#[derive(Clone, Debug)]
+pub struct Map {
+	pub values: SchemaKey,
+	pub(crate) _private: (),
+}
+impl Map {
+	pub fn new(values: SchemaKey) -> Self {
+		Self {
+			values,
+			_private: (),
+		}
+	}
 }
 
 /// Component of a [`SchemaMut`]

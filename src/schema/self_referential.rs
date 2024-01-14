@@ -319,11 +319,11 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					SafeSchemaType::Double => SchemaNode::Double,
 					SafeSchemaType::Bytes => SchemaNode::Bytes,
 					SafeSchemaType::String => SchemaNode::String,
-					SafeSchemaType::Array(schema_key) => {
-						SchemaNode::Array(key_to_node(schema_key, &logical_types)?)
+					SafeSchemaType::Array(array) => {
+						SchemaNode::Array(key_to_node(array.items, &logical_types)?)
 					}
-					SafeSchemaType::Map(schema_key) => {
-						SchemaNode::Map(key_to_node(schema_key, &logical_types)?)
+					SafeSchemaType::Map(map) => {
+						SchemaNode::Map(key_to_node(map.values, &logical_types)?)
 					}
 					SafeSchemaType::Union(union) => SchemaNode::Union({
 						Union {

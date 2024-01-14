@@ -50,7 +50,14 @@ impl std::str::FromStr for SchemaMut {
 			for schema_node in &mut state.nodes {
 				match schema_node {
 					SchemaNode::RegularType(schema_type) => match schema_type {
-						SchemaType::Array(key) | SchemaType::Map(key) => fix_key(key),
+						SchemaType::Array(Array {
+							items: key,
+							_private,
+						})
+						| SchemaType::Map(Map {
+							values: key,
+							_private,
+						}) => fix_key(key),
 						SchemaType::Union(union) => union.variants.iter_mut().for_each(fix_key),
 						SchemaType::Record(record) => {
 							record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
@@ -204,12 +211,24 @@ impl<'a> SchemaConstructionState<'a> {
 							};
 						}
 						match object.type_ {
-							raw::SchemaNode::Type(t @ raw::Type::Array) => SchemaType::Array(
-								self.register_node(field!(t items), enclosing_namespace, None)?,
-							),
-							raw::SchemaNode::Type(t @ raw::Type::Map) => SchemaType::Map(
-								self.register_node(field!(t values), enclosing_namespace, None)?,
-							),
+							raw::SchemaNode::Type(t @ raw::Type::Array) => {
+								SchemaType::Array(Array {
+									items: self.register_node(
+										field!(t items),
+										enclosing_namespace,
+										None,
+									)?,
+									_private: (),
+								})
+							}
+							raw::SchemaNode::Type(t @ raw::Type::Map) => SchemaType::Map(Map {
+								values: self.register_node(
+									field!(t values),
+									enclosing_namespace,
+									None,
+								)?,
+								_private: (),
+							}),
 							raw::SchemaNode::Type(t @ raw::Type::Enum) => SchemaType::Enum(Enum {
 								name: name(t)?.0,
 								symbols: field!(t symbols)
