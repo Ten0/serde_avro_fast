@@ -273,6 +273,38 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		Ok(())
 	}
 
+	/// Copy one or multiple already-serialized values into the object container
+	/// file
+	///
+	/// This is useful if you wish to run the heavy-weight of the serialization
+	/// logic outside of the thread that forms the blocks and compresses them.
+	///
+	/// It is expected that:
+	/// - The provided slice is a valid Avro object serialized with the same
+	///   schema as the one provided to the [`WriterBuilder`] that constructed
+	///   this [`Writer`] (via [`to_datum`](crate::to_datum) or
+	///   [`to_datum_vec`](crate::to_datum_vec) or
+	///   [`SerializerState::serializer`])
+	/// - `n_elements` is the number of elements that were serialized in the
+	///   provided slice
+	///
+	/// If these conditions are not satisfied, the generated object container
+	/// file will be invalid.
+	///
+	/// Note that since the elements are not delimited, closing the avro block
+	/// will only be considered after writing the full slice, which may lead to
+	/// a large block size if the number of serialized elements is not otherwise
+	/// controlled by your application.
+	pub fn push_serialized(&mut self, serialized: &[u8], n_elements: u64) -> Result<(), SerError> {
+		self.flush_finished_block()?;
+		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
+			self.finish_block()?;
+		}
+		self.inner.push_serialized(serialized, n_elements)?;
+		self.flush_finished_block()?;
+		Ok(())
+	}
+
 	/// Flushe the final block (if a block was started) then return the
 	/// underlying writer.
 	pub fn into_inner(mut self) -> Result<W, SerError> {
@@ -418,6 +450,30 @@ impl<'c, 's> WriterInner<'c, 's> {
 				e
 			})?;
 		self.n_elements_in_block += 1;
+		if self.serializer_state.writer.len() >= self.aprox_block_size as usize {
+			self.finish_block()?;
+		}
+		Ok(())
+	}
+
+	fn push_serialized(&mut self, serialized: &[u8], n_elements: u64) -> Result<(), SerError> {
+		let buf_len_before_attempt = self.serializer_state.writer.len();
+		self.serializer_state
+			.writer
+			.write_all(serialized)
+			.map_err(|e| {
+				// If the flush is going wrong though there's nothing we can do
+				self.serializer_state
+					.writer
+					.truncate(buf_len_before_attempt);
+				SerError::io(e)
+			})?;
+		self.n_elements_in_block = self
+			.n_elements_in_block
+			.checked_add(n_elements)
+			.ok_or_else(|| {
+				SerError::new("Provided incorrect n_elements to write_serialized (too big)")
+			})?;
 		if self.serializer_state.writer.len() >= self.aprox_block_size as usize {
 			self.finish_block()?;
 		}
