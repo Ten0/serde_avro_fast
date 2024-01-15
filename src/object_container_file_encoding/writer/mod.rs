@@ -291,21 +291,25 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 	/// If these conditions are not satisfied, the generated object container
 	/// file will be invalid.
 	///
-	/// Note that since the elements are not delimited, closing the avro block
-	/// will only be considered after writing the full slice, which may lead to
-	/// a large block size if the number of serialized elements is not otherwise
-	/// controlled by your application.
-	pub fn push_serialized(&mut self, serialized: &[u8], n_elements: u64) -> Result<(), SerError> {
+	/// Note that since the elements are not delimited, whether to finish the
+	/// avro block will only be considered after writing the full slice, which
+	/// may lead to a large block size if the number of serialized elements is
+	/// not otherwise controlled by your application.
+	pub fn push_serialized(
+		&mut self,
+		serialized_objects: &[u8],
+		n_objects: u64,
+	) -> Result<(), SerError> {
 		self.flush_finished_block()?;
 		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
 			self.finish_block()?;
 		}
-		self.inner.push_serialized(serialized, n_elements)?;
+		self.inner.push_serialized(serialized_objects, n_objects)?;
 		self.flush_finished_block()?;
 		Ok(())
 	}
 
-	/// Flushe the final block (if a block was started) then return the
+	/// Flush the final block (if a block was started) then return the
 	/// underlying writer.
 	pub fn into_inner(mut self) -> Result<W, SerError> {
 		self.finish_block()?;
@@ -372,7 +376,9 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 	/// buffer.
 	///
 	/// You may use this if you want to e.g. write the headers/blocks to
-	/// separate files, free up the memory...
+	/// separate files, free up the memory or push complete compressed blocks
+	/// from other [`Writer`]s (blocks are independent - just don't
+	/// write the header twice).
 	pub fn inner_mut(&mut self) -> &mut W {
 		self.writer.as_mut().expect(
 			"This is only unset by into_inner, which guarantees we \
@@ -456,11 +462,15 @@ impl<'c, 's> WriterInner<'c, 's> {
 		Ok(())
 	}
 
-	fn push_serialized(&mut self, serialized: &[u8], n_elements: u64) -> Result<(), SerError> {
+	fn push_serialized(
+		&mut self,
+		serialized_objects: &[u8],
+		n_objects: u64,
+	) -> Result<(), SerError> {
 		let buf_len_before_attempt = self.serializer_state.writer.len();
 		self.serializer_state
 			.writer
-			.write_all(serialized)
+			.write_all(serialized_objects)
 			.map_err(|e| {
 				// If the flush is going wrong though there's nothing we can do
 				self.serializer_state
@@ -468,12 +478,12 @@ impl<'c, 's> WriterInner<'c, 's> {
 					.truncate(buf_len_before_attempt);
 				SerError::io(e)
 			})?;
-		self.n_elements_in_block = self
-			.n_elements_in_block
-			.checked_add(n_elements)
-			.ok_or_else(|| {
-				SerError::new("Provided incorrect n_elements to write_serialized (too big)")
-			})?;
+		self.n_elements_in_block =
+			self.n_elements_in_block
+				.checked_add(n_objects)
+				.ok_or_else(|| {
+					SerError::new("Provided incorrect n_elements to write_serialized (too big)")
+				})?;
 		if self.serializer_state.writer.len() >= self.aprox_block_size as usize {
 			self.finish_block()?;
 		}

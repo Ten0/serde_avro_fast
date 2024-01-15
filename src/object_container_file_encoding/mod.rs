@@ -18,9 +18,8 @@ pub enum Compression {
 	Null,
 	#[cfg(feature = "deflate")]
 	/// The `Deflate` codec writes the data block using the deflate algorithm
-	/// as specified in RFC 1951, and typically implemented using the zlib
-	/// library. Note that this format (unlike the "zlib format" in RFC 1950)
-	/// does not have a checksum.
+	/// as specified in RFC 1951. Note that this format (unlike the "zlib
+	/// format" in RFC 1950) does not have a checksum.
 	Deflate {
 		level: CompressionLevel,
 	},
@@ -42,7 +41,8 @@ pub enum Compression {
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "zstandard")]
-	// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
+	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/)
+	/// compression library
 	Zstandard {
 		level: CompressionLevel,
 	},
