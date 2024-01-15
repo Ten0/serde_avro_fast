@@ -349,13 +349,34 @@ pub enum LogicalType {
 	/// An logical type that is not known or not handled in any particular way
 	/// by this library.
 	///
+	/// **You should not match on this variant.** (See below.)
+	///
 	/// This is the string that is used in the schema JSON to refer to this
 	/// logical type.
 	///
 	/// Logical types of this variant may turn into known logical types from one
-	/// release to another, as new logical types get added, so if you need to
-	/// check for a specific logical type, you should use
-	/// [`as_str`](Self::as_str) instead.
+	/// release to another, as new logical types get added, so you should not
+	/// match on this variant, and if you need to check for a specific unknown
+	/// logical type, you should use [`as_str`](Self::as_str) instead, as this
+	/// is guaranteed to keep working from one release to another:
+	///
+	/// ```rust
+	/// # use serde_avro_fast::schema::LogicalType;
+	/// # let logical_type = LogicalType::Unknown("foo".to_string());
+	/// match logical_type {
+	/// 	LogicalType::Uuid => { /* ... */ }
+	/// 	LogicalType::TimestampMillis => { /* ... */ }
+	/// 	_ => match logical_type.as_str() {
+	/// 		"some-unknown-logical-type" => { /* ... */ }
+	/// 		"some-other-unknown-logical-type" => { /* ... */ }
+	/// 		_ => { /* ... */ }
+	/// 	},
+	/// }
+	/// ```
+	///
+	/// However, you may construct an instance of this variant if you need to
+	/// build a [`SchemaMut`] with a logical type that is not known to this
+	/// library.
 	Unknown(String),
 }
 
