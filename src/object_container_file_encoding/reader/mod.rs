@@ -173,18 +173,11 @@ where
 			.read_const_size_buf::<16>()
 			.map_err(FailedToInitializeReader::FailedToDeserializeHeader)?;
 
-		// Build a `&'static SchemaNode` from the `Arc<Schema>` (`'static` is fake)
 		// Safety: we don't drop the schema until this is dropped
 		// This is useful to be able to store a DeserializerState directly in here,
 		// which will avoid additional &mut levels, allowing for highest performance and
 		// ergonomics
-		let schema_root: &'static schema::self_referential::SchemaNode<'static> = unsafe {
-			let schema = &*(&*schema as *const Schema);
-			let a: *const schema::self_referential::SchemaNode<'_> =
-				schema.root() as *const schema::self_referential::SchemaNode<'_>;
-			let b: *const schema::self_referential::SchemaNode<'static> = a as *const _;
-			&*b
-		};
+		let schema_root = unsafe { schema.root_with_fake_static_lifetime() };
 
 		Ok((
 			Self {

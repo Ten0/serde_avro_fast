@@ -43,12 +43,26 @@ impl Schema {
 	/// [`Schema`].
 	///
 	/// The root node represents the whole schema.
-	pub(crate) fn root<'a>(&'a self) -> &'a SchemaNode<'a> {
+	pub(crate) fn root<'a>(&'a self) -> NodeRef<'a> {
 		// the signature of this function downgrades the fake 'static lifetime in a way
 		// that makes it correct
-		self.nodes
-			.first()
-			.expect("Schema must have at least one node (the root)")
+		assert!(
+			!self.nodes.is_empty(),
+			"Schema must have at least one node (the root)"
+		);
+		// SAFETY: bounds checked
+		unsafe { NodeRef::new(self.nodes.as_ptr() as *mut _) }
+	}
+
+	/// SAFETY: this `NodeRef` must never be dereferenced after the
+	/// corresponding schema was dropped.
+	pub(crate) unsafe fn root_with_fake_static_lifetime(&self) -> NodeRef<'static> {
+		assert!(
+			!self.nodes.is_empty(),
+			"Schema must have at least one node (the root)"
+		);
+		// SAFETY: bounds checked
+		unsafe { NodeRef::new(self.nodes.as_ptr() as *mut _) }
 	}
 
 	/// Obtain the JSON for this schema
@@ -492,7 +506,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 
 impl std::fmt::Debug for Schema {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		<SchemaNode<'_> as std::fmt::Debug>::fmt(self.root(), f)
+		<SchemaNode<'_> as std::fmt::Debug>::fmt(self.root().as_ref(), f)
 	}
 }
 

@@ -159,7 +159,9 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 				codec: self.compression.codec(),
 				user_metadata: metadata,
 			})
-			.serialize(header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA))
+			.serialize(
+				header_serializer_state.serializer_overriding_schema_root(METADATA_SCHEMA.as_ref()),
+			)
 			.map_err(|ser_error| {
 				<SerError as serde::ser::Error>::custom(format_args!(
 					"Failed to serialize object container file header metadata: {ser_error}"

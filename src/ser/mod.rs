@@ -160,7 +160,7 @@ impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
 
 	pub fn serializer<'r>(&'r mut self) -> DatumSerializer<'r, 'c, 's, W> {
 		DatumSerializer {
-			schema_node: self.config.schema().root(),
+			schema_node: self.config.schema().root().as_ref(),
 			state: self,
 		}
 	}

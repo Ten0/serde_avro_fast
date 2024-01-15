@@ -173,10 +173,12 @@ struct Metadata<S, M> {
 	#[serde(flatten)]
 	user_metadata: M,
 }
-const METADATA_SCHEMA: &crate::schema::self_referential::SchemaNode =
-	&crate::schema::self_referential::SchemaNode::Map(
-		crate::schema::self_referential::NodeRef::from_static(
-			&crate::schema::self_referential::SchemaNode::Bytes,
+const METADATA_SCHEMA: crate::schema::self_referential::NodeRef<'static> =
+	crate::schema::self_referential::NodeRef::from_static(
+		&crate::schema::self_referential::SchemaNode::Map(
+			crate::schema::self_referential::NodeRef::from_static(
+				&crate::schema::self_referential::SchemaNode::Bytes,
+			),
 		),
 	);
 

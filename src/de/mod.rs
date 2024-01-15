@@ -91,7 +91,7 @@ pub struct DeserializerState<'s, R> {
 /// Schema + other configs for deserialization
 #[derive(Clone)]
 pub struct DeserializerConfig<'s> {
-	schema_root: &'s SchemaNode<'s>,
+	schema_root: NodeRef<'s>,
 	/// If a sequence turns out to be longer than this during deserialization,
 	/// we will throw an error instead.
 	///
@@ -115,7 +115,7 @@ impl<'s> DeserializerConfig<'s> {
 	pub fn new(schema: &'s Schema) -> Self {
 		Self::from_schema_node(schema.root())
 	}
-	pub(crate) fn from_schema_node(schema_root: &'s SchemaNode<'s>) -> Self {
+	pub(crate) fn from_schema_node(schema_root: NodeRef<'s>) -> Self {
 		Self {
 			schema_root,
 			max_seq_size: 1_000_000_000,
@@ -129,7 +129,7 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 		Self::from_schema_node(r, schema.root())
 	}
 
-	pub(crate) fn from_schema_node(r: R, schema_root: &'s SchemaNode<'s>) -> Self {
+	pub(crate) fn from_schema_node(r: R, schema_root: NodeRef<'s>) -> Self {
 		Self::with_config(r, DeserializerConfig::from_schema_node(schema_root))
 	}
 
@@ -139,7 +139,7 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 
 	pub fn deserializer<'r>(&'r mut self) -> DatumDeserializer<'r, 's, R> {
 		DatumDeserializer {
-			schema_node: self.config.schema_root,
+			schema_node: self.config.schema_root.as_ref(),
 			allowed_depth: AllowedDepth::new(self.config.allowed_depth),
 			state: self,
 		}
