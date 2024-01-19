@@ -50,32 +50,32 @@ impl std::str::FromStr for SchemaMut {
 			for schema_node in &mut state.nodes {
 				match schema_node {
 					SchemaNode::RegularType(schema_type) => match schema_type {
-						SchemaType::Array(Array {
+						RegularType::Array(Array {
 							items: key,
 							_private,
 						})
-						| SchemaType::Map(Map {
+						| RegularType::Map(Map {
 							values: key,
 							_private,
 						}) => fix_key(key),
-						SchemaType::Union(union) => union.variants.iter_mut().for_each(fix_key),
-						SchemaType::Record(record) => {
+						RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
+						RegularType::Record(record) => {
 							record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
 						}
-						SchemaType::Null
-						| SchemaType::Boolean
-						| SchemaType::Int
-						| SchemaType::Long
-						| SchemaType::Float
-						| SchemaType::Double
-						| SchemaType::Bytes
-						| SchemaType::String
-						| SchemaType::Enum(Enum {
+						RegularType::Null
+						| RegularType::Boolean
+						| RegularType::Int
+						| RegularType::Long
+						| RegularType::Float
+						| RegularType::Double
+						| RegularType::Bytes
+						| RegularType::String
+						| RegularType::Enum(Enum {
 							symbols: _,
 							name: _,
 							_private: (),
 						})
-						| SchemaType::Fixed(Fixed {
+						| RegularType::Fixed(Fixed {
 							size: _,
 							name: _,
 							_private: (),
@@ -129,14 +129,14 @@ impl<'a> SchemaConstructionState<'a> {
 			raw::SchemaNode::Type(type_) => {
 				let idx = self.nodes.len();
 				self.nodes.push(SchemaNode::RegularType(match type_ {
-					raw::Type::Null => SchemaType::Null,
-					raw::Type::Boolean => SchemaType::Boolean,
-					raw::Type::Int => SchemaType::Int,
-					raw::Type::Long => SchemaType::Long,
-					raw::Type::Float => SchemaType::Float,
-					raw::Type::Double => SchemaType::Double,
-					raw::Type::Bytes => SchemaType::Bytes,
-					raw::Type::String => SchemaType::String,
+					raw::Type::Null => RegularType::Null,
+					raw::Type::Boolean => RegularType::Boolean,
+					raw::Type::Int => RegularType::Int,
+					raw::Type::Long => RegularType::Long,
+					raw::Type::Float => RegularType::Float,
+					raw::Type::Double => RegularType::Double,
+					raw::Type::Bytes => RegularType::Bytes,
+					raw::Type::String => RegularType::String,
 					complex_type @ (raw::Type::Array
 					| raw::Type::Map
 					| raw::Type::Record
@@ -190,7 +190,7 @@ impl<'a> SchemaConstructionState<'a> {
 					Some(name_key) => Ok((name_key.name(), name_key)),
 				};
 
-				self.nodes.push(SchemaNode::RegularType(SchemaType::Null)); // Reserve the spot for us
+				self.nodes.push(SchemaNode::RegularType(RegularType::Null)); // Reserve the spot for us
 				let new_node: SchemaNode = match object.logical_type {
 					None => SchemaNode::RegularType({
 						macro_rules! field {
@@ -212,7 +212,7 @@ impl<'a> SchemaConstructionState<'a> {
 						}
 						match object.type_ {
 							raw::SchemaNode::Type(t @ raw::Type::Array) => {
-								SchemaType::Array(Array {
+								RegularType::Array(Array {
 									items: self.register_node(
 										field!(t items),
 										enclosing_namespace,
@@ -221,7 +221,7 @@ impl<'a> SchemaConstructionState<'a> {
 									_private: (),
 								})
 							}
-							raw::SchemaNode::Type(t @ raw::Type::Map) => SchemaType::Map(Map {
+							raw::SchemaNode::Type(t @ raw::Type::Map) => RegularType::Map(Map {
 								values: self.register_node(
 									field!(t values),
 									enclosing_namespace,
@@ -229,7 +229,7 @@ impl<'a> SchemaConstructionState<'a> {
 								)?,
 								_private: (),
 							}),
-							raw::SchemaNode::Type(t @ raw::Type::Enum) => SchemaType::Enum(Enum {
+							raw::SchemaNode::Type(t @ raw::Type::Enum) => RegularType::Enum(Enum {
 								name: name(t)?.0,
 								symbols: field!(t symbols)
 									.iter()
@@ -238,7 +238,7 @@ impl<'a> SchemaConstructionState<'a> {
 								_private: (),
 							}),
 							raw::SchemaNode::Type(t @ raw::Type::Fixed) => {
-								SchemaType::Fixed(Fixed {
+								RegularType::Fixed(Fixed {
 									name: name(t)?.0,
 									size: *field!(t size),
 									_private: (),
@@ -246,7 +246,7 @@ impl<'a> SchemaConstructionState<'a> {
 							}
 							raw::SchemaNode::Type(t @ raw::Type::Record) => {
 								let (name, name_key) = name(t)?;
-								SchemaType::Record(Record {
+								RegularType::Record(Record {
 									fields: field!(t fields)
 										.iter()
 										.map(|field| {
@@ -377,8 +377,8 @@ impl<'a> SchemaConstructionState<'a> {
 			}
 			raw::SchemaNode::Union(ref union_schemas) => {
 				let idx = self.nodes.len();
-				self.nodes.push(SchemaNode::RegularType(SchemaType::Null)); // Reserve the spot for us
-				let new_node = SchemaNode::RegularType(SchemaType::Union(Union {
+				self.nodes.push(SchemaNode::RegularType(RegularType::Null)); // Reserve the spot for us
+				let new_node = SchemaNode::RegularType(RegularType::Union(Union {
 					variants: union_schemas
 						.iter()
 						.map(|schema| self.register_node(schema, enclosing_namespace, None))

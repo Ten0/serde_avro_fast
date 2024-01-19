@@ -1,5 +1,5 @@
 use crate::schema::{
-	safe::{self as s, rabin::Rabin, SchemaKey, SchemaMut, SchemaType},
+	safe::{self as s, rabin::Rabin, RegularType, SchemaKey, SchemaMut},
 	SchemaError,
 };
 
@@ -73,31 +73,31 @@ impl<W: Write> WriteCanonicalFormState<W> {
 					})
 				};
 				match *type_ {
-					SchemaType::Null => {
+					RegularType::Null => {
 						self.w.write_str("\"null\"")?;
 					}
-					SchemaType::Boolean => {
+					RegularType::Boolean => {
 						self.w.write_str("\"boolean\"")?;
 					}
-					SchemaType::Bytes => {
+					RegularType::Bytes => {
 						self.w.write_str("\"bytes\"")?;
 					}
-					SchemaType::Double => {
+					RegularType::Double => {
 						self.w.write_str("\"double\"")?;
 					}
-					SchemaType::Float => {
+					RegularType::Float => {
 						self.w.write_str("\"float\"")?;
 					}
-					SchemaType::Int => {
+					RegularType::Int => {
 						self.w.write_str("\"int\"")?;
 					}
-					SchemaType::Long => {
+					RegularType::Long => {
 						self.w.write_str("\"long\"")?;
 					}
-					SchemaType::String => {
+					RegularType::String => {
 						self.w.write_str("\"string\"")?;
 					}
-					SchemaType::Union(ref union) => {
+					RegularType::Union(ref union) => {
 						self.w.write_char('[')?;
 						for &variant in &union.variants {
 							if !first_time {
@@ -109,17 +109,17 @@ impl<W: Write> WriteCanonicalFormState<W> {
 						}
 						self.w.write_char(']')?;
 					}
-					SchemaType::Array(ref array) => {
+					RegularType::Array(ref array) => {
 						self.w.write_str("{\"type\":\"array\",\"items\":")?;
 						self.write_canonical_form(schema, array.items)?;
 						self.w.write_char('}')?;
 					}
-					SchemaType::Map(ref map) => {
+					RegularType::Map(ref map) => {
 						self.w.write_str("{\"type\":\"map\",\"values\":")?;
 						self.write_canonical_form(schema, map.values)?;
 						self.w.write_char('}')?;
 					}
-					SchemaType::Enum(ref enum_) => {
+					RegularType::Enum(ref enum_) => {
 						if should_not_write_only_name(&enum_.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(enum_.name.fully_qualified_name())?;
@@ -138,7 +138,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 							self.w.write_char('}')?;
 						}
 					}
-					SchemaType::Fixed(ref fixed) => {
+					RegularType::Fixed(ref fixed) => {
 						if should_not_write_only_name(&fixed.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(fixed.name.fully_qualified_name())?;
@@ -147,7 +147,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 							self.w.write_char('}')?;
 						}
 					}
-					SchemaType::Record(ref record) => {
+					RegularType::Record(ref record) => {
 						if should_not_write_only_name(&record.name, self)? {
 							self.w.write_str("{\"name\":\"")?;
 							self.w.write_str(record.name.fully_qualified_name())?;

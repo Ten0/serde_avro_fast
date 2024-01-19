@@ -271,7 +271,7 @@ fn test_decimal() {
 				..
 			}),
 			inner
-		} if matches!(editable_schema[inner], SchemaNode::RegularType(SchemaType::Bytes))
+		} if matches!(editable_schema[inner], SchemaNode::RegularType(RegularType::Bytes))
 	));
 	let schema = editable_schema.try_into().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&schema);

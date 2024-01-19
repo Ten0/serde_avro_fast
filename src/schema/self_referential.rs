@@ -1,5 +1,5 @@
 use super::{
-	safe::{LogicalType, SchemaNode as SafeSchemaNode, SchemaType as SafeSchemaType},
+	safe::{LogicalType, RegularType as SafeSchemaType, SchemaNode as SafeSchemaNode},
 	union_variants_per_type_lookup::PerTypeLookup as UnionVariantsPerTypeLookup,
 	SchemaError,
 };

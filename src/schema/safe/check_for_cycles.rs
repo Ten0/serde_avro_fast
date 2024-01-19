@@ -1,4 +1,4 @@
-use super::{SchemaMut, SchemaNode, SchemaType};
+use super::{RegularType, SchemaMut, SchemaNode};
 
 impl SchemaMut {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
@@ -21,7 +21,8 @@ impl SchemaMut {
 		let mut visited_nodes = vec![false; self.nodes.len()];
 		let mut checked_nodes = vec![false; self.nodes.len()];
 		for (idx, node) in self.nodes.iter().enumerate() {
-			if matches!(node, SchemaNode::RegularType(SchemaType::Record(_))) && !checked_nodes[idx]
+			if matches!(node, SchemaNode::RegularType(RegularType::Record(_)))
+				&& !checked_nodes[idx]
 			{
 				check_no_zero_sized_cycle_inner(self, idx, &mut visited_nodes, &mut checked_nodes)?;
 			}
@@ -47,10 +48,10 @@ fn check_no_zero_sized_cycle_inner(
 ) -> Result<(), UnconditionalCycle> {
 	visited_nodes[node_idx] = true;
 	for field in match &schema.nodes[node_idx] {
-		SchemaNode::RegularType(SchemaType::Record(record)) => &record.fields,
+		SchemaNode::RegularType(RegularType::Record(record)) => &record.fields,
 		_ => unreachable!(),
 	} {
-		if let SchemaNode::RegularType(SchemaType::Record(_)) = &schema.nodes[field.type_.idx] {
+		if let SchemaNode::RegularType(RegularType::Record(_)) = &schema.nodes[field.type_.idx] {
 			if visited_nodes[field.type_.idx] {
 				return Err(UnconditionalCycle { _private: () });
 			} else {

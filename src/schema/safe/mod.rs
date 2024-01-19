@@ -140,7 +140,7 @@ impl std::fmt::Debug for SchemaKey {
 /// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
 pub enum SchemaNode {
-	RegularType(SchemaType),
+	RegularType(RegularType),
 	LogicalType {
 		inner: SchemaKey,
 		logical_type: LogicalType,
@@ -155,7 +155,7 @@ pub enum SchemaNode {
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
-pub enum SchemaType {
+pub enum RegularType {
 	/// A `null` Avro schema.
 	Null,
 	/// A `boolean` Avro schema.

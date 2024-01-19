@@ -50,27 +50,27 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				map.end()
 			}
 			SchemaNode::RegularType(schema_type) => match *schema_type {
-				SchemaType::Null => serializer.serialize_str("null"),
-				SchemaType::Boolean => serializer.serialize_str("boolean"),
-				SchemaType::Int => serializer.serialize_str("int"),
-				SchemaType::Long => serializer.serialize_str("long"),
-				SchemaType::Float => serializer.serialize_str("float"),
-				SchemaType::Double => serializer.serialize_str("double"),
-				SchemaType::Bytes => serializer.serialize_str("bytes"),
-				SchemaType::String => serializer.serialize_str("string"),
-				SchemaType::Array(Array { items, _private }) => {
+				RegularType::Null => serializer.serialize_str("null"),
+				RegularType::Boolean => serializer.serialize_str("boolean"),
+				RegularType::Int => serializer.serialize_str("int"),
+				RegularType::Long => serializer.serialize_str("long"),
+				RegularType::Float => serializer.serialize_str("float"),
+				RegularType::Double => serializer.serialize_str("double"),
+				RegularType::Bytes => serializer.serialize_str("bytes"),
+				RegularType::String => serializer.serialize_str("string"),
+				RegularType::Array(Array { items, _private }) => {
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "array")?;
 					map.serialize_entry("items", &self.serializable(items))?;
 					map.end()
 				}
-				SchemaType::Map(Map { values, _private }) => {
+				RegularType::Map(Map { values, _private }) => {
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "map")?;
 					map.serialize_entry("values", &self.serializable(values))?;
 					map.end()
 				}
-				SchemaType::Union(Union {
+				RegularType::Union(Union {
 					ref variants,
 					_private,
 				}) => {
@@ -80,7 +80,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					}
 					seq.end()
 				}
-				SchemaType::Record(Record {
+				RegularType::Record(Record {
 					ref name,
 					ref fields,
 					_private,
@@ -91,7 +91,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					map.serialize_entry("fields", &self.serializable(fields.as_slice()))?;
 					map.end()
 				}
-				SchemaType::Enum(Enum {
+				RegularType::Enum(Enum {
 					ref name,
 					ref symbols,
 					_private,
@@ -102,7 +102,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					map.serialize_entry("symbols", symbols)?;
 					map.end()
 				}
-				SchemaType::Fixed(Fixed {
+				RegularType::Fixed(Fixed {
 					ref name,
 					ref size,
 					_private,
