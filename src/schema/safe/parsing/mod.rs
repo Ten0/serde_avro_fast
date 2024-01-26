@@ -159,7 +159,7 @@ impl<'a> SchemaConstructionState<'a> {
 					let name: &str = &*name.0;
 					let name_key = if let Some((namespace, name)) = name.rsplit_once('.') {
 						NameKey {
-							namespace: Some(namespace),
+							namespace: Some(namespace).filter(|&s| !s.is_empty()),
 							name,
 						}
 					} else {
@@ -400,7 +400,7 @@ impl<'a> SchemaConstructionState<'a> {
 				// even if it's unordered because we're not in 1980 anymore.
 				let name_key = if let Some((namespace, name)) = reference.rsplit_once('.') {
 					NameKey {
-						namespace: Some(namespace),
+						namespace: Some(namespace).filter(|&s| !s.is_empty()),
 						name,
 					}
 				} else {
