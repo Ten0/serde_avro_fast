@@ -164,11 +164,16 @@ impl<'a> SchemaConstructionState<'a> {
 						}
 					} else {
 						NameKey {
-							namespace: object
-								.namespace
-								.as_ref()
-								.map(|c| &*c.0)
-								.or(enclosing_namespace),
+							namespace: match object.namespace {
+								Some(ref namespace) => {
+									// If the object explicitly specifies an empty string
+									// as namespace, "this indicates the null namespace"
+									// (aka no namespace)
+									Some(&*namespace.0).filter(|&s| !s.is_empty())
+								}
+								None => enclosing_namespace,
+							},
+
 							name: &name,
 						}
 					};
@@ -400,7 +405,7 @@ impl<'a> SchemaConstructionState<'a> {
 					}
 				} else {
 					NameKey {
-						namespace: None,
+						namespace: enclosing_namespace,
 						name: &reference,
 					}
 				};
