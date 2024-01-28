@@ -33,7 +33,7 @@ impl<'r, 'c, 's, W> Drop for KindRecord<'r, 'c, 's, W> {
 	fn drop(&mut self) {
 		// In order to avoid allocating even when field reordering is necessary we can
 		// preserve the necessary allocations from one record to another (even across
-		// deserializations).
+		// serializations).
 		// This brings ~40% perf improvement
 		if self.record_state.buffers.capacity() > 0 {
 			self.serializer_state
