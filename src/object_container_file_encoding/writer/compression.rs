@@ -230,7 +230,8 @@ impl CompressionCodecState {
 			#[cfg(feature = "zstandard")]
 			Kind::Zstandard { compressor, level } => {
 				self.output_vec.clear();
-				self.output_vec.reserve(32 * 1024);
+				self.output_vec
+					.reserve(zstd::zstd_safe::compress_bound(input.len()));
 
 				let compressor = match compressor {
 					None => {
