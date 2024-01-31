@@ -419,8 +419,21 @@ impl LogicalType {
 	}
 }
 
-impl From<RegularType> for SchemaNode {
-	fn from(t: RegularType) -> Self {
-		Self::RegularType(t)
+impl<RT: Into<RegularType>> From<RT> for SchemaNode {
+	fn from(regular_type: RT) -> Self {
+		Self::RegularType(regular_type.into())
 	}
 }
+
+macro_rules! impl_froms_for_regular_type {
+	($($variant: ident)*) => {
+		$(
+			impl From<$variant> for RegularType {
+				fn from(variant: $variant) -> Self {
+					Self::$variant(variant)
+				}
+			}
+		)*
+	};
+}
+impl_froms_for_regular_type! { Array Map Union Record Enum Fixed }
