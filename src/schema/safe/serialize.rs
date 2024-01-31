@@ -57,13 +57,14 @@ impl<'a, K> SerializeSchema<'a, K> {
 }
 impl<'a> SerializeSchema<'a, SchemaKey> {
 	/// Make sure we aren't cycling and every node is written at most once
-	fn check_not_written<E: serde::ser::Error>(&self) -> Result<(), E> {
-		if self.should_write_as_ref() {
+	fn no_cycle_guard<E: serde::ser::Error>(&self) -> Result<NoCycleGuard, E> {
+		let cell = &self.written[self.key.idx];
+		if cell.replace(true) {
 			Err(E::custom(
 				"Schema contains a cycle that can't be avoided using named references",
 			))
 		} else {
-			Ok(())
+			Ok(NoCycleGuard { release: cell })
 		}
 	}
 	/// If this node was already written, return true (don't write it again).
@@ -100,6 +101,19 @@ impl<'a> SerializeSchema<'a, SchemaKey> {
 	}
 }
 
+#[must_use]
+struct NoCycleGuard<'a> {
+	release: &'a Cell<bool>,
+}
+impl NoCycleGuard<'_> {
+	fn release(self) {
+		#[cfg(debug_assertions)]
+		assert!(self.release.replace(false));
+		#[cfg(not(debug_assertions))]
+		self.release.set(false);
+	}
+}
+
 impl Serialize for SerializeSchema<'_, SchemaKey> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		let node = self
@@ -111,69 +125,53 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				inner,
 				logical_type,
 			} => {
-				self.check_not_written()?;
+				let no_cycle_guard = self.no_cycle_guard()?;
 				let mut map = serializer.serialize_map(Some(2))?;
 				map.serialize_entry("logical_type", logical_type.as_str())?;
 				map.serialize_entry("type", &self.serializable(*inner))?;
-				map.end()
+				let res = map.end();
+				no_cycle_guard.release();
+				res
 			}
 			SchemaNode::RegularType(schema_type) => match *schema_type {
-				RegularType::Null => {
-					self.check_not_written()?;
-					serializer.serialize_str("null")
-				}
-				RegularType::Boolean => {
-					self.check_not_written()?;
-					serializer.serialize_str("boolean")
-				}
-				RegularType::Int => {
-					self.check_not_written()?;
-					serializer.serialize_str("int")
-				}
-				RegularType::Long => {
-					self.check_not_written()?;
-					serializer.serialize_str("long")
-				}
-				RegularType::Float => {
-					self.check_not_written()?;
-					serializer.serialize_str("float")
-				}
-				RegularType::Double => {
-					self.check_not_written()?;
-					serializer.serialize_str("double")
-				}
-				RegularType::Bytes => {
-					self.check_not_written()?;
-					serializer.serialize_str("bytes")
-				}
-				RegularType::String => {
-					self.check_not_written()?;
-					serializer.serialize_str("string")
-				}
+				RegularType::Null => serializer.serialize_str("null"),
+				RegularType::Boolean => serializer.serialize_str("boolean"),
+				RegularType::Int => serializer.serialize_str("int"),
+				RegularType::Long => serializer.serialize_str("long"),
+				RegularType::Float => serializer.serialize_str("float"),
+				RegularType::Double => serializer.serialize_str("double"),
+				RegularType::Bytes => serializer.serialize_str("bytes"),
+				RegularType::String => serializer.serialize_str("string"),
 				RegularType::Array(Array { items, _private }) => {
-					self.check_not_written()?;
+					let no_cycle_guard = self.no_cycle_guard()?;
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "array")?;
 					map.serialize_entry("items", &self.serializable(items))?;
-					map.end()
+					let res = map.end();
+					no_cycle_guard.release();
+					res
 				}
 				RegularType::Map(Map { values, _private }) => {
-					self.check_not_written()?;
+					let no_cycle_guard = self.no_cycle_guard()?;
 					let mut map = serializer.serialize_map(Some(2))?;
 					map.serialize_entry("type", "map")?;
 					map.serialize_entry("values", &self.serializable(values))?;
-					map.end()
+					let res = map.end();
+					no_cycle_guard.release();
+					res
 				}
 				RegularType::Union(Union {
 					ref variants,
 					_private,
 				}) => {
-					self.check_not_written()?;
+					let no_cycle_guard = self.no_cycle_guard()?;
 					let mut seq = serializer.serialize_seq(Some(variants.len()))?;
 					for &union_variant_key in variants {
 						seq.serialize_element(&self.serializable(union_variant_key))?;
 					}
-					seq.end()
+					let res = seq.end();
+					no_cycle_guard.release();
+					res
 				}
 				RegularType::Record(Record {
 					ref name,
