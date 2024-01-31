@@ -418,3 +418,9 @@ impl LogicalType {
 		}
 	}
 }
+
+impl From<RegularType> for SchemaNode {
+	fn from(t: RegularType) -> Self {
+		Self::RegularType(t)
+	}
+}
