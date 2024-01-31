@@ -419,9 +419,9 @@ impl LogicalType {
 	}
 }
 
-impl<RT: Into<RegularType>> From<RT> for SchemaNode {
-	fn from(regular_type: RT) -> Self {
-		Self::RegularType(regular_type.into())
+impl From<RegularType> for SchemaNode {
+	fn from(regular_type: RegularType) -> Self {
+		Self::RegularType(regular_type)
 	}
 }
 
@@ -431,6 +431,11 @@ macro_rules! impl_froms_for_regular_type {
 			impl From<$variant> for RegularType {
 				fn from(variant: $variant) -> Self {
 					Self::$variant(variant)
+				}
+			}
+			impl From<$variant> for SchemaNode {
+				fn from(variant: $variant) -> Self {
+					SchemaNode::RegularType(RegularType::$variant(variant))
 				}
 			}
 		)*
