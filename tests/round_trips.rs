@@ -147,27 +147,6 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 	assert_eq!(*value, decoded);
 }
 
-fn test_schema_fingerprint_and_parse_round_trip<T>(&(raw_schema, _): &(&str, Value)) {
-	let schema = Schema::parse_str(raw_schema).unwrap();
-	let apache_finterprint = schema.fingerprint::<apache_avro::rabin::Rabin>().bytes;
-	let mut fast_schema: SchemaMut = raw_schema.parse().unwrap();
-	let fast_fingerprint = fast_schema.canonical_form_rabin_fingerprint().unwrap();
-	assert_eq!(apache_finterprint, fast_fingerprint);
-
-	fast_schema.nodes_mut(); // Forget original json
-	let serialized_schema = serde_json::to_string(&fast_schema).unwrap();
-	let fast_schema_2: SchemaMut = serialized_schema.parse().unwrap();
-	let serialized_schema_2 = serde_json::to_string(&fast_schema_2).unwrap();
-	assert_eq!(serialized_schema, serialized_schema_2);
-	assert_eq!(
-		fast_schema_2.canonical_form_rabin_fingerprint().unwrap(),
-		fast_fingerprint
-	);
-
-	let apache_from_serialized = Schema::parse_str(&serialized_schema).unwrap();
-	assert_eq!(apache_from_serialized, schema);
-}
-
 fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	&(raw_schema, ref value): &(&str, Value),
 ) {
@@ -183,6 +162,39 @@ fn test_round_trip_fast_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	serde_avro_fast::to_datum(&json_for_value, &mut encoded, serializer_config).unwrap();
 	let decoded = from_avro_datum_fast::<T>(&schema, &fast_schema, &encoded);
 	assert_eq!(*value, decoded);
+}
+
+/// Skip apache avro and just do a local round trip - for cases when apache avro
+/// is buggy
+fn test_schema_parse_round_trip(raw_schema: &str) -> (String, [u8; 8]) {
+	let mut fast_schema: SchemaMut = raw_schema.parse().unwrap();
+	let fast_fingerprint = fast_schema.canonical_form_rabin_fingerprint().unwrap();
+
+	fast_schema.nodes_mut(); // Forget original json
+	let serialized_schema = serde_json::to_string_pretty(&fast_schema).unwrap();
+	let fast_schema_2: SchemaMut = serialized_schema.parse().unwrap();
+	let serialized_schema_2 = serde_json::to_string_pretty(&fast_schema_2).unwrap();
+	assert_eq!(serialized_schema, serialized_schema_2);
+	println!("{}", &serialized_schema);
+	assert_eq!(
+		fast_schema_2.canonical_form_rabin_fingerprint().unwrap(),
+		fast_fingerprint
+	);
+
+	(serialized_schema, fast_fingerprint)
+}
+/// Make sure that parsed schema -> serialized schema -> apache schema agrees
+/// with apache parsed schema
+fn test_schema_fingerprint_and_parse_round_trip(raw_schema: &str) {
+	let (serialized_schema, fast_fingerprint) = test_schema_parse_round_trip(raw_schema);
+
+	let schema = Schema::parse_str(raw_schema).unwrap();
+
+	let apache_from_serialized = Schema::parse_str(&serialized_schema).unwrap();
+	assert_eq!(apache_from_serialized, schema);
+
+	let apache_finterprint = schema.fingerprint::<apache_avro::rabin::Rabin>().bytes;
+	assert_eq!(apache_finterprint, fast_fingerprint);
 }
 
 macro_rules! tests {
@@ -227,7 +239,7 @@ macro_rules! tests {
 				$(
 					#[test]
 					fn [<test_schema_fingerprint_and_parse_round_trip_ $name $idx>]() {
-						test_schema_fingerprint_and_parse_round_trip::<$type_>(&SCHEMAS_TO_VALIDATE[$idx]);
+						test_schema_fingerprint_and_parse_round_trip(SCHEMAS_TO_VALIDATE[$idx].0);
 					}
 				)*
 			)*
@@ -343,4 +355,135 @@ fn test_fixed_with_serde_json_value() {
 	let serialized = serializer_state.into_writer();
 
 	assert_eq!(serialized, encoded);
+}
+
+#[test]
+fn complex_schema_parsing_serialization_round_trip() {
+	let (serialized, fingerprint) = test_schema_parse_round_trip(
+		r#"
+		[
+			{
+				"type": "fixed",
+				"name": "fiiixed",
+				"size": 12
+			},
+			{
+				"type": "record",
+				"name": "Test",
+				"fields": [
+					{
+						"name": "f",
+						"type": {
+							"type": "record",
+							"name": "a.Test2",
+							"fields": [
+								{
+									"name": "Test2 inner",
+									"type": {
+										"type": "fixed",
+										"size": 12,
+										"name": "test2_inner"
+									}
+								},
+								{
+									"name": "the_fiixed",
+									"type": ".fiiixed"
+								}
+							]
+						}
+					},
+					{
+						"name": "f2",
+						"type": "a.Test2"
+					},
+					{
+						"name": "f3",
+						"type": {
+							"type": "record",
+							"name": "f3",
+							"namespace": "",
+							"fields": [
+								{
+									"name": "f3fiiixed",
+									"type": "fiiixed"
+								},
+								{
+									"name": "f3_2",
+									"type": "a.test2_inner"
+								}
+							]
+						}
+					},
+					{
+						"name": "f4",
+						"type": "a.test2_inner"
+					}
+				]
+			}
+		]
+	"#,
+	);
+	assert_eq!(
+		serialized,
+		r#"[
+  {
+    "type": "fixed",
+    "name": "fiiixed",
+    "size": 12
+  },
+  {
+    "type": "record",
+    "name": "Test",
+    "fields": [
+      {
+        "name": "f",
+        "type": {
+          "type": "record",
+          "name": "a.Test2",
+          "fields": [
+            {
+              "name": "Test2 inner",
+              "type": {
+                "type": "fixed",
+                "name": "test2_inner",
+                "size": 12
+              }
+            },
+            {
+              "name": "the_fiixed",
+              "type": ".fiiixed"
+            }
+          ]
+        }
+      },
+      {
+        "name": "f2",
+        "type": "a.Test2"
+      },
+      {
+        "name": "f3",
+        "type": {
+          "type": "record",
+          "name": "f3",
+          "fields": [
+            {
+              "name": "f3fiiixed",
+              "type": "fiiixed"
+            },
+            {
+              "name": "f3_2",
+              "type": "a.test2_inner"
+            }
+          ]
+        }
+      },
+      {
+        "name": "f4",
+        "type": "a.test2_inner"
+      }
+    ]
+  }
+]"#
+	);
+	assert_eq!(fingerprint, [18, 207, 199, 195, 150, 81, 210, 28]);
 }
