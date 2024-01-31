@@ -74,10 +74,28 @@ impl Name {
 	}
 
 	/// Build a [`Name`] from a fully qualified name
-	pub fn from_fully_qualified_name(fully_qualified_name: String) -> Self {
-		Self {
-			namespace_delimiter_idx: fully_qualified_name.rfind('.'),
-			fully_qualified_name,
+	///
+	/// Side note if doing weird stuff: If the only `.` in the fully qualified
+	/// name is at the beginning of the string, it will be stripped, that is, we
+	/// will parse `namespace: None, name: "anything_behind_the_dot"`. This is
+	/// for consistency with the parsing logic, but that would imply that what
+	/// would be returned by
+	/// [`fully_qualified_name`](Name::fully_qualified_name) is not equal to
+	/// what was provided here, because it would not contain the dot.
+	pub fn from_fully_qualified_name(fully_qualified_name: impl Into<String>) -> Self {
+		fn non_generic_inner(mut fully_qualified_name: String) -> Name {
+			Name {
+				namespace_delimiter_idx: match fully_qualified_name.rfind('.') {
+					Some(0) => {
+						// Let's parse ".x" as {namespace: None, name: "x"}
+						fully_qualified_name.remove(0);
+						None
+					}
+					other => other,
+				},
+				fully_qualified_name,
+			}
 		}
+		non_generic_inner(fully_qualified_name.into())
 	}
 }
