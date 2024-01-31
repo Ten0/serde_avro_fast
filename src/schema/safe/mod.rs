@@ -274,9 +274,9 @@ pub struct RecordField {
 	pub(crate) _private: (),
 }
 impl RecordField {
-	pub fn new(name: String, schema: SchemaKey) -> Self {
+	pub fn new(name: impl Into<String>, schema: SchemaKey) -> Self {
 		Self {
-			name,
+			name: name.into(),
 			type_: schema,
 			_private: (),
 		}
