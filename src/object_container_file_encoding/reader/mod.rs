@@ -374,25 +374,19 @@ where
 							DecompressionState::Null {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
-							#[cfg(feature = "deflate")]
-							DecompressionState::Deflate {
-								deserializer_state, ..
-							} => T::deserialize(deserializer_state.deserializer()),
-							#[cfg(feature = "bzip2")]
-							DecompressionState::Bzip2 {
+							#[cfg(any(
+								feature = "deflate",
+								feature = "bzip2",
+								feature = "xz",
+								feature = "zstandard"
+							))]
+							DecompressionState::BufReader {
 								deserializer_state, ..
 							} => T::deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "snappy")]
-							DecompressionState::Snappy {
-								deserializer_state, ..
-							} => T::deserialize(deserializer_state.deserializer()),
-							#[cfg(feature = "xz")]
-							DecompressionState::Xz {
-								deserializer_state, ..
-							} => T::deserialize(deserializer_state.deserializer()),
-							#[cfg(feature = "zstandard")]
-							DecompressionState::Zstandard {
-								deserializer_state, ..
+							DecompressionState::DecompressedOnConstruction {
+								deserializer_state,
+								..
 							} => T::deserialize(deserializer_state.deserializer()),
 						}
 						.map(Some);
