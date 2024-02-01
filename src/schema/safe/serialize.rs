@@ -13,14 +13,17 @@ impl SchemaMut {
 
 impl Serialize for SchemaMut {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		// `written` serves both to avoid infinite recursion and to avoid writing the
+		// This serves both to avoid infinite recursion and to avoid writing the
 		// same node twice in an unnamed manner.
-		let written = vec![Cell::new(false); self.nodes.len()];
+		let node_traversal_state = vec![Cell::new(0); self.nodes.len()];
+
+		let n_written_names = Cell::new(1);
 		SerializeSchema {
 			schema_nodes: self.nodes(),
 			key: SchemaKey::from_idx(0),
-			namespace: None,
-			written: written.as_slice(),
+			parent_namespace: None,
+			n_written_names: &n_written_names,
+			node_traversal_state: node_traversal_state.as_slice(),
 		}
 		.serialize(serializer)
 	}
@@ -28,52 +31,86 @@ impl Serialize for SchemaMut {
 
 struct SerializeSchema<'a, K> {
 	schema_nodes: &'a [SchemaNode],
-	written: &'a [Cell<bool>],
 	key: K,
-	namespace: Option<&'a str>,
+	n_written_names: &'a Cell<u64>,
+	node_traversal_state: &'a [Cell<u64>],
+	parent_namespace: Option<&'a str>,
 }
 
 impl<'a, K> SerializeSchema<'a, K> {
 	fn serializable<NK>(&self, key: NK) -> SerializeSchema<'a, NK> {
 		SerializeSchema {
-			schema_nodes: self.schema_nodes,
-			written: self.written,
 			key,
-			namespace: self.namespace,
+			schema_nodes: self.schema_nodes,
+			n_written_names: self.n_written_names,
+			node_traversal_state: self.node_traversal_state,
+			parent_namespace: self.parent_namespace,
 		}
 	}
+	/// Current field overrides the namespace, so we need to propagate that to
+	/// children
 	fn serializable_with_namespace<NK>(
 		&self,
 		key: NK,
 		namespace: Option<&'a str>,
 	) -> SerializeSchema<'a, NK> {
 		SerializeSchema {
-			schema_nodes: self.schema_nodes,
-			written: self.written,
 			key,
-			namespace,
+			schema_nodes: self.schema_nodes,
+			n_written_names: self.n_written_names,
+			node_traversal_state: self.node_traversal_state,
+			parent_namespace: namespace,
 		}
 	}
 }
 impl<'a> SerializeSchema<'a, SchemaKey> {
-	/// Make sure we aren't cycling and every node is written at most once
+	/// Make sure we aren't cycling
 	fn no_cycle_guard<E: serde::ser::Error>(&self) -> Result<NoCycleGuard, E> {
-		let cell = &self.written[self.key.idx];
-		if cell.replace(true) {
+		let cell = &self.node_traversal_state[self.key.idx];
+		let n_written_names = self.n_written_names.get();
+		let prev_n_written_names = cell.replace(n_written_names);
+		// If we encounter the same node without having written a new name, this means
+		// that we are in a cycle. If however we have written a new name, then next loop
+		// we will likely just reference that name (if it is indeed in that particular
+		// loop), so the schema serialization will not loop indefinitely. -> Let's allow
+		// another round. (If it was in another loop, since we'll redo that check on our
+		// next loop we'll also catch it.)
+		// Complexity is at most O(n²) since we'll at most go through every node for
+		// every named node. In practice such degenerate schemas are very unlikely to
+		// exist so it will run in a reasonable amount of time.
+
+		// Should never be greater, only at most equal, but this is a safer writing
+		if prev_n_written_names >= n_written_names {
 			Err(E::custom(
 				"Schema contains a cycle that can't be avoided using named references",
 			))
 		} else {
-			Ok(NoCycleGuard { release: cell })
+			// We will use this to reset
+			Ok(NoCycleGuard {
+				node_traversal_state: cell,
+			})
 		}
 	}
 	/// If this node was already written, return true (don't write it again).
-	/// Either way, mark it as written now.
+	/// Otherwise, return false, assume we'll write it entirely and increment
+	/// the counter of written names.
 	fn should_write_as_ref(&self) -> bool {
-		self.written[self.key.idx].replace(true)
+		let key_generation = &self.node_traversal_state[self.key.idx];
+		if key_generation.get() > 0 {
+			// We have already written that one, just write it as a ref
+			true
+		} else {
+			let generation = self.n_written_names.get();
+			key_generation.set(generation);
+			// Mark that we are going to write one additional named node by increasing the
+			// generation, so that resets the cycle checker for all parent nodes
+			// We can't count to u64::MAX so this can't overflow
+			self.n_written_names.set(generation + 1);
+			false
+		}
 	}
 	fn str_for_ref(&self, name: &'a Name) -> Cow<'a, str> {
-		if self.namespace == name.namespace() {
+		if self.parent_namespace == name.namespace() {
 			Cow::Borrowed(name.name())
 		} else if name.namespace().is_none() {
 			// This syntax with the leading dot is unspecified, and it's probably impossible
@@ -86,15 +123,16 @@ impl<'a> SerializeSchema<'a, SchemaKey> {
 		}
 	}
 	fn serialize_name<M: SerializeMap>(&self, map: &mut M, name: &'a Name) -> Result<(), M::Error> {
-		if self.namespace == name.namespace() {
+		if self.parent_namespace == name.namespace() {
 			map.serialize_entry("name", name.name())?;
 		} else if name.namespace().is_none() {
-			// To get the "null namespace" back, it's specified that one should specify
+			// To get the "null namespace" back, it's specified that one should write
 			// "namespace": "" in the json.
 			map.serialize_entry("namespace", "")?;
 			map.serialize_entry("name", name.name())?;
 		} else {
-			// We need to update the namespace, might as well put it in the name
+			// We need to update the namespace (and we know it's not None), might as well
+			// put it in the name
 			map.serialize_entry("name", name.fully_qualified_name())?;
 		}
 		Ok(())
@@ -103,14 +141,11 @@ impl<'a> SerializeSchema<'a, SchemaKey> {
 
 #[must_use]
 struct NoCycleGuard<'a> {
-	release: &'a Cell<bool>,
+	node_traversal_state: &'a Cell<u64>,
 }
 impl NoCycleGuard<'_> {
 	fn release(self) {
-		#[cfg(debug_assertions)]
-		assert!(self.release.replace(false));
-		#[cfg(not(debug_assertions))]
-		self.release.set(false);
+		self.node_traversal_state.set(0);
 	}
 }
 
