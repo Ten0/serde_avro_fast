@@ -88,6 +88,16 @@ impl SchemaMut {
 	pub fn freeze(self) -> Result<super::Schema, SchemaError> {
 		self.try_into()
 	}
+
+	/// Try to get the node at the given [`SchemaKey`]
+	///
+	/// (or return `None` if the key is invalid)
+	///
+	/// If you want to panic on invalid keys, use `schema[key]`
+	/// instead.
+	pub fn get(&self, key: SchemaKey) -> Option<&SchemaNode> {
+		self.nodes.get(key.idx)
+	}
 }
 
 /// The location of a node in a [`SchemaMut`]
@@ -110,13 +120,20 @@ impl SchemaKey {
 	///
 	/// (Note that [`Index`](std::ops::Index)ing into a `SchemaMut` with an
 	/// invalid index would cause a panic.)
-	pub fn from_idx(idx: usize) -> Self {
+	pub const fn from_idx(idx: usize) -> Self {
 		Self { idx }
 	}
 	/// Obtain the index in the [`nodes`](SchemaMut::nodes) `Vec` of a
 	/// [`SchemaMut`] that this [`SchemaKey`] points to.
-	pub fn idx(self) -> usize {
+	pub const fn idx(self) -> usize {
 		self.idx
+	}
+	/// Construct a new SchemaKey representing the root of the schema
+	///
+	/// This is equivalent to `SchemaKey::from_idx(0)`, since the root of the
+	/// schema is always simply the first element of the `nodes` array.
+	pub const fn root() -> Self {
+		Self { idx: 0 }
 	}
 }
 impl std::ops::Index<SchemaKey> for SchemaMut {
@@ -321,12 +338,18 @@ pub enum LogicalType {
 	Date,
 	/// The time of day in number of milliseconds after midnight with no
 	/// reference any calendar, time zone or date in particular.
+	///
+	/// Annotates an [`Int`](RegularType::Int).
 	TimeMillis,
 	/// The time of day in number of microseconds after midnight with no
 	/// reference any calendar, time zone or date in particular.
+	///
+	/// Annotates a [`Long`](RegularType::Long).
 	TimeMicros,
 	/// An instant in time represented as the number of milliseconds after the
 	/// UNIX epoch.
+	///
+	/// Annotates a [`Long`](RegularType::Long).
 	///
 	/// You probably want to use
 	/// [`TimestampMilliSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMilliSeconds.html)
@@ -334,6 +357,8 @@ pub enum LogicalType {
 	TimestampMillis,
 	/// An instant in time represented as the number of microseconds after the
 	/// UNIX epoch.
+	///
+	/// Annotates a [`Long`](RegularType::Long).
 	///
 	/// You probably want to use
 	/// [`TimestampMicroSeconds`](https://docs.rs/serde_with/latest/serde_with/struct.TimestampMicroSeconds.html)
