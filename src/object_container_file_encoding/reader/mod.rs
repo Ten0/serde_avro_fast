@@ -11,8 +11,11 @@ use crate::{
 
 use {
 	decompression::DecompressionState,
-	serde::{de::DeserializeOwned, Deserialize},
-	std::sync::Arc,
+	serde::{
+		de::{DeserializeOwned, DeserializeSeed},
+		Deserialize,
+	},
+	std::{marker::PhantomData, sync::Arc},
 };
 
 /// Reader for [object container files](https://avro.apache.org/docs/current/specification/#object-container-files)
@@ -237,7 +240,7 @@ where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		std::iter::from_fn(|| self.deserialize_next_inner().transpose())
+		std::iter::from_fn(|| self.deserialize_seed_next(PhantomData::<T>).transpose())
 	}
 
 	/// Attempt to deserialize the next value
@@ -246,7 +249,7 @@ where
 		R: ReadSlice<'a>,
 		<R as de::read::take::Take>::Take: ReadSlice<'a>,
 	{
-		self.deserialize_next_inner()
+		self.deserialize_seed_next(PhantomData::<T>)
 	}
 
 	/// Attempt to deserialize the next value
@@ -264,10 +267,20 @@ where
 		R: ReadSlice<'de> + IsSliceRead,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
 	{
-		self.deserialize_next_inner()
+		self.deserialize_seed_next(PhantomData::<T>)
 	}
 
-	fn deserialize_next_inner<'de, T: Deserialize<'de>>(&mut self) -> Result<Option<T>, DeError>
+	/// Attempt to deserialize the next value via the advanced
+	/// [`DeserializeSeed`] serde API
+	///
+	/// A typical user should not need this.
+	///
+	/// This may be useful for transcoding in some select cases - typically one
+	/// may prefer using [`transcode_next`](Self::transcode_next).
+	pub fn deserialize_seed_next<'de, S: DeserializeSeed<'de>>(
+		&mut self,
+		deserialize_seed: S,
+	) -> Result<Option<S::Value>, DeError>
 	where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
@@ -275,7 +288,7 @@ where
 		if self.pretend_eof_because_yielded_unrecoverable_error {
 			return Ok(None);
 		}
-		let res = self.deserialize_next_inner_2();
+		let res = self.deserialize_next_inner(deserialize_seed);
 		if let Err(ref de_error) = res {
 			if de_error.io_error().is_some() || matches!(self.reader_state, ReaderState::Broken) {
 				// we yield this error once, then for following calls to
@@ -292,11 +305,14 @@ where
 
 	/// Attempt to deserialize the next value
 	///
-	/// Note that this may fail if the provided `T` requires to borrow from the
-	/// input and the input is actually an `impl BufRead`, or if the blocks are
-	/// compressed. (`deserialize_next` typechecks that we have
+	/// Note that this may fail if the provided `seed` requires to borrow from
+	/// the input and the input is actually an `impl BufRead`, or if the blocks
+	/// are compressed. (`deserialize_next` typechecks that we have
 	/// `DeserializeOwned` to make sure that is never the case)
-	fn deserialize_next_inner_2<'de, T: Deserialize<'de>>(&mut self) -> Result<Option<T>, DeError>
+	fn deserialize_next_inner<'de, S: DeserializeSeed<'de>>(
+		&mut self,
+		deserialize_seed: S,
+	) -> Result<Option<S::Value>, DeError>
 	where
 		R: ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: ReadSlice<'de>,
@@ -373,7 +389,7 @@ where
 						break match codec_data {
 							DecompressionState::Null {
 								deserializer_state, ..
-							} => T::deserialize(deserializer_state.deserializer()),
+							} => deserialize_seed.deserialize(deserializer_state.deserializer()),
 							#[cfg(any(
 								feature = "deflate",
 								feature = "bzip2",
@@ -382,12 +398,12 @@ where
 							))]
 							DecompressionState::BufReader {
 								deserializer_state, ..
-							} => T::deserialize(deserializer_state.deserializer()),
+							} => deserialize_seed.deserialize(deserializer_state.deserializer()),
 							#[cfg(feature = "snappy")]
 							DecompressionState::DecompressedOnConstruction {
 								deserializer_state,
 								..
-							} => T::deserialize(deserializer_state.deserializer()),
+							} => deserialize_seed.deserialize(deserializer_state.deserializer()),
 						}
 						.map(Some);
 					}
