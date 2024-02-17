@@ -16,10 +16,7 @@ use integer_encoding::{VarInt, VarIntReader};
 pub trait Read: std::io::Read + Sized + private::Sealed {
 	fn read_varint<I>(&mut self) -> Result<I, DeError>
 	where
-		I: VarInt,
-	{
-		<Self as VarIntReader>::read_varint(self).map_err(DeError::io)
-	}
+		I: VarInt;
 	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
 		let mut buf = [0u8; N];
 		self.read_exact(&mut buf).map_err(DeError::io)?;
@@ -127,7 +124,25 @@ impl<R> ReaderRead<R> {
 		self.reader
 	}
 }
-impl<R: std::io::Read> Read for ReaderRead<R> {}
+impl<R: std::io::BufRead> Read for ReaderRead<R> {
+	fn read_varint<I>(&mut self) -> Result<I, DeError>
+	where
+		I: VarInt,
+	{
+		use std::io::BufRead;
+		// Try to decode in one go from the buffer slice.
+		// On buffer refill boundaries, that may fail, so we fall back to the
+		// more general `read_varint` method that reads byte by byte (that's slightly
+		// sub-optimal but also will trigger extremely rarely).
+		match I::decode_var(self.fill_buf().map_err(DeError::io)?) {
+			None => <Self as VarIntReader>::read_varint(self).map_err(DeError::io),
+			Some((val, read)) => {
+				self.consume(read);
+				Ok(val)
+			}
+		}
+	}
+}
 impl<'de, R: std::io::BufRead> ReadSlice<'de> for ReaderRead<R> {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
