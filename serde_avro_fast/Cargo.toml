@@ -6,6 +6,7 @@
 	name = "serde_avro_fast"
 	repository = "https://github.com/Ten0/serde_avro_fast"
 	version = "1.0.0-rc.4"
+	workspace = ".."
 
 [features]
 	default = ["deflate"]
