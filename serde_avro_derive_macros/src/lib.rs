@@ -8,6 +8,7 @@ use darling::FromDeriveInput;
 
 #[proc_macro_derive(Schema, attributes(avro_schema))]
 /// Derive the ability to build an Avro schema for a type
+/// (implements `BuildSchema`)
 ///
 /// # Example
 /// ```
@@ -23,10 +24,11 @@ use darling::FromDeriveInput;
 /// 	b: String,
 /// }
 ///
+/// let schema = Foo::schema();
+///
 /// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
 /// // generate the following schema:
-///
-/// let schema = r#"{
+/// let schema_str = r#"{
 ///   "type": "record",
 ///   "name": "rust_out.Foo",
 ///   "fields": [
@@ -49,9 +51,12 @@ use darling::FromDeriveInput;
 ///     }
 ///   ]
 /// }"#;
+/// // Note that the `rust_out` namespace here is only due to the fact this is a doctest:
+/// // the name will always be crate_name.path.to.module.Foo
+/// // (but for doctests the crate is called rust_out and the struct is at top level)
 /// # use serde_avro_derive::BuildSchema;
 /// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut()).unwrap();
-/// # assert_eq!(actual_schema, schema);
+/// # assert_eq!(actual_schema, schema_str);
 /// ```
 pub fn schema_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let derive_input = syn::parse_macro_input!(input as syn::DeriveInput);

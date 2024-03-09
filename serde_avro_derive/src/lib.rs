@@ -1,3 +1,8 @@
+//! Bring automatic Avro Schema generation to [`serde_avro_fast`]
+//!
+//! See the [`#[derive(Schema)]`](derive@Schema) documentation for more
+//! information
+
 pub use serde_avro_fast;
 
 pub use serde_avro_derive_macros::*;
@@ -8,50 +13,81 @@ use serde_avro_fast::schema::*;
 
 /// We can automatically build a schema for this type (can be `derive`d)
 ///
-/// This trait can be derived using `#[derive(Schema)]` from the
-/// [`serde_avro_derive`](https://docs.rs/serde_avro_derive/) crate
+/// This trait can be derived using [`#[derive(Schema)]`](derive@Schema)
 pub trait BuildSchema {
-	/// Obtain the [`struct@Schema`] for this type
+	/// Build a [`struct@Schema`] for this type
 	fn schema() -> Schema {
 		Self::schema_mut()
 			.try_into()
 			.expect("Schema derive generated invalid schema")
 	}
-	/// Obtain the [`SchemaMut`] for this type
+	/// Build a [`SchemaMut`] for this type
 	fn schema_mut() -> SchemaMut {
 		let mut builder = SchemaBuilder::default();
-		assert_eq!(Self::build_schema(&mut builder).idx(), 0);
+		Self::append_schema(&mut builder);
 		SchemaMut::from_nodes(builder.nodes)
 	}
 
-	/// Largely internal method to build the schema. Registers the schema with
+	/// Largely internal method to build the schema. Registers the schema within
 	/// the builder.
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey;
+	///
+	/// This does not check if this type already exists in the builder, so it
+	/// should never be called directly (instead, use
+	/// [`SchemaBuilder::find_or_build`])
+	///
+	/// The [`SchemaNode`] for this type should be put at the current end of the
+	/// `nodes` array, and its non-already-built dependencies should be put
+	/// after in the array.
+	fn append_schema(builder: &mut SchemaBuilder);
+
+	/// Largely internal type used by [`#[derive(Schema)]`](derive@Schema)
+	///
+	/// The TypeId of this type will be used to lookup whether the
+	/// [`SchemaNode`] for this type has already been built in the
+	/// [`SchemaBuilder`].
+	///
+	/// This indirection is required to allow non-static types to implement
+	/// [`BuildSchema`], and also enables using the same node for types that we
+	/// know map to the same schema.
 	type TypeLookup: std::any::Any;
 }
 
+/// Largely internal type used by [`#[derive(Schema)]`](derive@Schema)
+///
+/// You should typically not use this directly
 #[derive(Default)]
 pub struct SchemaBuilder {
 	pub nodes: Vec<SchemaNode>,
-	pub already_built: HashMap<TypeId, SchemaKey>,
+	pub already_built_types: HashMap<TypeId, SchemaKey>,
 	_private: (),
 }
 
 impl SchemaBuilder {
-	pub fn reserve(&mut self) -> SchemaKey {
+	/// Reserve a slot in the `nodes` array
+	///
+	/// After building the `SchemaNode`, it should be put at the corresponding
+	/// position in `nodes`.
+	pub fn reserve(&mut self) -> usize {
 		let idx = self.nodes.len();
 		self.nodes.push(SchemaNode::RegularType(RegularType::Null));
-		SchemaKey::from_idx(idx)
+		idx
 	}
 
 	pub fn find_or_build<T: BuildSchema>(&mut self) -> SchemaKey {
-		match self.already_built.entry(TypeId::of::<T::TypeLookup>()) {
+		match self
+			.already_built_types
+			.entry(TypeId::of::<T::TypeLookup>())
+		{
 			std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
 			std::collections::hash_map::Entry::Vacant(entry) => {
-				let expected_idx = SchemaKey::from_idx(self.nodes.len());
-				entry.insert(expected_idx);
-				let idx = T::build_schema(self);
-				assert_eq!(idx, expected_idx);
+				let idx = SchemaKey::from_idx(self.nodes.len());
+				entry.insert(idx);
+				T::append_schema(self);
+				assert!(
+					self.nodes.len() > idx.idx(),
+					"append_schema should always insert at least a node \
+					(and its dependencies below itself)"
+				);
 				idx
 			}
 		}
@@ -62,10 +98,8 @@ macro_rules! impl_primitive {
 	($($ty:ty, $variant:ident;)+) => {
 		$(
 			impl BuildSchema for $ty {
-				fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
-					let schema_key = SchemaKey::from_idx(builder.nodes.len());
+				fn append_schema(builder: &mut SchemaBuilder) {
 					builder.nodes.push(SchemaNode::RegularType(RegularType::$variant));
-					schema_key
 				}
 				type TypeLookup = Self;
 			}
@@ -83,90 +117,112 @@ impl_primitive!(
 	Vec<u8>, Bytes;
 );
 
-macro_rules! delegate_impl {
+macro_rules! impl_forward {
 	($($ty:ty, $to:ty;)+) => {
 		$(
 			impl BuildSchema for $ty {
-				fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
-					<$to as BuildSchema>::build_schema(builder)
+				fn append_schema(builder: &mut SchemaBuilder) {
+					<$to as BuildSchema>::append_schema(builder)
 				}
 				type TypeLookup = <$to as BuildSchema>::TypeLookup;
 			}
 		)*
 	};
 }
-delegate_impl! {
-	&'_ str, String;
-	&'_ [u8], Vec<u8>;
+impl_forward! {
+	str, String;
+	[u8], Vec<u8>;
 	u16, i32;
 	u32, i64;
 	u64, i64;
 	i8, i32;
 	i16, i32;
+	usize, i64;
+}
+
+macro_rules! impl_ptr {
+	($($($ty_path:ident)::+,)+) => {
+		$(
+			impl<T: BuildSchema + ?Sized> BuildSchema for $($ty_path)::+<T> {
+				fn append_schema(builder: &mut SchemaBuilder) {
+					<T as BuildSchema>::append_schema(builder)
+				}
+				type TypeLookup = T::TypeLookup;
+			}
+		)*
+	};
+}
+impl_ptr! {
+	Box,
+	std::sync::Arc,
+	std::rc::Rc,
+	std::cell::RefCell,
+	std::cell::Cell,
+}
+impl<T: BuildSchema + ?Sized> BuildSchema for &'_ T {
+	fn append_schema(builder: &mut SchemaBuilder) {
+		<T as BuildSchema>::append_schema(builder)
+	}
+	type TypeLookup = T::TypeLookup;
 }
 
 impl<T: BuildSchema> BuildSchema for Vec<T> {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
+	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
 		let new_node =
 			SchemaNode::RegularType(RegularType::Array(Array::new(builder.find_or_build::<T>())));
-		builder.nodes[reserved_schema_key.idx()] = new_node;
-		reserved_schema_key
+		builder.nodes[reserved_schema_key] = new_node;
 	}
 
 	type TypeLookup = Vec<T::TypeLookup>;
 }
 
-impl<T: BuildSchema> BuildSchema for &'_ [T] {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
-		<Vec<T> as BuildSchema>::build_schema(builder)
+impl<T: BuildSchema> BuildSchema for [T] {
+	fn append_schema(builder: &mut SchemaBuilder) {
+		<Vec<T> as BuildSchema>::append_schema(builder)
 	}
 	type TypeLookup = <Vec<T> as BuildSchema>::TypeLookup;
 }
 
 impl<T: BuildSchema> BuildSchema for Option<T> {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
+	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
 		let new_node = SchemaNode::RegularType(RegularType::Union(Union::new(vec![
 			builder.find_or_build::<()>(),
 			builder.find_or_build::<T>(),
 		])));
-		builder.nodes[reserved_schema_key.idx()] = new_node;
-		reserved_schema_key
+		builder.nodes[reserved_schema_key] = new_node;
 	}
 
 	type TypeLookup = Option<T::TypeLookup>;
 }
 
 impl<const N: usize> BuildSchema for [u8; N] {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
-		let schema_key = SchemaKey::from_idx(builder.nodes.len());
+	fn append_schema(builder: &mut SchemaBuilder) {
 		builder
 			.nodes
 			.push(SchemaNode::RegularType(RegularType::Fixed(Fixed::new(
 				Name::from_fully_qualified_name(format!("u8_array_{}", N)),
 				N,
 			))));
-		schema_key
 	}
 	type TypeLookup = Self;
 }
 
 impl<S: std::ops::Deref<Target = str>, V: BuildSchema> BuildSchema for HashMap<S, V> {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
+	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
 		let new_node =
 			SchemaNode::RegularType(RegularType::Map(Map::new(builder.find_or_build::<V>())));
-		builder.nodes[reserved_schema_key.idx()] = new_node;
-		reserved_schema_key
+		builder.nodes[reserved_schema_key] = new_node;
 	}
 	type TypeLookup = HashMap<String, V::TypeLookup>;
 }
 impl<S: std::ops::Deref<Target = str>, V: BuildSchema> BuildSchema
 	for std::collections::BTreeMap<S, V>
 {
-	fn build_schema(builder: &mut SchemaBuilder) -> SchemaKey {
-		<HashMap<String, V> as BuildSchema>::build_schema(builder)
+	fn append_schema(builder: &mut SchemaBuilder) {
+		<HashMap<String, V> as BuildSchema>::append_schema(builder)
 	}
 	type TypeLookup = <HashMap<String, V> as BuildSchema>::TypeLookup;
 }

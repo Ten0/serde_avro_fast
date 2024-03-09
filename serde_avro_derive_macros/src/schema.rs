@@ -48,7 +48,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			use serde_avro_derive::serde_avro_fast::schema;
 
 			impl #impl_generics serde_avro_derive::BuildSchema for #ident #ty_generics #where_clause {
-				fn build_schema(builder: &mut serde_avro_derive::SchemaBuilder) -> schema::SchemaKey {
+				fn append_schema(builder: &mut serde_avro_derive::SchemaBuilder) {
 					let reserved_schema_key = builder.reserve();
 					let mut struct_name = module_path!().replace("::", ".");
 					struct_name.push('.');
@@ -64,8 +64,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 							)*],
 						),
 					));
-					builder.nodes[reserved_schema_key.idx()] = new_node;
-					reserved_schema_key
+					builder.nodes[reserved_schema_key] = new_node;
 				}
 
 				type TypeLookup = #ident #ty_generics_staticified;
