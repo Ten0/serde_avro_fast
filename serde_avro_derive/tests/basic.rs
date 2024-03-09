@@ -1,4 +1,4 @@
-use serde_avro_fast::schema::BuildSchema;
+use serde_avro_derive::BuildSchema;
 
 use pretty_assertions::assert_eq;
 

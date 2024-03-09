@@ -45,10 +45,10 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 
 	Ok(quote! {
 		const _: () = {
-			use serde_avro_fast::schema::{self, builder};
+			use serde_avro_derive::serde_avro_fast::schema;
 
-			impl #impl_generics builder::BuildSchemaInner for #ident #ty_generics #where_clause {
-				fn build(builder: &mut builder::SchemaBuilder) -> schema::SchemaKey {
+			impl #impl_generics serde_avro_derive::BuildSchema for #ident #ty_generics #where_clause {
+				fn build_schema(builder: &mut serde_avro_derive::SchemaBuilder) -> schema::SchemaKey {
 					let reserved_schema_key = builder.reserve();
 					let mut struct_name = module_path!().replace("::", ".");
 					struct_name.push('.');
@@ -59,7 +59,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 							vec![#(
 								schema::RecordField::new(
 									#field_names,
-									builder::node_idx::<#field_types>(builder),
+									builder.find_or_build::<#field_types>(),
 								),
 							)*],
 						),

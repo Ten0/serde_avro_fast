@@ -1,6 +1,7 @@
 [workspace]
 	members = [
 		"serde_avro_derive",
+		"serde_avro_derive_macros",
 		"serde_avro_fast",
 	]
 	resolver = "2"
