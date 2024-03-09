@@ -2,6 +2,10 @@ use std::{any::TypeId, collections::HashMap};
 
 use crate::schema::*;
 
+/// We can automatically build a schema for this type (can be `derive`d)
+///
+/// This trait can be derived using `#[derive(Schema)]` from the
+/// [`serde_avro_derive`](https://docs.rs/serde_avro_derive/) crate
 pub trait BuildSchema {
 	fn schema() -> Schema {
 		Self::schema_mut()
@@ -51,21 +55,18 @@ pub fn node_idx<T: BuildSchemaInner>(builder: &mut SchemaBuilder) -> SchemaKey {
 }
 
 macro_rules! impl_primitive {
-	($ty:ty, $variant:ident; $($rest:tt)*) => {
-		impl_primitive!($ty, Self, $variant; $($rest)*);
-	};
-	($ty:ty, $type_id_of: ty, $variant:ident; $($rest:tt)*) => {
-		impl BuildSchemaInner for $ty {
-			fn build(builder: &mut SchemaBuilder) -> SchemaKey {
-				let schema_key = SchemaKey::from_idx(builder.nodes.len());
-				builder.nodes.push(SchemaNode::RegularType(RegularType::$variant));
-				schema_key
+	($($ty:ty, $variant:ident;)+) => {
+		$(
+			impl BuildSchemaInner for $ty {
+				fn build(builder: &mut SchemaBuilder) -> SchemaKey {
+					let schema_key = SchemaKey::from_idx(builder.nodes.len());
+					builder.nodes.push(SchemaNode::RegularType(RegularType::$variant));
+					schema_key
+				}
+				type TypeLookup = Self;
 			}
-			type TypeLookup = $type_id_of;
-		}
-		impl_primitive!($($rest)*);
+		)*
 	};
-	() => {};
 }
 impl_primitive!(
 	(), Null;
@@ -75,10 +76,25 @@ impl_primitive!(
 	f32, Float;
 	f64, Double;
 	String, String;
-	&'_ str, String, String;
 	Vec<u8>, Bytes;
-	&'_ [u8], Vec<u8>, Bytes;
 );
+
+macro_rules! delegate_impl {
+	($($ty:ty, $to:ty;)+) => {
+		$(
+			impl BuildSchemaInner for $ty {
+				fn build(builder: &mut SchemaBuilder) -> SchemaKey {
+					<$to as BuildSchemaInner>::build(builder)
+				}
+				type TypeLookup = <$to as BuildSchemaInner>::TypeLookup;
+			}
+		)*
+	};
+}
+delegate_impl! {
+	&'_ str, String;
+	&'_ [u8], Vec<u8>;
+}
 
 impl<T: BuildSchemaInner> BuildSchemaInner for Vec<T> {
 	fn build(builder: &mut SchemaBuilder) -> SchemaKey {
