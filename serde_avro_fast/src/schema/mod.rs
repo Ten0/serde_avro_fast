@@ -1,11 +1,15 @@
 //! Navigate, modify and initialize the [`Schema`]
 
+// For now I'll consider this not stable so not public API
+#[doc(hidden)]
+pub mod builder;
+
 mod error;
 mod safe;
 pub(crate) mod self_referential;
 mod union_variants_per_type_lookup;
 
-pub use {error::SchemaError, safe::*, self_referential::Schema};
+pub use {builder::BuildSchema, error::SchemaError, safe::*, self_referential::Schema};
 
 pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 
