@@ -275,8 +275,7 @@ where
 	///
 	/// A typical user should not need this.
 	///
-	/// This may be useful for transcoding in some select cases - typically one
-	/// may prefer using [`transcode_next`](Self::transcode_next).
+	/// This may be useful for transcoding.
 	pub fn deserialize_seed_next<'de, S: DeserializeSeed<'de>>(
 		&mut self,
 		deserialize_seed: S,
