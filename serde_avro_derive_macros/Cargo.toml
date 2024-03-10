@@ -15,7 +15,7 @@
 	darling = "0.20"
 	proc-macro2 = "1"
 	quote = "1"
-	syn = { version = "2", features = ["visit-mut"] }
+	syn = { version = "2", features = ["visit", "extra-traits"] }
 
 [dev-dependencies]
 	serde_avro_derive = { path = "../serde_avro_derive" }

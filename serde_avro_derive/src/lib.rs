@@ -165,6 +165,12 @@ impl<T: BuildSchema + ?Sized> BuildSchema for &'_ T {
 	}
 	type TypeLookup = T::TypeLookup;
 }
+impl<T: BuildSchema + ?Sized> BuildSchema for &'_ mut T {
+	fn append_schema(builder: &mut SchemaBuilder) {
+		<T as BuildSchema>::append_schema(builder)
+	}
+	type TypeLookup = T::TypeLookup;
+}
 
 impl<T: BuildSchema> BuildSchema for Vec<T> {
 	fn append_schema(builder: &mut SchemaBuilder) {
@@ -225,4 +231,16 @@ impl<S: std::ops::Deref<Target = str>, V: BuildSchema> BuildSchema
 		<HashMap<String, V> as BuildSchema>::append_schema(builder)
 	}
 	type TypeLookup = <HashMap<String, V> as BuildSchema>::TypeLookup;
+}
+
+#[doc(hidden)]
+pub fn hash_type_id(struct_name: &mut String, type_id: TypeId) {
+	use std::{
+		fmt::Write,
+		hash::{Hash as _, Hasher as _},
+	};
+	#[allow(deprecated)] // I actually want to not change hasher
+	let mut hasher = std::hash::SipHasher::new();
+	type_id.hash(&mut hasher);
+	write!(struct_name, "_{:016x?}", hasher.finish()).unwrap();
 }
