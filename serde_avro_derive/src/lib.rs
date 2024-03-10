@@ -71,7 +71,7 @@ impl SchemaBuilder {
 		idx
 	}
 
-	pub fn find_or_build<T: BuildSchema>(&mut self) -> SchemaKey {
+	pub fn find_or_build<T: BuildSchema + ?Sized>(&mut self) -> SchemaKey {
 		match self
 			.already_built_types
 			.entry(TypeId::of::<T::TypeLookup>())

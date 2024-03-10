@@ -79,9 +79,8 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			// 'static otherwise it won't implement `Any`, so we need to generate a
 			// dedicated struct for it.
 			let type_lookup_ident = format_ident!("{ident}TypeLookup");
-			let type_params: Vec<syn::Ident> = (0..generics.params.len())
-				.map(|i| format_ident!("T{}", i))
-				.collect();
+			let type_params: Vec<syn::Ident> =
+				(0..fields.len()).map(|i| format_ident!("T{}", i)).collect();
 			let struct_decl = syn::ItemStruct {
 				attrs: Default::default(),
 				vis: syn::Visibility::Inherited,

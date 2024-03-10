@@ -20,7 +20,7 @@ fn primitives() {
 	test::<Bar>(
 		r#"{
   "type": "record",
-  "name": "basic.Bar",
+  "name": "derive_schema.Bar",
   "fields": [
     {
       "name": "a",
@@ -46,7 +46,7 @@ fn substruct() {
 	test::<Foo>(
 		r#"{
   "type": "record",
-  "name": "basic.Foo",
+  "name": "derive_schema.Foo",
   "fields": [
     {
       "name": "primitives",
@@ -83,7 +83,7 @@ fn complex() {
 	test::<Complex>(
 		r#"{
   "type": "record",
-  "name": "basic.Complex",
+  "name": "derive_schema.Complex",
   "fields": [
     {
       "name": "s1",
@@ -132,6 +132,7 @@ fn complex() {
 struct Generics<'a, F> {
 	s1: F,
 	s2: &'a F,
+	s: &'a str,
 }
 
 #[test]
@@ -139,7 +140,7 @@ fn generics() {
 	test::<Generics<'_, Bar>>(
 		r#"{
   "type": "record",
-  "name": "basic.Generics_be632cb05c10a877",
+  "name": "derive_schema.Generics_62462e653c3a8376",
   "fields": [
     {
       "name": "s1",
@@ -161,6 +162,10 @@ fn generics() {
     {
       "name": "s2",
       "type": "Bar"
+    },
+    {
+      "name": "s",
+      "type": "string"
     }
   ]
 }"#,
