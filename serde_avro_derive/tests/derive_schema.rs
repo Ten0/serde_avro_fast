@@ -236,21 +236,23 @@ fn logical_types() {
     {
       "name": "uuid",
       "type": {
-        "logical_type": "uuid",
+        "logicalType": "uuid",
         "type": "string"
       }
     },
     {
       "name": "decimal",
       "type": {
-        "logical_type": "decimal",
-        "type": "double"
+        "logicalType": "decimal",
+        "type": "double",
+        "scale": 1,
+        "precision": 4
       }
     },
     {
       "name": "custom",
       "type": {
-        "logical_type": "CustomLogicalType",
+        "logicalType": "CustomLogicalType",
         "type": "string"
       }
     }
