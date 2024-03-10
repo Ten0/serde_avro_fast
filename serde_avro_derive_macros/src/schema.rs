@@ -4,6 +4,7 @@ use {
 	syn::{
 		parse_quote,
 		visit::{self, Visit},
+		visit_mut::{self, VisitMut},
 		Error,
 	},
 };
@@ -11,26 +12,29 @@ use {
 #[derive(darling::FromDeriveInput)]
 #[darling(attributes(avro_schema), supports(struct_named))]
 pub(crate) struct SchemaDeriveInput {
-	pub(super) ident: proc_macro2::Ident,
-	pub(super) data: darling::ast::Data<(), SchemaDeriveField>,
-	pub(super) generics: syn::Generics,
+	ident: proc_macro2::Ident,
+	data: darling::ast::Data<(), SchemaDeriveField>,
+	generics: syn::Generics,
 }
 
 #[derive(darling::FromField)]
 #[darling(attributes(avro_schema))]
 pub(crate) struct SchemaDeriveField {
-	pub(super) ident: Option<proc_macro2::Ident>,
-	pub(super) ty: syn::Type,
+	ident: Option<proc_macro2::Ident>,
+	ty: syn::Type,
+
+	skip: darling::util::Flag,
 }
 
 pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error> {
-	let fields = input
+	let mut fields = input
 		.data
 		.take_struct()
 		.expect("Supports directive should prevent enums");
+	fields.fields.retain(|f| !f.skip.is_present());
 
-	let ident = &input.ident;
-	let struct_name = ident.to_string();
+	let struct_ident = &input.ident;
+	let struct_name = struct_ident.to_string();
 	let mut generics = input.generics;
 
 	let mut added_where_clause_predicate_for_types: std::collections::HashSet<_> =
@@ -63,17 +67,28 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		})
 		.collect::<Vec<_>>();
 
-	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
 	let field_names = fields
 		.iter()
 		.map(|f| f.ident.as_ref().map(|i| i.to_string()))
 		.collect::<Option<Vec<_>>>()
 		.ok_or_else(|| Error::new(Span::call_site(), "Unnamed fields are not supported"))?;
 
-	let has_generics = !generics.params.is_empty();
-	let (type_lookup, type_lookup_decl): (syn::Type, _) = match has_generics {
-		false => (parse_quote!(Self), None),
+	let has_non_lifetime_generics = generics
+		.params
+		.iter()
+		.any(|gp| !matches!(gp, syn::GenericParam::Lifetime(_)));
+	let (type_lookup, type_lookup_decl): (syn::Type, _) = match has_non_lifetime_generics {
+		false => {
+			let type_lookup = if generics.params.is_empty() {
+				parse_quote!(Self)
+			} else {
+				let mut generics_static = generics.clone();
+				TurnLifetimesToStatic.visit_generics_mut(&mut generics_static);
+				let (_, ty_generics, _) = generics_static.split_for_impl();
+				parse_quote!(#struct_ident #ty_generics)
+			};
+			(type_lookup, None)
+		}
 		true => {
 			// The struct we are deriving on is generic, but we need the TypeLookup to be
 			// 'static otherwise it won't implement `Any`, so we need to generate a
@@ -94,7 +109,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			//       <Bar as BuildSchema>::TypeLookup,
 			//       <Baz as BuildSchema>::TypeLookup,
 			//   >;
-			let type_lookup_ident = format_ident!("{ident}TypeLookup");
+			let type_lookup_ident = format_ident!("{struct_ident}TypeLookup");
 			let type_params: Vec<syn::Ident> =
 				(0..fields.len()).map(|i| format_ident!("T{}", i)).collect();
 			let struct_decl = syn::ItemStruct {
@@ -148,7 +163,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		}
 	};
 
-	let add_type_id_to_fqn = if has_generics {
+	let add_type_id_to_fqn = if has_non_lifetime_generics {
 		quote! {
 			serde_avro_derive::hash_type_id(
 				&mut struct_name,
@@ -159,11 +174,13 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		quote! {}
 	};
 
+	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
 	Ok(quote! {
 		const _: () = {
 			use serde_avro_derive::serde_avro_fast::schema;
 
-			impl #impl_generics serde_avro_derive::BuildSchema for #ident #ty_generics #where_clause {
+			impl #impl_generics serde_avro_derive::BuildSchema for #struct_ident #ty_generics #where_clause {
 				fn append_schema(builder: &mut serde_avro_derive::SchemaBuilder) {
 					let reserved_schema_key = builder.reserve();
 					let mut struct_name = module_path!().replace("::", ".");
@@ -230,5 +247,13 @@ impl Visit<'_> for IsRelevantGeneric<'_> {
 			self.result = true;
 		}
 		visit::visit_const_param(self, v)
+	}
+}
+
+struct TurnLifetimesToStatic;
+impl VisitMut for TurnLifetimesToStatic {
+	fn visit_lifetime_mut(&mut self, i: &mut syn::Lifetime) {
+		i.ident = format_ident!("static");
+		visit_mut::visit_lifetime_mut(self, i)
 	}
 }

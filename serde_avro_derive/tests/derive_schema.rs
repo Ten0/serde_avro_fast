@@ -140,7 +140,7 @@ fn generics() {
 	test::<Generics<'_, Bar>>(
 		r#"{
   "type": "record",
-  "name": "derive_schema.Generics_62462e653c3a8376",
+  "name": "derive_schema.Generics_b8f49e32140be9d5",
   "fields": [
     {
       "name": "s1",
@@ -166,6 +166,33 @@ fn generics() {
     {
       "name": "s",
       "type": "string"
+    }
+  ]
+}"#,
+	);
+}
+
+#[derive(serde_avro_derive::Schema)]
+#[allow(unused)]
+struct Lifetimes<'a, 'b> {
+	s: &'a [&'b str],
+	#[avro_schema(skip)]
+	z: String,
+}
+
+#[test]
+fn lifetimes() {
+	test::<Lifetimes<'_, '_>>(
+		r#"{
+  "type": "record",
+  "name": "derive_schema.Lifetimes",
+  "fields": [
+    {
+      "name": "s",
+      "type": {
+        "type": "array",
+        "items": "string"
+      }
     }
   ]
 }"#,
