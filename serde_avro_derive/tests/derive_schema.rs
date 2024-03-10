@@ -226,7 +226,9 @@ struct LogicalTypes<'a> {
 	#[avro_schema(logical_type = r#"custom-logical-type"#, has_same_type_as = "String")]
 	custom: MyCustomString,
 }
-struct MyCustomString(String);
+struct MyCustomString {
+	_inner: String,
+}
 
 #[test]
 fn logical_types() {
