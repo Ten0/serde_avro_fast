@@ -19,18 +19,69 @@
 //! .parse()
 //! .expect("Failed to parse schema");
 //!
-//! #[derive(serde_derive::Deserialize, Debug, PartialEq)]
+//! #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug, PartialEq)]
 //! struct Test<'a> {
 //! 	field: &'a str,
 //! }
 //!
+//! let rust_value = Test { field: "foo" };
 //! let avro_datum = &[6, 102, 111, 111];
+//!
+//! // Avro datum deserialization
 //! assert_eq!(
 //! 	serde_avro_fast::from_datum_slice::<Test>(avro_datum, &schema)
 //! 		.expect("Failed to deserialize"),
-//! 	Test { field: "foo" }
+//! 	rust_value
+//! );
+//!
+//! // Avro datum serialization
+//! assert_eq!(
+//! 	serde_avro_fast::to_datum(
+//! 		&rust_value,
+//! 		Vec::new(),
+//! 		&mut serde_avro_fast::ser::SerializerConfig::new(&schema)
+//! 	)
+//! 	.expect("Failed to serialize"),
+//! 	avro_datum
 //! );
 //! ```
+//!
+//! # Object container file encoding
+//! Otherwise called "avro files", avro object container files contain a header
+//! that holds the schema, followed by an arbitrary number of avro objects.
+//!
+//! For this use-case, please see the [`object_container_file_encoding`] module
+//! documentation.
+//!
+//! # Deriving schema from Rust structs
+//!
+//! If the Rust program is the source of truth for the schema definition, it is
+//! useful to define the schema as a derive on the relevant Rust structs.
+//! This can be achieved using the [`serde_avro_derive`](https://docs.rs/serde_avro_derive/)
+//! crate:
+//!
+//! ```
+//! use serde_avro_derive::BuildSchema;
+//!
+//! #[derive(BuildSchema)]
+//! struct Foo {
+//! 	primitives: Bar,
+//! }
+//!
+//! #[derive(BuildSchema)]
+//! struct Bar {
+//! 	a: i32,
+//! 	b: String,
+//! }
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let schema: serde_avro_fast::Schema = Foo::schema()?;
+//! # Ok(())
+//! # }
+//! ```
+//! See the [`serde_avro_derive`](https://docs.rs/serde_avro_derive/) documentation
+//! for more details.
+//!
 //! # An idiomatic (re)implementation of serde/avro (de)serialization
 //!
 //! At the time of writing, the other existing libraries for [Avro](https://avro.apache.org/docs/current/specification/)

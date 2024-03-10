@@ -20,26 +20,40 @@ use {
 ///
 /// # Example
 /// ```
-/// use serde_avro_fast::object_container_file_encoding::{self, Compression, Reader};
+/// use {
+/// 	serde_avro_derive::BuildSchema,
+/// 	serde_avro_fast::object_container_file_encoding::{self, Compression, Reader},
+/// };
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let schema: serde_avro_fast::Schema = r#"
-/// {
-/// 	"type": "record",
-/// 	"name": "test",
-/// 	"fields": [
-/// 		{ "name": "a", "type": "long" },
-/// 		{ "name": "b", "type": "string" }
-/// 	]
-/// }
-/// "#
-/// .parse()?;
-///
-/// #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug, PartialEq, Eq)]
+/// #[derive(
+/// 	serde_derive::Serialize, serde_derive::Deserialize, BuildSchema, Debug, PartialEq, Eq,
+/// )]
 /// struct SchemaRecord<'a> {
 /// 	a: i64,
 /// 	b: &'a str,
 /// }
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema: serde_avro_fast::Schema = SchemaRecord::schema()?;
+///
+/// // This will generate the following schema:
+/// let _schema_str = r#"{
+///   "type": "record",
+///   "name": "crate_name.path.to.SchemaRecord",
+///   "fields": [
+///     { "name": "a", "type": "long" },
+///     { "name": "b", "type": "string" }
+///   ]
+/// }"#;
+/// # assert_eq!(schema.json(), {
+/// # 	let mut serializer = serde_json::Serializer::new(Vec::new());
+/// # 	serde_transcode::transcode(
+/// # 		&mut serde_json::Deserializer::from_str(&_schema_str.replace("crate_name.path.to.", "rust_out.")),
+/// # 		&mut serializer,
+/// # 	)
+/// # 	.unwrap();
+/// # 	String::from_utf8(serializer.into_inner()).unwrap()
+/// # });
 ///
 /// let object_container_file_encoded: Vec<u8> = object_container_file_encoding::write_all(
 /// 	&schema,
@@ -48,6 +62,7 @@ use {
 /// 	(0..3).map(|a| SchemaRecord { a, b: "hello" }),
 /// )?;
 ///
+/// // Decode and make sure we obtain the same thing
 /// let decoded = Reader::from_slice(&object_container_file_encoded)?
 /// 	.deserialize_borrowed() // Only use `_borrowed` if data is not compressed
 /// 	.collect::<Result<Vec<SchemaRecord>, _>>()?;
@@ -197,29 +212,43 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 /// # Example
 ///
 /// ```
-/// use serde_avro_fast::{
-/// 	object_container_file_encoding::{Compression, Reader, WriterBuilder},
-/// 	ser::SerializerConfig,
+/// use {
+/// 	serde_avro_derive::BuildSchema,
+/// 	serde_avro_fast::{
+/// 		object_container_file_encoding::{Compression, Reader, WriterBuilder},
+/// 		ser::SerializerConfig,
+/// 	},
 /// };
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let schema: serde_avro_fast::Schema = r#"
-/// {
-/// 	"type": "record",
-/// 	"name": "test",
-/// 	"fields": [
-/// 		{ "name": "a", "type": "long" },
-/// 		{ "name": "b", "type": "string" }
-/// 	]
-/// }
-/// "#
-/// .parse()?;
-///
-/// #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug, PartialEq, Eq)]
+/// #[derive(
+/// 	serde_derive::Serialize, serde_derive::Deserialize, BuildSchema, Debug, PartialEq, Eq,
+/// )]
 /// struct SchemaRecord<'a> {
 /// 	a: i64,
 /// 	b: &'a str,
 /// }
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema: serde_avro_fast::Schema = SchemaRecord::schema()?;
+///
+/// // This will generate the following schema:
+/// let _schema_str = r#"{
+///   "type": "record",
+///   "name": "crate_name.path.to.SchemaRecord",
+///   "fields": [
+///     { "name": "a", "type": "long" },
+///     { "name": "b", "type": "string" }
+///   ]
+/// }"#;
+/// # assert_eq!(schema.json(), {
+/// # 	let mut serializer = serde_json::Serializer::new(Vec::new());
+/// # 	serde_transcode::transcode(
+/// # 		&mut serde_json::Deserializer::from_str(&_schema_str.replace("crate_name.path.to.", "rust_out.")),
+/// # 		&mut serializer,
+/// # 	)
+/// # 	.unwrap();
+/// # 	String::from_utf8(serializer.into_inner()).unwrap()
+/// # });
 ///
 /// let mut serializer_config = SerializerConfig::new(&schema);
 /// let mut writer = WriterBuilder::new(&mut serializer_config)
@@ -232,6 +261,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 ///
 /// let object_container_file_encoded: Vec<u8> = writer.into_inner()?;
 ///
+/// // Decode and make sure we obtain the same thing
 /// let decoded = Reader::from_slice(&object_container_file_encoded)?
 /// 	.deserialize_borrowed() // Only use `_borrowed` if data is not compressed
 /// 	.collect::<Result<Vec<SchemaRecord>, _>>()?;
