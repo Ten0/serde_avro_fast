@@ -5,7 +5,7 @@
 	license = "LGPL-3.0-only"
 	name = "serde_avro_fast"
 	repository = "https://github.com/Ten0/serde_avro_fast"
-	version = "1.0.1"
+	version = "1.0.2"
 	workspace = ".."
 
 [features]
