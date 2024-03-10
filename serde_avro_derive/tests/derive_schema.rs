@@ -3,12 +3,13 @@ use serde_avro_derive::BuildSchema;
 use pretty_assertions::assert_eq;
 
 fn test<T: BuildSchema>(expected: &str) {
-	let schema = clean_schema(&serde_json::to_string_pretty(&T::schema_mut()).unwrap());
+	let schema_raw = serde_json::to_string_pretty(&T::schema_mut()).unwrap();
+	let schema = clean_schema(&schema_raw);
 	println!("{schema}");
 	assert_eq!(schema, expected);
 
 	// Round trip
-	let schema_mut: serde_avro_fast::schema::SchemaMut = schema.parse().unwrap();
+	let schema_mut: serde_avro_fast::schema::SchemaMut = schema_raw.parse().unwrap();
 	dbg!(&schema_mut);
 	let schema2 = clean_schema(&serde_json::to_string_pretty(&schema_mut).unwrap());
 	assert_eq!(schema2, expected);
