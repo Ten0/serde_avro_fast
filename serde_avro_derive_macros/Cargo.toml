@@ -5,7 +5,7 @@
 	license = "LGPL-3.0-only"
 	name = "serde_avro_derive_macros"
 	repository = "https://github.com/Ten0/serde_avro_fast"
-	version = "0.1.0"
+	version = "0.1.1"
 	workspace = ".."
 
 [lib]
@@ -19,5 +19,5 @@
 	syn = { version = "2", features = ["visit", "visit-mut", "extra-traits"] }
 
 [dev-dependencies]
-	#serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
+	serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
 	serde_json = "1"
