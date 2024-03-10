@@ -438,6 +438,10 @@ impl UnknownLogicalType {
 			_private: (),
 		}
 	}
+
+	pub fn as_str(&self) -> &str {
+		&self.logical_type_name
+	}
 }
 
 impl LogicalType {
