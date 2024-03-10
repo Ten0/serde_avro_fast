@@ -24,9 +24,14 @@ pub(crate) struct SchemaDeriveField {
 	ty: syn::Type,
 
 	skip: darling::util::Flag,
+	logical_type: Option<syn::Ident>,
+	scale: Option<WithMetaPath<syn::LitInt>>,
+	precision: Option<WithMetaPath<syn::LitInt>>,
 }
 
 pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error> {
+	let mut errors = TokenStream::default();
+
 	let mut fields = input
 		.data
 		.take_struct()
@@ -66,6 +71,96 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			ty
 		})
 		.collect::<Vec<_>>();
+
+	let field_instantiations = fields.iter().zip(&field_types).map(|(field, ty)| {
+		let mut logical_type_ident = field.logical_type.as_ref();
+		if logical_type_ident.is_none() {
+			if let syn::Type::Path(path) = &field.ty {
+				if let Some(last_type_ident) = path.path.segments.last().map(|s| &s.ident) {
+					let last_type_str = last_type_ident.to_string();
+					match last_type_str.as_str() {
+						"Uuid" => logical_type_ident = Some(last_type_ident),
+						_ => {}
+					}
+				}
+			}
+		}
+		match logical_type_ident {
+			None => quote! { builder.find_or_build::<#ty>() },
+			Some(logical_type_ident) => {
+				let logical_type_str = logical_type_ident.to_string();
+				let mut logical_type = if [
+					"Decimal",
+					"Uuid",
+					"Date",
+					"TimeMillis",
+					"TimeMicros",
+					"TimestampMillis",
+					"TimestampMicros",
+					"Duration",
+				]
+				.contains(&logical_type_str.as_str())
+				{
+					// This is a known logical type
+					quote! { schema::LogicalType::#logical_type_ident }
+				} else {
+					quote! { schema::LogicalType::Unknown(
+						#logical_type_str.to_owned()
+					) }
+				};
+				if logical_type_str == "Decimal" {
+					let zero = parse_quote!(0);
+					let mut error = |missing_field: &str| {
+						errors.extend(
+							Error::new_spanned(
+								logical_type_ident,
+								format_args!(
+									"`Decimal` logical type requires \
+										`{missing_field}` attribute to be set"
+								),
+							)
+							.to_compile_error(),
+						);
+						&zero
+					};
+					let scale = field
+						.scale
+						.as_ref()
+						.map_or_else(|| error("scale"), |w| &w.value);
+					let precision = field
+						.precision
+						.as_ref()
+						.map_or_else(|| error("precision"), |w| &w.value);
+					logical_type.extend(quote! {
+						(schema::Decimal::new(#scale, #precision))
+					});
+				} else {
+					let mut error = |field_that_should_not_be_here: &WithMetaPath<syn::LitInt>| {
+						errors.extend(
+							Error::new_spanned(
+								&field_that_should_not_be_here.path,
+								format_args!(
+									"`{}` attribute is not relevant for `{}` logical type",
+									darling::util::path_to_string(
+										&field_that_should_not_be_here.path
+									),
+									logical_type_str
+								),
+							)
+							.to_compile_error(),
+						);
+					};
+					if let Some(f) = &field.scale {
+						error(&f);
+					}
+					if let Some(f) = &field.precision {
+						error(&f);
+					}
+				}
+				quote! { builder.build_logical_type::<#ty>(#logical_type) }
+			}
+		}
+	});
 
 	let field_names = fields
 		.iter()
@@ -193,7 +288,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 							vec![#(
 								schema::RecordField::new(
 									#field_names,
-									builder.find_or_build::<#field_types>(),
+									#field_instantiations,
 								),
 							)*],
 						),
@@ -205,6 +300,8 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			}
 
 			#type_lookup_decl
+
+			#errors
 		};
 	})
 }
@@ -255,5 +352,18 @@ impl VisitMut for TurnLifetimesToStatic {
 	fn visit_lifetime_mut(&mut self, i: &mut syn::Lifetime) {
 		i.ident = format_ident!("static");
 		visit_mut::visit_lifetime_mut(self, i)
+	}
+}
+
+struct WithMetaPath<T> {
+	path: syn::Path,
+	value: T,
+}
+impl<T: darling::FromMeta> darling::FromMeta for WithMetaPath<T> {
+	fn from_meta(meta: &syn::Meta) -> Result<Self, darling::Error> {
+		Ok(Self {
+			value: <T as darling::FromMeta>::from_meta(meta)?,
+			path: meta.path().clone(),
+		})
 	}
 }

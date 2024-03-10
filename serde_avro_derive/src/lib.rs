@@ -90,6 +90,19 @@ impl SchemaBuilder {
 			}
 		}
 	}
+
+	pub fn build_logical_type<T: BuildSchema + ?Sized>(
+		&mut self,
+		logical_type: LogicalType,
+	) -> SchemaKey {
+		let reserved_schema_key = self.reserve();
+		let new_node = SchemaNode::LogicalType {
+			logical_type,
+			inner: self.find_or_build::<T>(),
+		};
+		self.nodes[reserved_schema_key] = new_node;
+		SchemaKey::from_idx(reserved_schema_key)
+	}
 }
 
 macro_rules! impl_primitive {
