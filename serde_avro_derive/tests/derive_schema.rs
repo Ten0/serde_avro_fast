@@ -219,13 +219,14 @@ fn lifetimes() {
 #[derive(BuildSchema)]
 #[allow(unused)]
 struct LogicalTypes<'a> {
-	#[avro_schema(logical_type = Uuid)]
+	#[avro_schema(logical_type = "Uuid")]
 	uuid: &'a str,
-	#[avro_schema(logical_type = Decimal, scale = 1, precision = 4)]
+	#[avro_schema(logical_type = r#"decimal"#, scale = 1, precision = 4)]
 	decimal: f64,
-	#[avro_schema(logical_type = CustomLogicalType)]
-	custom: &'a str,
+	#[avro_schema(logical_type = r#"custom-logical-type"#, has_same_schema_as = "String")]
+	custom: MyCustomString,
 }
+struct MyCustomString(String);
 
 #[test]
 fn logical_types() {
@@ -253,7 +254,7 @@ fn logical_types() {
     {
       "name": "custom",
       "type": {
-        "logicalType": "CustomLogicalType",
+        "logicalType": "custom-logical-type",
         "type": "string"
       }
     }

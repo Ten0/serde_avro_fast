@@ -1,8 +1,10 @@
 use {
+	heck::ToPascalCase as _,
 	proc_macro2::{Span, TokenStream},
 	quote::{format_ident, quote},
+	std::borrow::Cow,
 	syn::{
-		parse_quote,
+		parse_quote, parse_quote_spanned,
 		visit::{self, Visit},
 		visit_mut::{self, VisitMut},
 		Error,
@@ -24,9 +26,12 @@ pub(crate) struct SchemaDeriveField {
 	ty: syn::Type,
 
 	skip: darling::util::Flag,
-	logical_type: Option<syn::Ident>,
+
+	logical_type: Option<syn::LitStr>,
 	scale: Option<WithMetaPath<syn::LitInt>>,
 	precision: Option<WithMetaPath<syn::LitInt>>,
+
+	has_same_schema_as: Option<syn::Type>,
 }
 
 pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error> {
@@ -44,23 +49,177 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 
 	let mut added_where_clause_predicate_for_types: std::collections::HashSet<_> =
 		Default::default();
-	let field_types = fields
+	let (field_types, field_instantiations): (Vec<Cow<syn::Type>>, Vec<TokenStream>) = fields
 		.iter()
-		.map(|f| {
-			let mut ty = &f.ty;
-			while let syn::Type::Reference(r) = ty {
+		.map(|field| {
+			// Choose type
+			let mut ty = field.has_same_schema_as.as_ref().unwrap_or(&field.ty);
+			while let syn::Type::Reference(reference) = ty {
 				// This allows not requiring the user to specify that T: 'a
 				// as an explicit where predicate, and simplifies the calls
-				ty = &r.elem;
+				ty = &reference.elem;
 			}
+			let mut ty = Cow::Borrowed(ty);
+
+			// Identify logical types and prepare field instantiation
+			let mut logical_type_litstr = field.logical_type.as_ref().map(Cow::Borrowed);
+			let mut inferred_decimal_logical_type = false;
+			if logical_type_litstr.is_none() {
+				if let syn::Type::Path(path) = &field.ty {
+					if let Some(last_type_ident) = path.path.segments.last().map(|s| &s.ident) {
+						let last_type_str = last_type_ident.to_string();
+						let from_last_type = || {
+							Some(Cow::Owned(syn::LitStr::new(
+								&last_type_str,
+								last_type_ident.span(),
+							)))
+						};
+						match last_type_str.as_str() {
+							"Uuid" => {
+								logical_type_litstr = from_last_type();
+							}
+							"Decimal" => {
+								inferred_decimal_logical_type = true;
+								logical_type_litstr = from_last_type();
+							}
+							_ => {}
+						}
+					}
+				}
+			}
+			let field_instantiation = match logical_type_litstr.as_deref() {
+				None => quote! { builder.find_or_build::<#ty>() },
+				Some(logical_type_litstr) => {
+					let logical_type_str_raw = logical_type_litstr.value();
+					let logical_type_str_pascal = logical_type_str_raw.to_pascal_case();
+					let mut logical_type = if [
+						"Decimal",
+						"Uuid",
+						"Date",
+						"TimeMillis",
+						"TimeMicros",
+						"TimestampMillis",
+						"TimestampMicros",
+						"Duration",
+					]
+					.contains(&logical_type_str_pascal.as_str())
+					{
+						// This is a known logical type
+						let logical_type_ident_pascal =
+							syn::Ident::new(&logical_type_str_pascal, logical_type_litstr.span());
+						quote! { schema::LogicalType::#logical_type_ident_pascal }
+					} else {
+						quote! { schema::LogicalType::Unknown(
+							#logical_type_litstr.to_owned()
+						) }
+					};
+					if logical_type_str_pascal == "Decimal" {
+						let zero = parse_quote!(0);
+						let mut error = |missing_field: &str| {
+							errors.extend(
+								Error::new_spanned(
+									logical_type_litstr,
+									format_args!(
+										"`Decimal` logical type requires \
+										`{missing_field}` attribute to be set"
+									),
+								)
+								.to_compile_error(),
+							);
+							&zero
+						};
+						let scale = field
+							.scale
+							.as_ref()
+							.map_or_else(|| error("scale"), |w| &w.value);
+						let precision = field
+							.precision
+							.as_ref()
+							.map_or_else(|| error("precision"), |w| &w.value);
+						logical_type.extend(quote! {
+							(schema::Decimal::new(#scale, #precision))
+						});
+					} else {
+						match logical_type_str_pascal.as_str() {
+							_ if inferred_decimal_logical_type => {
+								ty = Cow::Owned(
+									// "A `decimal` logical type annotates Avro `bytes` or `fixed`
+									// types". Because we need to choose an arbitrary one as we
+									// picked `decimal` because the type was named `Decimal`, we'll
+									// choose Bytes as we have no information to accurately decide
+									// the attributes we would give to a `Fixed`.
+									parse_quote_spanned!(logical_type_litstr.span() => Vec<u8>),
+								);
+							}
+							"TimestampMillis" | "TimestampMicros" | "TimeMicros" => {
+								if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i64")) {
+									ty = Cow::Owned(
+										parse_quote_spanned!(logical_type_litstr.span() => i64),
+									);
+								}
+							}
+							"TimeMillis" => {
+								if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i32")) {
+									ty = Cow::Owned(
+										parse_quote_spanned!(logical_type_litstr.span() => i32),
+									);
+								}
+							}
+							"Uuid" => {
+								if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("String"))
+								{
+									// It is specified that
+									// "A uuid logical type annotates an Avro string"
+									ty = Cow::Owned(
+										parse_quote_spanned!(logical_type_litstr.span() => String),
+									);
+								}
+							}
+							"Date" => {
+								if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i32")) {
+									ty = Cow::Owned(
+										parse_quote_spanned!(logical_type_litstr.span() => i32),
+									);
+								}
+							}
+							_ => {}
+						}
+						let mut error =
+							|field_that_should_not_be_here: &WithMetaPath<syn::LitInt>| {
+								errors.extend(
+									Error::new_spanned(
+										&field_that_should_not_be_here.path,
+										format_args!(
+											"`{}` attribute is not relevant for `{}` logical type",
+											darling::util::path_to_string(
+												&field_that_should_not_be_here.path
+											),
+											logical_type_str_raw
+										),
+									)
+									.to_compile_error(),
+								);
+							};
+						if let Some(f) = &field.scale {
+							error(&f);
+						}
+						if let Some(f) = &field.precision {
+							error(&f);
+						}
+					}
+					quote! { builder.build_logical_type::<#ty>(#logical_type) }
+				}
+			};
+
+			// Add relevant where clause if not already present
 			if !generics.params.is_empty() {
 				let mut is_relevant_generic = IsRelevantGeneric {
 					generics: &generics,
 					result: false,
 				};
-				is_relevant_generic.visit_type(ty);
+				is_relevant_generic.visit_type(&*ty);
 				if is_relevant_generic.result {
-					if added_where_clause_predicate_for_types.insert(ty) {
+					if added_where_clause_predicate_for_types.insert(ty.clone()) {
 						generics
 							.make_where_clause()
 							.predicates
@@ -68,99 +227,10 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 					}
 				}
 			}
-			ty
-		})
-		.collect::<Vec<_>>();
 
-	let field_instantiations = fields.iter().zip(&field_types).map(|(field, ty)| {
-		let mut logical_type_ident = field.logical_type.as_ref();
-		if logical_type_ident.is_none() {
-			if let syn::Type::Path(path) = &field.ty {
-				if let Some(last_type_ident) = path.path.segments.last().map(|s| &s.ident) {
-					let last_type_str = last_type_ident.to_string();
-					match last_type_str.as_str() {
-						"Uuid" => logical_type_ident = Some(last_type_ident),
-						_ => {}
-					}
-				}
-			}
-		}
-		match logical_type_ident {
-			None => quote! { builder.find_or_build::<#ty>() },
-			Some(logical_type_ident) => {
-				let logical_type_str = logical_type_ident.to_string();
-				let mut logical_type = if [
-					"Decimal",
-					"Uuid",
-					"Date",
-					"TimeMillis",
-					"TimeMicros",
-					"TimestampMillis",
-					"TimestampMicros",
-					"Duration",
-				]
-				.contains(&logical_type_str.as_str())
-				{
-					// This is a known logical type
-					quote! { schema::LogicalType::#logical_type_ident }
-				} else {
-					quote! { schema::LogicalType::Unknown(
-						#logical_type_str.to_owned()
-					) }
-				};
-				if logical_type_str == "Decimal" {
-					let zero = parse_quote!(0);
-					let mut error = |missing_field: &str| {
-						errors.extend(
-							Error::new_spanned(
-								logical_type_ident,
-								format_args!(
-									"`Decimal` logical type requires \
-										`{missing_field}` attribute to be set"
-								),
-							)
-							.to_compile_error(),
-						);
-						&zero
-					};
-					let scale = field
-						.scale
-						.as_ref()
-						.map_or_else(|| error("scale"), |w| &w.value);
-					let precision = field
-						.precision
-						.as_ref()
-						.map_or_else(|| error("precision"), |w| &w.value);
-					logical_type.extend(quote! {
-						(schema::Decimal::new(#scale, #precision))
-					});
-				} else {
-					let mut error = |field_that_should_not_be_here: &WithMetaPath<syn::LitInt>| {
-						errors.extend(
-							Error::new_spanned(
-								&field_that_should_not_be_here.path,
-								format_args!(
-									"`{}` attribute is not relevant for `{}` logical type",
-									darling::util::path_to_string(
-										&field_that_should_not_be_here.path
-									),
-									logical_type_str
-								),
-							)
-							.to_compile_error(),
-						);
-					};
-					if let Some(f) = &field.scale {
-						error(&f);
-					}
-					if let Some(f) = &field.precision {
-						error(&f);
-					}
-				}
-				quote! { builder.build_logical_type::<#ty>(#logical_type) }
-			}
-		}
-	});
+			(ty, field_instantiation)
+		})
+		.unzip();
 
 	let field_names = fields
 		.iter()
