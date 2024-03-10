@@ -58,6 +58,79 @@ use darling::FromDeriveInput;
 /// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut()).unwrap();
 /// # assert_eq!(actual_schema, schema_str);
 /// ```
+///
+/// # Customize field schema
+///
+/// Field attributes can be used to specify logical type or override the
+/// schema that a given field will produce:
+/// ```
+/// use serde_avro_derive::BuildSchema;
+///
+/// #[derive(BuildSchema)]
+/// #[allow(unused)]
+/// struct LogicalTypes<'a> {
+/// 	#[avro_schema(logical_type = "Uuid")]
+/// 	uuid: &'a str,
+/// 	#[avro_schema(logical_type = "decimal", scale = 1, precision = 4)]
+/// 	decimal: f64,
+/// 	#[avro_schema(scale = 1, precision = 4)]
+/// 	implicit_decimal: Decimal, // logical type is inferred because of the name of the type
+/// 	#[avro_schema(logical_type = "custom-logical-type", has_same_type_as = "String")]
+/// 	custom: MyCustomString,
+/// }
+/// struct MyCustomString(String);
+/// struct Decimal {
+/// 	_repr: (),
+/// }
+///
+/// let expected_schema = r#"{
+///   "type": "record",
+///   "name": "rust_out.LogicalTypes",
+///   "fields": [
+///     {
+///       "name": "uuid",
+///       "type": {
+///         "logicalType": "uuid",
+///         "type": "string"
+///       }
+///     },
+///     {
+///       "name": "decimal",
+///       "type": {
+///         "logicalType": "decimal",
+///         "type": "double",
+///         "scale": 1,
+///         "precision": 4
+///       }
+///     },
+///     {
+///       "name": "implicit_decimal",
+///       "type": {
+///         "logicalType": "decimal",
+///         "type": "bytes",
+///         "scale": 1,
+///         "precision": 4
+///       }
+///     },
+///     {
+///       "name": "custom",
+///       "type": {
+///         "logicalType": "custom-logical-type",
+///         "type": "string"
+///       }
+///     }
+///   ]
+/// }"#;
+///
+/// # let actual_schema = serde_json::to_string_pretty(&LogicalTypes::schema_mut()).unwrap();
+/// assert_eq!(actual_schema, expected_schema);
+/// ```
+///
+/// # Generics
+///
+/// Generics are supported - see
+/// [the `tests` module](https://github.com/Ten0/serde_avro_fast/blob/master/serde_avro_derive/tests/derive_schema.rs)
+/// for more advanced examples
 pub fn build_schema_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let derive_input = syn::parse_macro_input!(input as syn::DeriveInput);
 

@@ -31,7 +31,7 @@ pub(crate) struct SchemaDeriveField {
 	scale: Option<WithMetaPath<syn::LitInt>>,
 	precision: Option<WithMetaPath<syn::LitInt>>,
 
-	has_same_schema_as: Option<syn::Type>,
+	has_same_type_as: Option<syn::Type>,
 }
 
 pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error> {
@@ -53,7 +53,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		.iter()
 		.map(|field| {
 			// Choose type
-			let mut ty = field.has_same_schema_as.as_ref().unwrap_or(&field.ty);
+			let mut ty = field.has_same_type_as.as_ref().unwrap_or(&field.ty);
 			while let syn::Type::Reference(reference) = ty {
 				// This allows not requiring the user to specify that T: 'a
 				// as an explicit where predicate, and simplifies the calls
@@ -114,6 +114,16 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 						) }
 					};
 					if logical_type_str_pascal == "Decimal" {
+						if inferred_decimal_logical_type {
+							ty = Cow::Owned(
+								// "A `decimal` logical type annotates Avro `bytes` or `fixed`
+								// types". Because we need to choose an arbitrary one as we
+								// picked `decimal` because the type was named `Decimal`, we'll
+								// choose Bytes as we have no information to accurately decide
+								// the attributes we would give to a `Fixed`.
+								parse_quote_spanned!(logical_type_litstr.span() => Vec<u8>),
+							);
+						}
 						let zero = parse_quote!(0);
 						let mut error = |missing_field: &str| {
 							errors.extend(
@@ -141,16 +151,6 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 						});
 					} else {
 						match logical_type_str_pascal.as_str() {
-							_ if inferred_decimal_logical_type => {
-								ty = Cow::Owned(
-									// "A `decimal` logical type annotates Avro `bytes` or `fixed`
-									// types". Because we need to choose an arbitrary one as we
-									// picked `decimal` because the type was named `Decimal`, we'll
-									// choose Bytes as we have no information to accurately decide
-									// the attributes we would give to a `Fixed`.
-									parse_quote_spanned!(logical_type_litstr.span() => Vec<u8>),
-								);
-							}
 							"TimestampMillis" | "TimestampMicros" | "TimeMicros" => {
 								if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i64")) {
 									ty = Cow::Owned(

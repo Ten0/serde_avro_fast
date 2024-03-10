@@ -223,7 +223,7 @@ struct LogicalTypes<'a> {
 	uuid: &'a str,
 	#[avro_schema(logical_type = r#"decimal"#, scale = 1, precision = 4)]
 	decimal: f64,
-	#[avro_schema(logical_type = r#"custom-logical-type"#, has_same_schema_as = "String")]
+	#[avro_schema(logical_type = r#"custom-logical-type"#, has_same_type_as = "String")]
 	custom: MyCustomString,
 }
 struct MyCustomString(String);
