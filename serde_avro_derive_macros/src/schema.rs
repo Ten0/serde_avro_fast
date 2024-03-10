@@ -78,6 +78,22 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			// The struct we are deriving on is generic, but we need the TypeLookup to be
 			// 'static otherwise it won't implement `Any`, so we need to generate a
 			// dedicated struct for it.
+
+			// E.g., for a struct
+			// struct Foo<Bar> {
+			// 	f1: Bar,
+			// 	f2: Baz;
+			// }
+			// We'll generate
+			// struct FooTypeLookup<T0, T1> {
+			// 	f1: T0,
+			// 	f1: T1,
+			// }
+			// and then use type TypeLookup =
+			//   TypeLookup<
+			//       <Bar as BuildSchema>::TypeLookup,
+			//       <Baz as BuildSchema>::TypeLookup,
+			//   >;
 			let type_lookup_ident = format_ident!("{ident}TypeLookup");
 			let type_params: Vec<syn::Ident> =
 				(0..fields.len()).map(|i| format_ident!("T{}", i)).collect();
