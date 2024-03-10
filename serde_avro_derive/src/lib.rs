@@ -16,10 +16,8 @@ use serde_avro_fast::schema::*;
 /// This trait can be derived using [`#[derive(Schema)]`](derive@Schema)
 pub trait BuildSchema {
 	/// Build a [`struct@Schema`] for this type
-	fn schema() -> Schema {
-		Self::schema_mut()
-			.try_into()
-			.expect("Schema derive generated invalid schema")
+	fn schema() -> Result<Schema, SchemaError> {
+		Self::schema_mut().try_into()
 	}
 	/// Build a [`SchemaMut`] for this type
 	fn schema_mut() -> SchemaMut {
