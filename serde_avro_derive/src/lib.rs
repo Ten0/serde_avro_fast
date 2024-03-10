@@ -1,7 +1,7 @@
 //! Bring automatic Avro Schema generation to [`serde_avro_fast`]
 //!
-//! See the [`#[derive(Schema)]`](derive@Schema) documentation for more
-//! information
+//! See the [`#[derive(BuildSchema)]`](derive@BuildSchema) documentation for
+//! more information
 
 pub use serde_avro_fast;
 
@@ -13,9 +13,10 @@ use serde_avro_fast::schema::*;
 
 /// We can automatically build a schema for this type (can be `derive`d)
 ///
-/// This trait can be derived using [`#[derive(Schema)]`](derive@Schema)
+/// This trait can be derived using
+/// [`#[derive(BuildSchema)]`](derive@BuildSchema)
 pub trait BuildSchema {
-	/// Build a [`struct@Schema`] for this type
+	/// Build a [`Schema`] for this type
 	fn schema() -> Result<Schema, SchemaError> {
 		Self::schema_mut().try_into()
 	}
@@ -38,7 +39,8 @@ pub trait BuildSchema {
 	/// after in the array.
 	fn append_schema(builder: &mut SchemaBuilder);
 
-	/// Largely internal type used by [`#[derive(Schema)]`](derive@Schema)
+	/// Largely internal type used by
+	/// [`#[derive(BuildSchema)]`](derive@BuildSchema)
 	///
 	/// The TypeId of this type will be used to lookup whether the
 	/// [`SchemaNode`] for this type has already been built in the
@@ -50,7 +52,7 @@ pub trait BuildSchema {
 	type TypeLookup: std::any::Any;
 }
 
-/// Largely internal type used by [`#[derive(Schema)]`](derive@Schema)
+/// Largely internal type used by [`#[derive(BuildSchema)]`](derive@BuildSchema)
 ///
 /// You should typically not use this directly
 #[derive(Default)]

@@ -25,7 +25,7 @@ fn clean_schema(schema: &str) -> String {
 		.into_owned()
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 #[allow(unused)]
 struct Bar {
 	a: i32,
@@ -52,7 +52,7 @@ fn primitives() {
 	);
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 struct Foo {
 	#[allow(unused)]
 	primitives: Bar,
@@ -87,7 +87,7 @@ fn substruct() {
 	);
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 #[allow(unused)]
 struct Complex {
 	s1: Foo,
@@ -144,7 +144,7 @@ fn complex() {
 	);
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 #[allow(unused)]
 struct Generics<'a, F> {
 	s1: F,
@@ -189,7 +189,7 @@ fn generics() {
 	);
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 #[allow(unused)]
 struct Lifetimes<'a, 'b> {
 	s: &'a [&'b str],
@@ -216,7 +216,7 @@ fn lifetimes() {
 	);
 }
 
-#[derive(serde_avro_derive::Schema)]
+#[derive(BuildSchema)]
 #[allow(unused)]
 struct LogicalTypes<'a> {
 	#[avro_schema(logical_type = Uuid)]
