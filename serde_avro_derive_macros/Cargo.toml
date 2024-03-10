@@ -19,5 +19,5 @@
 	syn = { version = "2", features = ["visit", "visit-mut", "extra-traits"] }
 
 [dev-dependencies]
-	serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
+	#serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
 	serde_json = "1"
