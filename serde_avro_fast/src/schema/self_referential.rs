@@ -62,7 +62,7 @@ impl Schema {
 			"Schema must have at least one node (the root)"
 		);
 		// SAFETY: bounds checked
-		unsafe { NodeRef::new(self.nodes.as_ptr() as *mut _) }
+		NodeRef::new(self.nodes.as_ptr() as *mut _)
 	}
 
 	/// Obtain the JSON for this schema
