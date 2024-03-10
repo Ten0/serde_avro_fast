@@ -1,6 +1,6 @@
 mod raw;
 
-use crate::schema::{safe::*, SchemaError};
+use crate::schema::safe::*;
 
 use std::collections::HashMap;
 
