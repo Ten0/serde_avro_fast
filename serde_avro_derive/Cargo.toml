@@ -9,12 +9,11 @@
 	workspace = ".."
 
 [dependencies]
-	serde_avro_derive_macros = { path = "../serde_avro_derive_macros" }
-	serde_avro_fast = { path = "../serde_avro_fast" }
+	serde_avro_derive_macros = { path = "../serde_avro_derive_macros", version = "0.1" }
+	serde_avro_fast = { path = "../serde_avro_fast", version = "1.0.0-rc.4" }
 
 [dev-dependencies]
 	lazy_static = "1"
 	pretty_assertions = "1"
 	regex = "1"
-	serde_avro_derive = { path = "../serde_avro_derive" }
 	serde_json = "1"
