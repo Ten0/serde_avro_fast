@@ -161,9 +161,23 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				logical_type,
 			} => {
 				let no_cycle_guard = self.no_cycle_guard()?;
-				let mut map = serializer.serialize_map(Some(2))?;
-				map.serialize_entry("logical_type", logical_type.as_str())?;
+				let mut map = serializer.serialize_map(None)?;
+				map.serialize_entry("logicalType", logical_type.as_str())?;
 				map.serialize_entry("type", &self.serializable(*inner))?;
+				match logical_type {
+					LogicalType::Decimal(decimal) => {
+						map.serialize_entry("scale", &decimal.scale)?;
+						map.serialize_entry("precision", &decimal.precision)?;
+					}
+					LogicalType::Uuid
+					| LogicalType::Date
+					| LogicalType::TimeMillis
+					| LogicalType::TimeMicros
+					| LogicalType::TimestampMillis
+					| LogicalType::TimestampMicros
+					| LogicalType::Duration => {}
+					LogicalType::Unknown(_) => {}
+				}
 				let res = map.end();
 				no_cycle_guard.release();
 				res
