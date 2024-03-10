@@ -371,7 +371,7 @@ pub enum LogicalType {
 	/// tuple, or to its raw representation [as defined by the specification](https://avro.apache.org/docs/current/specification/#duration)
 	/// if the deserializer is hinted this way ([`serde_bytes`](https://docs.rs/serde_bytes/latest/serde_bytes/)).
 	Duration,
-	/// An logical type that is not known or not handled in any particular way
+	/// A logical type that is not known or not handled in any particular way
 	/// by this library.
 	///
 	/// **You should not match on this variant.** (See below.)
@@ -387,7 +387,7 @@ pub enum LogicalType {
 	///
 	/// ```rust
 	/// # use serde_avro_fast::schema::LogicalType;
-	/// # let logical_type = LogicalType::Unknown("foo".to_string());
+	/// # let logical_type = LogicalType::Unknown(serde_avro_fast::schema::UnknownLogicalType::new("foo"));
 	/// match logical_type {
 	/// 	LogicalType::Uuid => { /* ... */ }
 	/// 	LogicalType::TimestampMillis => { /* ... */ }
@@ -402,7 +402,7 @@ pub enum LogicalType {
 	/// However, you may construct an instance of this variant if you need to
 	/// build a [`SchemaMut`] with a logical type that is not known to this
 	/// library.
-	Unknown(String),
+	Unknown(UnknownLogicalType),
 }
 
 /// Component of a [`SchemaMut`]
@@ -417,6 +417,24 @@ impl Decimal {
 		Self {
 			precision,
 			scale,
+			_private: (),
+		}
+	}
+}
+
+/// Component of a [`SchemaMut`]
+///
+/// Represents a logical type that is not known or not handled in any particular
+/// way by this library.
+#[derive(Clone, Debug)]
+pub struct UnknownLogicalType {
+	pub logical_type_name: String,
+	_private: (),
+}
+impl UnknownLogicalType {
+	pub fn new(logical_type_name: impl Into<String>) -> Self {
+		Self {
+			logical_type_name: logical_type_name.into(),
 			_private: (),
 		}
 	}
@@ -439,7 +457,7 @@ impl LogicalType {
 			LogicalType::TimestampMillis => "timestamp-millis",
 			LogicalType::TimestampMicros => "timestamp-micros",
 			LogicalType::Duration => "duration",
-			LogicalType::Unknown(name) => name,
+			LogicalType::Unknown(unknown_logical_type) => &unknown_logical_type.logical_type_name,
 		}
 	}
 }

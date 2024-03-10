@@ -365,7 +365,9 @@ impl<'a> SchemaConstructionState<'a> {
 										"timestamp-millis" => LogicalType::TimestampMillis,
 										"timestamp-micros" => LogicalType::TimestampMicros,
 										"duration" => LogicalType::Duration,
-										unknown => LogicalType::Unknown(unknown.to_owned()),
+										unknown => {
+											LogicalType::Unknown(UnknownLogicalType::new(unknown))
+										}
 									}
 								},
 								inner: self.register_node(

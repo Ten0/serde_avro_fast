@@ -110,7 +110,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 						quote! { schema::LogicalType::#logical_type_ident_pascal }
 					} else {
 						quote! { schema::LogicalType::Unknown(
-							#logical_type_litstr.to_owned()
+							schema::UnknownLogicalType::new(#logical_type_litstr)
 						) }
 					};
 					if logical_type_str_pascal == "Decimal" {
