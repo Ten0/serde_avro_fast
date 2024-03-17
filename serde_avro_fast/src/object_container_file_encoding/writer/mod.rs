@@ -101,9 +101,11 @@ where
 ///
 /// See [`Writer`] for an example.
 pub struct WriterBuilder<'c, 's> {
+	serializer_config: &'c mut SerializerConfig<'s>,
 	compression: Compression,
 	aprox_block_size: u32,
-	serializer_config: &'c mut SerializerConfig<'s>,
+	/// Will otherwise be randomly generated
+	enforce_sync_marker_value: Option<[u8; 16]>,
 }
 
 impl<'c, 's> WriterBuilder<'c, 's> {
@@ -117,6 +119,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			serializer_config,
 			compression: Compression::Null,
 			aprox_block_size: 64 * 1024,
+			enforce_sync_marker_value: None,
 		}
 	}
 
@@ -137,6 +140,21 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		self
 	}
 
+	/// Enforce the 16-byte inter-block sync marker value
+	///
+	/// This is [the 16-byte value that is written at the end of each block to help detect corrupt blocks](https://avro.apache.org/docs/current/specification/#object-container-files).
+	///
+	/// If not set, a random value will be generated.
+	///
+	/// Setting this may be useful for reproducibility (e.g. tests) or if
+	/// generating a file by concatenating independent batches (the sync markers
+	/// would need to be the same, otherwise the resulting file would be
+	/// incorrect).
+	pub fn sync_marker(&mut self, sync_marker: [u8; 16]) -> &mut Self {
+		self.enforce_sync_marker_value = Some(sync_marker);
+		self
+	}
+
 	/// Build the [`Writer`]
 	///
 	/// After this method is called, it is guaranteed that the full object
@@ -154,11 +172,17 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		mut writer: W,
 		metadata: M,
 	) -> Result<Writer<'c, 's, W>, SerError> {
+		let sync_marker = match self.enforce_sync_marker_value {
+			Some(enforced_sync_marker) => enforced_sync_marker,
+			None => {
+				let mut random_sync_marker = [0; 16];
+				rand::Rng::fill(&mut rand::thread_rng(), &mut random_sync_marker);
+				random_sync_marker
+			}
+		};
+
 		// We'll use this both for serializing the header and as a buffer when
 		// serializing blocks
-		let mut sync_marker = [0; 16];
-		rand::Rng::fill(&mut rand::thread_rng(), &mut sync_marker);
-
 		let mut buf = Vec::with_capacity(self.aprox_block_size as usize * 5 / 4);
 
 		// Construct the header into the buf
