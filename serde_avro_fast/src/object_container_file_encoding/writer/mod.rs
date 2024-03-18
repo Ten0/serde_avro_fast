@@ -150,7 +150,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	/// generating a file by concatenating independent batches (the sync markers
 	/// would need to be the same, otherwise the resulting file would be
 	/// incorrect).
-	pub fn sync_marker(&mut self, sync_marker: [u8; 16]) -> &mut Self {
+	pub fn sync_marker(mut self, sync_marker: [u8; 16]) -> Self {
 		self.enforce_sync_marker_value = Some(sync_marker);
 		self
 	}
