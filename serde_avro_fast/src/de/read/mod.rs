@@ -100,9 +100,14 @@ impl std::io::BufRead for SliceRead<'_> {
 pub struct ReaderRead<R> {
 	reader: R,
 	scratch: Vec<u8>,
+	/// Maximum allocation size for a single field (string, bytes...)
+	///
 	/// This is a safeguard for malformed data
 	///
-	/// See [`de`](crate::de) module documentation for an example
+	/// Default is 512 MB.
+	///
+	/// See [`de`](crate::de) module documentation for an example of how to set
+	/// this.
 	pub max_alloc_size: usize,
 }
 impl<R: std::io::Read> private::Sealed for ReaderRead<R> {}
@@ -115,7 +120,7 @@ impl<R: std::io::BufRead> ReaderRead<R> {
 		Self {
 			reader,
 			scratch: Vec::new(),
-			max_alloc_size: 512 * 512 * 1024 * 1024,
+			max_alloc_size: 512 * 1024 * 1024,
 		}
 	}
 }
