@@ -313,6 +313,17 @@ fn test_decimal() {
 		serde_avro_fast::to_datum_vec(&deserialized, serializer_config).unwrap(),
 		[2, 0xFE]
 	);
+
+	assert_eq!(
+		serde_avro_fast::to_datum_vec(
+			&rust_decimal::Decimal::from_str_exact("-12.8").unwrap(),
+			&mut SerializerConfig::new(
+				&r#"{"type": {"type":"fixed","size":3,"name":"f"}, "logicalType": "decimal", "precision": 123, "scale": 1}"#.parse().unwrap()
+			)
+		)
+		.unwrap(),
+		[255, 255, 128]
+	);
 }
 
 #[test]
