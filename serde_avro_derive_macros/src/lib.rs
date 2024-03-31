@@ -31,7 +31,7 @@ use darling::FromDeriveInput;
 /// // generate the following schema:
 /// let schema_str = r#"{
 ///   "type": "record",
-///   "name": "rust_out.Foo",
+///   "name": "crate_name.path.to.Foo",
 ///   "fields": [
 ///     {
 ///       "name": "primitives",
@@ -52,11 +52,11 @@ use darling::FromDeriveInput;
 ///     }
 ///   ]
 /// }"#;
-/// // Note that the `rust_out` namespace here is only due to the fact this is a doctest:
-/// // the name will always be crate_name.path.to.module.Foo
-/// // (but for doctests the crate is called rust_out and the struct is at top level)
-/// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut()).unwrap();
-/// # assert_eq!(actual_schema, schema_str);
+///
+/// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut())
+/// #     .unwrap()
+/// #     .replace("rust_out.", "crate_name.path.to.");
+/// assert_eq!(actual_schema, schema_str);
 /// ```
 ///
 /// # Customize field schema
@@ -85,7 +85,7 @@ use darling::FromDeriveInput;
 ///
 /// let expected_schema = r#"{
 ///   "type": "record",
-///   "name": "rust_out.LogicalTypes",
+///   "name": "crate_name.path.to.LogicalTypes",
 ///   "fields": [
 ///     {
 ///       "name": "uuid",
@@ -122,7 +122,9 @@ use darling::FromDeriveInput;
 ///   ]
 /// }"#;
 ///
-/// # let actual_schema = serde_json::to_string_pretty(&LogicalTypes::schema_mut()).unwrap();
+/// # let actual_schema = serde_json::to_string_pretty(&LogicalTypes::schema_mut())
+/// #     .unwrap()
+/// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, expected_schema);
 /// ```
 ///

@@ -247,6 +247,8 @@ impl<S: std::ops::Deref<Target = str>, V: BuildSchema> BuildSchema
 }
 
 #[doc(hidden)]
+/// Used by the [`BuildSchema!`] derive macro to generate a unique name for a
+/// struct when it's generic
 pub fn hash_type_id(struct_name: &mut String, type_id: TypeId) {
 	use std::{
 		fmt::Write,

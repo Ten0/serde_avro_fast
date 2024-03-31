@@ -76,6 +76,32 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let schema: serde_avro_fast::Schema = Foo::schema()?;
+//!
+//! // This will generate the following schema:
+//! let _schema_str = r#"{
+//!   "type": "record",
+//!   "name": "crate_name.path.to.Foo",
+//!   "fields": [{
+//!     "name": "primitives",
+//!     "type": {
+//!       "type": "record",
+//!       "name": "Bar",
+//!       "fields": [
+//!         { "name": "a", "type": "int" },
+//!         { "name": "b", "type": "string" }
+//!       ]
+//!     }
+//!   }]
+//! }"#;
+//! # assert_eq!(schema.json(), {
+//! # 	let mut serializer = serde_json::Serializer::new(Vec::new());
+//! # 	serde_transcode::transcode(
+//! # 		&mut serde_json::Deserializer::from_str(&_schema_str.replace("crate_name.path.to.", "rust_out.")),
+//! # 		&mut serializer,
+//! # 	)
+//! # 	.unwrap();
+//! # 	String::from_utf8(serializer.into_inner()).unwrap()
+//! # });
 //! # Ok(())
 //! # }
 //! ```

@@ -261,13 +261,13 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 
 			// E.g., for a struct
 			// struct Foo<Bar> {
-			// 	f1: Bar,
-			// 	f2: Baz;
+			//     f1: Bar,
+			//     f2: Baz;
 			// }
 			// We'll generate
 			// struct FooTypeLookup<T0, T1> {
-			// 	f1: T0,
-			// 	f1: T1,
+			//     f1: T0,
+			//     f2: T1,
 			// }
 			// and then use type TypeLookup =
 			//   TypeLookup<
