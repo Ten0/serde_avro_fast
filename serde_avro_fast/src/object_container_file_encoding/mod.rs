@@ -12,21 +12,27 @@ pub use {reader::*, writer::*};
 
 use std::num::NonZeroU8;
 
+/// Specifies the compression codec and level to be used for the data blocks
+/// in the file.
+///
+/// Variants may be made available by enabling features.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Compression {
-	// The `Null` codec simply passes through data uncompressed.
+	/// The `Null` codec simply passes through data uncompressed.
 	Null,
 	#[cfg(feature = "deflate")]
 	/// The `Deflate` codec writes the data block using the deflate algorithm
 	/// as specified in RFC 1951. Note that this format (unlike the "zlib
 	/// format" in RFC 1950) does not have a checksum.
 	Deflate {
+		/// Deflate compression level to use
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "bzip2")]
 	/// The `BZip2` codec uses [BZip2](https://sourceware.org/bzip2/)
 	/// compression library.
 	Bzip2 {
+		/// BZip2 compression level to use
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "snappy")]
@@ -38,12 +44,14 @@ pub enum Compression {
 	/// The `Xz` codec uses [Xz utils](https://tukaani.org/xz/)
 	/// compression library.
 	Xz {
+		/// Xz compression level to use
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "zstandard")]
 	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/)
 	/// compression library
 	Zstandard {
+		/// Zstandard compression level to use
 		level: CompressionLevel,
 	},
 }
@@ -158,7 +166,7 @@ enum CompressionCodec {
 	/// compression library.
 	Xz,
 	#[cfg(feature = "zstandard")]
-	// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
+	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
 	Zstandard,
 }
 

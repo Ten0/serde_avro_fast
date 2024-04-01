@@ -1,6 +1,8 @@
 //! This benchmakes apache_avro for comparison
 //! Benches are again largely stolen from there
 
+#![allow(missing_docs)]
+
 use criterion::BenchmarkId;
 
 use criterion::{criterion_group, criterion_main, Criterion};

@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_fast::object_container_file_encoding::{Compression, CompressionLevel};
 
 use criterion::BenchmarkId;

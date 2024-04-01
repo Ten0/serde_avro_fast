@@ -14,9 +14,17 @@ use integer_encoding::{VarInt, VarIntReader};
 ///
 /// The deserializer is implemented generically on this.
 pub trait Read: std::io::Read + Sized + private::Sealed {
+	/// Read an integer of type `I` from the underlying buffer using varint
+	/// encoding
+	///
+	/// Note that Avro uses signed integers all the time, so there is seldom
+	/// use-case for unsigned integers here.
 	fn read_varint<I>(&mut self) -> Result<I, DeError>
 	where
 		I: VarInt;
+	/// Read a buffer of size `N` from the underlying buffer, returning it
+	/// as an array. This is a convenience method because the deserializer often
+	/// needs to run fixed-size buffers to immediately turn them into values.
 	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
 		let mut buf = [0u8; N];
 		self.read_exact(&mut buf).map_err(DeError::io)?;
@@ -29,6 +37,8 @@ pub trait Read: std::io::Read + Sized + private::Sealed {
 ///
 /// The deserializer is implemented generically on this.
 pub trait ReadSlice<'de>: Read {
+	/// Read a slice of `n` bytes from the underlying buffer, and pass it to
+	/// the visitor to turn it into a value
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
 		V: ReadVisitor<'de>;
@@ -43,6 +53,7 @@ pub struct SliceRead<'de> {
 	slice: &'de [u8],
 }
 impl<'de> SliceRead<'de> {
+	/// Construct a `SliceRead` from a `&'de [u8]`
 	pub fn new(slice: &'de [u8]) -> Self {
 		Self { slice }
 	}
@@ -125,6 +136,7 @@ impl<R: std::io::BufRead> ReaderRead<R> {
 	}
 }
 impl<R> ReaderRead<R> {
+	/// Consume the `ReaderRead` and return the inner reader
 	pub fn into_inner(self) -> R {
 		self.reader
 	}
@@ -203,8 +215,11 @@ impl<R: std::io::BufRead> std::io::BufRead for ReaderRead<R> {
 /// owned or borrowed values depending on whether we're reading from a slice or
 /// an arbitrary impl `Read`.
 pub trait ReadVisitor<'de>: Sized {
+	/// The value that this `Visitor` generates
 	type Value;
+	/// How to construct the `Value` from a short-lived slice
 	fn visit(self, bytes: &[u8]) -> Result<Self::Value, DeError>;
+	/// How to construct the `Value` from a borrowed slice
 	fn visit_borrowed(self, bytes: &'de [u8]) -> Result<Self::Value, DeError> {
 		self.visit(bytes)
 	}

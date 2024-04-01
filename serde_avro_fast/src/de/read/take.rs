@@ -8,16 +8,24 @@ use super::*;
 /// (probably don't use this directly - but you may need it to write trait
 /// bounds)
 ///
-/// Turn this into a reader that we can only read `block_size` bytes from.
+/// Represents the ability to turn `Self` into a reader that we can only read
+/// `block_size` bytes from, then turn the resulting reader back into `Self`.
 pub trait Take {
+	/// The reader that we can only read `block_size` bytes from, then can also
+	/// turn back into `Self`
 	type Take: IntoLeftAfterTake<Original = Self> + std::io::BufRead;
+	/// Take `block_size` bytes from `self`, returning a reader that can only
+	/// read those bytes.
 	fn take(self, block_size: usize) -> Result<Self::Take, DeError>;
 }
 /// Largely internal trait for `object_container_file` implementation
 /// (probably don't use this directly - but you may need it to write trait
 /// bounds)
 pub trait IntoLeftAfterTake {
+	/// The original reader that we took `block_size` bytes from
 	type Original;
+	/// Check that we have consumed everything we should have (`block_size`)
+	/// from the `take`n reader, then turn it back into the original reader
 	fn into_left_after_take(self) -> Result<Self::Original, DeError>;
 }
 

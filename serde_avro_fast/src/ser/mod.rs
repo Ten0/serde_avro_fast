@@ -118,6 +118,15 @@ pub struct SerializerConfig<'s> {
 }
 
 impl<'s> SerializerConfig<'s> {
+	/// Build a new `SerializerConfig` with a given `schema`, default options
+	/// and empty serialization buffers.
+	///
+	/// The `schema` will be used when instantiating a serializer from this
+	/// `SerializerConfig`.
+	///
+	/// Reusing the same `SerializerConfig` across serializations is ideal for
+	/// performance, as it allows the buffers to be reused to avoid
+	/// allocations.
 	pub fn new(schema: &'s Schema) -> Self {
 		Self::new_with_optional_schema(Some(schema))
 	}
@@ -145,12 +154,24 @@ impl<'s> SerializerConfig<'s> {
 		self
 	}
 
+	/// Get the schema that was used when creating this `SerializerConfig`.
+	///
+	/// That is the one that will be used when building a serializer from this
+	/// `SerializerConfig`.
 	pub fn schema(&self) -> &'s Schema {
 		self.schema.expect("Unknown schema in SerializerConfig")
 	}
 }
 
 impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
+	/// Build a `SerializerState` from a writer and a `SerializerConfig`.
+	///
+	/// This contains all that's needed to perform serialization.
+	///
+	/// Note that the resulting `SerializerState` does not implement
+	/// [`serde::Serializer`] directly. Instead, use
+	/// [`SerializerState::serializer`] to obtain a `DatumSerializer` that
+	/// does.
 	pub fn from_writer(writer: W, serializer_config: &'c mut SerializerConfig<'s>) -> Self {
 		Self {
 			writer,
@@ -158,6 +179,7 @@ impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
 		}
 	}
 
+	/// Obtain the actual [`serde::Serializer`] for this `SerializerState`
 	pub fn serializer<'r>(&'r mut self) -> DatumSerializer<'r, 'c, 's, W> {
 		DatumSerializer {
 			schema_node: self.config.schema().root().as_ref(),

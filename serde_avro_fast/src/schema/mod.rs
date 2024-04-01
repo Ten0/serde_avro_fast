@@ -20,11 +20,15 @@ impl std::str::FromStr for Schema {
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Fixed {
+	/// The size in bytes of the *fixed* type
 	pub size: usize,
+	/// The name of the *fixed* type, including the namespace
 	pub name: Name,
 	pub(crate) _private: (),
 }
 impl Fixed {
+	/// `name` is name of the *fixed* type, including the namespace, `size` is
+	/// the size in bytes of the fixed type
 	pub fn new(name: Name, size: usize) -> Self {
 		Self {
 			size,
@@ -35,6 +39,8 @@ impl Fixed {
 }
 
 /// Schema component for named nodes of a [`SchemaMut`]
+///
+/// This holds both the "name" and the "namespace".
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Name {
 	fully_qualified_name: String,

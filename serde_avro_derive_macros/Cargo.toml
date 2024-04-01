@@ -21,3 +21,6 @@
 [dev-dependencies]
 	serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
 	serde_json = "1"
+
+[lints]
+	workspace = true

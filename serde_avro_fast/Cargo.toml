@@ -51,3 +51,6 @@
 [[bench]]
 	harness = false
 	name = "object_container_file_encoding"
+
+[lints]
+	workspace = true

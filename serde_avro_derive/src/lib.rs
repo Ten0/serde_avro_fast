@@ -57,7 +57,22 @@ pub trait BuildSchema {
 /// You should typically not use this directly
 #[derive(Default)]
 pub struct SchemaBuilder {
+	/// The current set of nodes that have been built
+	///
+	/// These will be the nodes of the resulting schema.
+	///
+	/// The first node of the array is the root of the schema.
 	pub nodes: Vec<SchemaNode>,
+	/// This map maintains the lookup from the TypeId of a type to the index of
+	/// the node in `nodes` that represents the schema for that type.
+	///
+	/// This allows not registering several nodes for the same type if it is
+	/// referenced multiple times. This results in a smaller, more efficient
+	/// schema (also avoids infinite loops for cyclic types).
+	///
+	/// Note that it is important for serialization of the Schema to JSON that
+	/// the same named schema node is used for the same type, so this map is
+	/// necessary. (This is used for de-duplication of named types.)
 	pub already_built_types: HashMap<TypeId, SchemaKey>,
 	_private: (),
 }
@@ -73,6 +88,13 @@ impl SchemaBuilder {
 		idx
 	}
 
+	/// If the schema for this type (generic parameter) has already been built
+	/// and inserted in the [`nodes`](SchemaBuilder::nodes), return the
+	/// [`SchemaKey`] for it.
+	///
+	/// Otherwise, build the relevant [`SchemaNode`]s, insert them in
+	/// [`nodes`](SchemaBuilder::nodes), and return the [`SchemaKey`] for the
+	/// newly built schema.
 	pub fn find_or_build<T: BuildSchema + ?Sized>(&mut self) -> SchemaKey {
 		match self
 			.already_built_types
@@ -93,6 +115,9 @@ impl SchemaBuilder {
 		}
 	}
 
+	/// Register a new node for this logical type, where the regular type
+	/// specified with `T` is annotated with the logical type specified as the
+	/// `logical_type` argument.
 	pub fn build_logical_type<T: BuildSchema + ?Sized>(
 		&mut self,
 		logical_type: LogicalType,

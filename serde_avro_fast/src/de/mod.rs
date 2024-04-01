@@ -112,6 +112,8 @@ pub struct DeserializerConfig<'s> {
 }
 
 impl<'s> DeserializerConfig<'s> {
+	/// Construct a `DeserializerConfig` from a schema, otherwise initializing
+	/// all other parameters to their default values
 	pub fn new(schema: &'s Schema) -> Self {
 		Self::from_schema_node(schema.root())
 	}
@@ -125,6 +127,9 @@ impl<'s> DeserializerConfig<'s> {
 }
 
 impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
+	/// Construct a `DeserializerState` from a reader and a schema, internally
+	/// initializing a `DeserializerConfig` from the schema with all other
+	/// parameters set to their default values
 	pub fn new(r: R, schema: &'s Schema) -> Self {
 		Self::from_schema_node(r, schema.root())
 	}
@@ -133,10 +138,18 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 		Self::with_config(r, DeserializerConfig::from_schema_node(schema_root))
 	}
 
+	/// Construct a `DeserializerState` from a `ReadSlice` (either a
+	/// [`SliceRead`] or a [`ReaderRead`]) and a [`DeserializerConfig`]
+	///
+	/// This is only useful if you want to set custom parameters on the
+	/// `DeserializerConfig` for the deserialization, otherwise you may simply
+	/// use [`DeserializerState::from_slice`] or
+	/// [`DeserializerState::from_reader`].
 	pub fn with_config(r: R, config: DeserializerConfig<'s>) -> Self {
 		DeserializerState { reader: r, config }
 	}
 
+	/// Obtain the actual [`serde::Deserializer`] for this `DeserializerState`
 	pub fn deserializer<'r>(&'r mut self) -> DatumDeserializer<'r, 's, R> {
 		DatumDeserializer {
 			schema_node: self.config.schema_root.as_ref(),
@@ -146,27 +159,41 @@ impl<'s, 'de, R: ReadSlice<'de>> DeserializerState<'s, R> {
 	}
 }
 impl<'s, R> DeserializerState<'s, R> {
+	/// Turn the `DeserializerState` into the reader it was built from
 	pub fn into_reader(self) -> R {
 		self.reader
 	}
 
+	/// Turn the `DeserializerState` into the reader it was built from, also
+	/// extracting the original configuration (in case that needs to be re-used)
 	pub fn into_inner(self) -> (R, DeserializerConfig<'s>) {
 		(self.reader, self.config)
 	}
 }
 impl<'s, R> DeserializerState<'s, R> {
+	/// Get the configuration that this `DeserializerState` uses (that it was
+	/// built with)
 	pub fn config(&self) -> &DeserializerConfig<'s> {
 		&self.config
 	}
 }
 
 impl<'s, 'a> DeserializerState<'s, read::SliceRead<'a>> {
+	/// Construct a `DeserializerState` from an `&[u8]` and a schema, otherwise
+	/// initializing all other parameters to their default values
 	pub fn from_slice(slice: &'a [u8], schema: &'s Schema) -> Self {
 		Self::new(read::SliceRead::new(slice), schema)
 	}
 }
 
 impl<'s, R: std::io::BufRead> DeserializerState<'s, read::ReaderRead<R>> {
+	/// Construct a `DeserializerState` from an
+	/// [`impl BufRead`](std::io::BufRead) and a schema, otherwise initializing
+	/// all other parameters to their default values
+	///
+	/// Prefer using [`DeserializerState::from_slice`] if you have a slice, as
+	/// that will be more performant and enable you to borrow `&str`s from the
+	/// original slice.
 	pub fn from_reader(reader: R, schema: &'s Schema) -> Self {
 		Self::new(read::ReaderRead::new(reader), schema)
 	}

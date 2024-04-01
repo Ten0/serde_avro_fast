@@ -90,8 +90,14 @@ pub enum FailedToInitializeReader {
 	/// Does not begin by `Obj1` as per spec
 	#[error("Reader input is not an avro object container file: could not match the header")]
 	NotAvroObjectContainerFile,
+	/// The `Avro` object container file header could not be deserialized as per
+	/// the avro schema of the header defined by the specification
 	#[error("Failed to validate avro object container file header: {}", _0)]
 	FailedToDeserializeHeader(DeError),
+	/// The avro schema in the header could not be parsed
+	///
+	/// This could be due to an invalid schema, or a schema that is not
+	/// supported by this library
 	#[error("Failed to parse schema in avro object container file: {}", _0)]
 	FailedToParseSchema(schema::SchemaError),
 }
