@@ -19,7 +19,7 @@ fn write_all_vectored_inner<'a, W: Write>(
 	// to avoid calling write_vectored if there is no data to be written.
 	advance_slices(&mut slices, &mut bufs, 0);
 	while !bufs.is_empty() {
-		match writer.write_vectored(&bufs) {
+		match writer.write_vectored(bufs) {
 			Ok(0) => {
 				return Err(Error::new(
 					ErrorKind::WriteZero,

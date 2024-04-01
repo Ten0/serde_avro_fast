@@ -102,7 +102,11 @@ impl<'a, N> Clone for NodeRef<'a, N> {
 		*self
 	}
 }
+/// SAFETY: NonNull is !Send !Sync, but NodeRef is really just a reference, so
+/// we can implement Sync and Send
 unsafe impl<T: Sync> Sync for NodeRef<'_, T> {}
+/// SAFETY: NonNull is !Send !Sync, but NodeRef is really just a reference, so
+/// we can implement Sync and Send
 unsafe impl<T: Sync> Send for NodeRef<'_, T> {}
 impl<N> NodeRef<'static, N> {
 	const unsafe fn new(ptr: *mut N) -> Self {
@@ -351,7 +355,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 				// There cannot be nested logical types so there cannot be a second remapping
 				// Also we know the index is low enough because that has been checked
 				// when loading inner_type above
-				// But we're doing unsafe so let's still make sure that is true
+				// But we're doing unsafe so let's still make extra sure that is true
 				assert!(
 					idx < len,
 					"id should be low enough - bug in serde_avro_fast"
@@ -450,6 +454,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					SafeSchemaType::Fixed(fixed) => SchemaNode::Fixed(fixed),
 				},
 			};
+			// SAFETY: see comment at beginning of loop
 			unsafe {
 				*curr_storage_node_ptr = new_node;
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
@@ -458,7 +463,9 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		// Now that all the nodes have been partially we can set the references to
 		// `Fixed` for `Decimal` nodes
 		for (i, to) in set_decimal_repr_to_fixed {
-			// SAFETY: indexes are valid
+			// SAFETY: indexes are valid, and there are no live references
+			// to this (live NodeRef don't count because they contain pointers, and that is
+			// allowed)
 			unsafe {
 				match *storage_start_ptr.add(i) {
 					SchemaNode::Decimal(ref mut decimal) => {

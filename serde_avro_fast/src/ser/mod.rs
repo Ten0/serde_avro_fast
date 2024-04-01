@@ -159,6 +159,8 @@ impl<'s> SerializerConfig<'s> {
 	/// That is the one that will be used when building a serializer from this
 	/// `SerializerConfig`.
 	pub fn schema(&self) -> &'s Schema {
+		// A SerializerConfig with no schema can only be built within this
+		// crate - in which case we don't call `.schema()`
 		self.schema.expect("Unknown schema in SerializerConfig")
 	}
 }

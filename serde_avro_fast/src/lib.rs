@@ -149,9 +149,7 @@ pub fn from_datum_slice<'a, T>(slice: &'a [u8], schema: &Schema) -> Result<T, de
 where
 	T: serde::Deserialize<'a>,
 {
-	serde::Deserialize::deserialize(
-		de::DeserializerState::from_slice(slice, &schema).deserializer(),
-	)
+	serde::Deserialize::deserialize(de::DeserializerState::from_slice(slice, schema).deserializer())
 }
 
 /// Deserialize from an avro "datum" (raw data, no headers...) `impl BufRead`
@@ -168,7 +166,7 @@ where
 	R: std::io::BufRead,
 {
 	serde::Deserialize::deserialize(
-		de::DeserializerState::from_reader(reader, &schema).deserializer(),
+		de::DeserializerState::from_reader(reader, schema).deserializer(),
 	)
 }
 

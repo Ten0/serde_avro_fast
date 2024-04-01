@@ -96,7 +96,7 @@ fn avro_3642_test_single_object_reader_incomplete_reads() {
 		c: vec!["cat".into(), "dog".into()],
 	};
 	// The two-byte marker, to show that the message uses this single-record format
-	let to_read_1 = vec![0xC3, 0x01];
+	let to_read_1 = &[0xC3, 0x01];
 	let mut to_read_2 = Vec::<u8>::new();
 	to_read_2.extend_from_slice(
 		&APACHE_SCHEMA
@@ -106,7 +106,7 @@ fn avro_3642_test_single_object_reader_incomplete_reads() {
 	let mut to_read_3 = Vec::<u8>::new();
 	apache_encode(expected_value.clone(), &APACHE_SCHEMA, &mut to_read_3)
 		.expect("Encode should succeed");
-	let to_read = (&to_read_1[..]).chain(&to_read_2[..]).chain(&to_read_3[..]);
+	let to_read = (to_read_1).chain(&to_read_2[..]).chain(&to_read_3[..]);
 	let val: TestSingleObjectReader = from_single_object_reader(to_read, &SCHEMA).unwrap();
 	assert_eq!(expected_value, val);
 }

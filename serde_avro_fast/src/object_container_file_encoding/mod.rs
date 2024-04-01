@@ -68,10 +68,11 @@ impl CompressionLevel {
 	/// Specifies the compression level that will be used for the compression
 	/// algorithms
 	///
-	/// Panics if `level` is lower than `1` or greater than `9`
+	/// # Panics
+	/// If `level` is lower than `1` or greater than `9`
 	///
 	/// This is because all algorithms expect compression levels between `1`
-	/// (fast compression) and `9` (take as long as you'd like).
+	/// ("fast compression") and `9` ("take as long as you'd like").
 	pub const fn new(level: u8) -> Self {
 		match NonZeroU8::new(level) {
 			Some(n) if n.get() < 10 => Self { repr: n },

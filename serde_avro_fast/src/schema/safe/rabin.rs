@@ -70,7 +70,7 @@ mod tests {
 				fp = (fp >> 1)
 					^ (super::EMPTY64 & u64::from_ne_bytes((-((fp & 1) as i64)).to_ne_bytes()));
 			}
-			fp_table[i as usize] = fp as u64;
+			fp_table[i as usize] = fp;
 			println!("\t{:#018X},", fp);
 		}
 		assert!(super::FP_TABLE as &[_] == &fp_table as &[_]);

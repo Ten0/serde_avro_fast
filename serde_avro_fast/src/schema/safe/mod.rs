@@ -58,7 +58,8 @@ impl SchemaMut {
 	///
 	/// It is the first node of the `nodes` `Vec`.
 	///
-	/// Panics if the `nodes` `Vec` is empty.
+	/// # Panics
+	/// If the `nodes` `Vec` is empty.
 	/// This can only happen if you have updated it through
 	/// [`nodes_mut`](Self::nodes_mut), as parsing otherwise guarantees that
 	/// this cannot happen.

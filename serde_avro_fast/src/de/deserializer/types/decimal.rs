@@ -26,8 +26,8 @@ where
 	if buf.get(start).map_or(false, |&v| v & 0x80 != 0) {
 		// This is a negative number in CA2 repr, we need to maintain that for the
 		// larger number
-		for i in 0..start {
-			buf[i] = 0xFF;
+		for v in &mut buf[0..start] {
+			*v = 0xFF;
 		}
 	}
 	let unscaled = i128::from_be_bytes(buf);

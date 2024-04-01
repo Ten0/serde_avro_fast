@@ -174,7 +174,7 @@ impl<'a> SchemaConstructionState<'a> {
 								None => enclosing_namespace,
 							},
 
-							name: &name,
+							name,
 						}
 					};
 					if let Some(_) = self.names.insert(name_key, idx) {
@@ -408,7 +408,7 @@ impl<'a> SchemaConstructionState<'a> {
 				} else {
 					NameKey {
 						namespace: enclosing_namespace,
-						name: &reference,
+						name: reference,
 					}
 				};
 				match self.names.get(&name_key) {

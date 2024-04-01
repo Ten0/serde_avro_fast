@@ -36,6 +36,7 @@ impl CompressionCodecState {
 	}
 }
 
+/// This is potentially a large enum due to the snap encoder's buffer
 enum Kind {
 	Null,
 	#[cfg(feature = "deflate")]
@@ -124,7 +125,7 @@ impl CompressionCodecState {
 							return Err(error("Deflate", &"got BufError from flate2"));
 						}
 						flate2::Status::StreamEnd => {
-							assert_eq!(input.len(), written as usize);
+							assert_eq!(input.len(), written);
 							break;
 						}
 					}
@@ -166,7 +167,7 @@ impl CompressionCodecState {
 							));
 						}
 						bzip2::Status::FinishOk | bzip2::Status::StreamEnd => {
-							assert_eq!(input.len(), written as usize);
+							assert_eq!(input.len(), written);
 							*len = compress.total_out() as usize;
 							break;
 						}
@@ -181,8 +182,7 @@ impl CompressionCodecState {
 					.compress(input, &mut self.output_vec)
 					.map_err(|snappy_error| error("Snappy", &snappy_error))?;
 				self.output_vec.truncate(n);
-				self.output_vec
-					.extend(crc32fast::hash(&input).to_be_bytes());
+				self.output_vec.extend(crc32fast::hash(input).to_be_bytes());
 			}
 			#[cfg(feature = "xz")]
 			Kind::Xz { len, level } => {
@@ -220,7 +220,7 @@ impl CompressionCodecState {
 							));
 						}
 						xz2::stream::Status::StreamEnd => {
-							assert_eq!(input.len(), written as usize);
+							assert_eq!(input.len(), written);
 							*len = compress.total_out() as usize;
 							break;
 						}

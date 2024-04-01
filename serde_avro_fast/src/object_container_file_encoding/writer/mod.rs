@@ -492,9 +492,10 @@ struct WriterInner<'c, 's> {
 	n_elements_in_block: u64,
 	aprox_block_size: u32,
 	sync_marker: [u8; 16],
-	compression_codec_state: CompressionCodecState,
 	block_header_buffer: [u8; 20],
 	block_header_size: Option<NonZeroUsize>,
+	/// This type goes at the end because it's potentially large
+	compression_codec_state: CompressionCodecState,
 }
 
 impl<'c, 's> WriterInner<'c, 's> {

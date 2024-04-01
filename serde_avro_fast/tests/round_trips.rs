@@ -1,6 +1,8 @@
 //! Port of tests from the apache-avro library
 //! https://github.com/apache/avro/blob/5016cd5c3f2054ebacce7983785c228798e47f59/lang/rust/avro/tests/io.rs
 
+#![allow(clippy::zero_prefixed_literal)]
+
 use {
 	apache_avro::{types::Value, Schema},
 	lazy_static::lazy_static,
@@ -334,7 +336,7 @@ fn test_bytes_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Bytes(b) => b.into_iter().map(|b| *b as u64).collect(),
+		Value::Bytes(b) => b.iter().map(|&b| b as u64).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
@@ -355,7 +357,7 @@ fn test_fixed_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Fixed(_, b) => b.into_iter().map(|b| *b as u64).collect(),
+		Value::Fixed(_, b) => b.iter().map(|&b| b as u64).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);

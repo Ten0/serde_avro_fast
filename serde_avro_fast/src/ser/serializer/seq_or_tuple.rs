@@ -164,7 +164,7 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 			Kind::BufferedBytes {
 				ref mut serializer_state,
 				ref buffer,
-			} => serializer_state.write_length_delimited(&buffer),
+			} => serializer_state.write_length_delimited(buffer),
 			Kind::Fixed { expected_len, .. } => {
 				if expected_len != 0 {
 					Err(SerError::new(

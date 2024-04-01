@@ -201,10 +201,10 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 								);
 							};
 						if let Some(f) = &field.scale {
-							error(&f);
+							error(f);
 						}
 						if let Some(f) = &field.precision {
-							error(&f);
+							error(f);
 						}
 					}
 					quote! { builder.build_logical_type::<#ty>(#logical_type) }
