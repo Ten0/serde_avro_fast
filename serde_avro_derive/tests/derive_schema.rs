@@ -264,3 +264,66 @@ fn logical_types() {
 }"#,
 	);
 }
+
+#[derive(BuildSchema)]
+#[allow(unused)]
+enum Ip {
+	Ipv4([u8; 4]),
+	Ipv6([u8; 16]),
+	Normal(String),
+}
+
+#[test]
+fn ip_enum() {
+	test::<Ip>(
+		r#"[
+  {
+    "type": "fixed",
+    "name": "derive_schema.Ip.Ipv4",
+    "size": 4
+  },
+  {
+    "type": "fixed",
+    "name": "derive_schema.Ip.Ipv6",
+    "size": 16
+  },
+  "string"
+]"#,
+	);
+}
+
+#[derive(BuildSchema)]
+#[allow(unused)]
+enum FooEnum {
+	Bar,
+	Baz,
+}
+
+#[test]
+fn foo_enum() {
+	test::<FooEnum>(
+		r#"{
+  "type": "enum",
+  "name": "derive_schema.FooEnum",
+  "symbols": [
+    "Bar",
+    "Baz"
+  ]
+}"#,
+	);
+}
+
+#[derive(BuildSchema)]
+#[allow(unused)]
+struct NewType(Box<[u8; 3]>);
+
+#[test]
+fn newtype() {
+	test::<NewType>(
+		r#"{
+  "type": "fixed",
+  "name": "derive_schema.NewType",
+  "size": 3
+}"#,
+	);
+}

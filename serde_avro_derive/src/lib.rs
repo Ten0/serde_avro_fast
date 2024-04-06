@@ -118,14 +118,15 @@ impl SchemaBuilder {
 	/// Register a new node for this logical type, where the regular type
 	/// specified with `T` is annotated with the logical type specified as the
 	/// `logical_type` argument.
-	pub fn build_logical_type<T: BuildSchema + ?Sized>(
+	pub fn build_logical_type(
 		&mut self,
 		logical_type: LogicalType,
+		inner_type: impl FnOnce(&mut Self) -> SchemaKey,
 	) -> SchemaKey {
 		let reserved_schema_key = self.reserve();
 		let new_node = SchemaNode::LogicalType {
 			logical_type,
-			inner: self.find_or_build::<T>(),
+			inner: inner_type(self),
 		};
 		self.nodes[reserved_schema_key] = new_node;
 		SchemaKey::from_idx(reserved_schema_key)
