@@ -126,6 +126,10 @@
 //! serde_avro_fast/big     time:   [165.87 ns 166.92 ns 168.09 ns] <- x11 improvement
 //! ```
 
+// Get docs.rs to display all compression methods and corresponding feature flags.
+// That is used jointly with `package.metadata.docs.rs` in the `Cargo.toml`
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 pub mod de;
 pub mod schema;
 pub mod ser;
