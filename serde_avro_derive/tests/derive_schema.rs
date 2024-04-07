@@ -393,3 +393,26 @@ fn ip_enum_namespace() {
 ]"#,
 	);
 }
+
+#[derive(BuildSchema)]
+#[avro_schema(name = Name, namespace = "namespace")]
+#[allow(unused)]
+struct NameOverride {
+	inner: i32,
+}
+
+#[test]
+fn name_override() {
+	test::<NameOverride>(
+		r#"{
+  "type": "record",
+  "name": "namespace.Name",
+  "fields": [
+    {
+      "name": "inner",
+      "type": "int"
+    }
+  ]
+}"#,
+	);
+}

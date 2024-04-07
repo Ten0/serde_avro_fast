@@ -28,6 +28,7 @@ pub(crate) struct SchemaDeriveInput {
 	generics: syn::Generics,
 
 	namespace: Option<String>,
+	name: Option<proc_macro2::Ident>,
 }
 
 #[derive(darling::FromField, Debug)]
@@ -69,10 +70,11 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 	};
 
 	let type_ident = &input.ident;
+	let name_ident = input.name.as_ref().unwrap_or(type_ident);
 	let compute_namespace_expr = quote! { module_path!().replace("::", ".") };
 	let type_name_var = match &input.namespace {
 		None => {
-			let type_name_str = format!(".{}", type_ident);
+			let type_name_str = format!(".{}", name_ident);
 			quote! {
 				let mut type_name = #compute_namespace_expr;
 				type_name.push_str(#type_name_str);
@@ -80,9 +82,9 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		}
 		Some(namespace) => {
 			let type_name = if namespace.is_empty() {
-				type_ident.to_string()
+				name_ident.to_string()
 			} else {
-				format!("{}.{}", namespace, type_ident)
+				format!("{}.{}", namespace, name_ident)
 			};
 			quote! {
 				let mut type_name = #type_name.to_owned();
@@ -114,7 +116,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 					.field_type_and_instantiation(
 						field,
 						Some(OverrideFixedName::NewtypeStruct {
-							struct_name: type_ident,
+							struct_name: name_ident,
 						}),
 					);
 				let namespace_var = field_types_and_instantiations

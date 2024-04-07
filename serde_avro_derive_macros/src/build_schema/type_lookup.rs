@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn build_type_lookup(
-	struct_ident: &syn::Ident,
+	type_ident: &syn::Ident,
 	generics: &syn::Generics,
 	field_idents: Option<&[&syn::Ident]>,
 	field_types: &[Cow<syn::Type>],
@@ -18,7 +18,7 @@ pub(super) fn build_type_lookup(
 				let mut generics_static = generics.clone();
 				TurnLifetimesToStatic.visit_generics_mut(&mut generics_static);
 				let (_, ty_generics, _) = generics_static.split_for_impl();
-				parse_quote!(#struct_ident #ty_generics)
+				parse_quote!(#type_ident #ty_generics)
 			};
 			(type_lookup, None)
 		}
@@ -42,7 +42,7 @@ pub(super) fn build_type_lookup(
 			//       <Bar as BuildSchema>::TypeLookup,
 			//       <Baz as BuildSchema>::TypeLookup,
 			//   >;
-			let type_lookup_ident = format_ident!("{struct_ident}TypeLookup");
+			let type_lookup_ident = format_ident!("{type_ident}TypeLookup");
 			let type_params: Vec<syn::Ident> = (0..field_types.len())
 				.map(|i| format_ident!("T{}", i))
 				.collect();
