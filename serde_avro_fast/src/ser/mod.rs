@@ -82,7 +82,7 @@ use {integer_encoding::VarIntWriter, serde::ser::*, std::io::Write};
 /// Does not implement [`Serializer`] directly (use
 /// [`.serializer`](Self::serializer) to obtain that).
 pub struct SerializerState<'c, 's, W> {
-	pub(crate) writer: W,
+	writer: W,
 	/// Storing these here for reuse so that we can bypass the allocation,
 	/// and statistically obtain buffers that are already the proper length
 	/// (since we have used them for previous records)
@@ -204,6 +204,22 @@ impl<W> SerializerState<'_, '_, W> {
 	/// Get writer back
 	pub fn into_writer(self) -> W {
 		self.writer
+	}
+
+	/// Get writer by reference
+	///
+	/// This may be useful to observe the state of the inner buffer,
+	/// notably when re-using a `SerializerState` to write multiple objects.
+	pub fn writer(&self) -> &W {
+		&self.writer
+	}
+
+	/// Get writer by mutable reference
+	///
+	/// This may be useful to clear the inner buffer, when re-using a
+	/// `SerializerState`.
+	pub fn writer_mut(&mut self) -> &mut W {
+		&mut self.writer
 	}
 }
 

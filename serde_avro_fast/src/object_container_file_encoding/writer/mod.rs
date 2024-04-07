@@ -319,7 +319,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 	/// Serialize one value as an object in the object container file
 	pub fn serialize<T: Serialize>(&mut self, value: T) -> Result<(), SerError> {
 		self.flush_finished_block()?;
-		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
+		if self.inner.serializer_state.writer().len() >= self.inner.aprox_block_size as usize {
 			self.finish_block()?;
 		}
 		self.inner.serialize(value)?;
@@ -355,7 +355,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		n_objects: u64,
 	) -> Result<(), SerError> {
 		self.flush_finished_block()?;
-		if self.inner.serializer_state.writer.len() >= self.inner.aprox_block_size as usize {
+		if self.inner.serializer_state.writer().len() >= self.inner.aprox_block_size as usize {
 			self.finish_block()?;
 		}
 		self.inner.push_serialized(serialized_objects, n_objects)?;
@@ -408,7 +408,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 				)
 				.map_err(SerError::io)?;
 				self.inner.block_header_size = None; // Mark that we have flushed
-				self.inner.serializer_state.writer.clear();
+				self.inner.serializer_state.writer_mut().clear();
 			}
 		}
 
@@ -500,18 +500,18 @@ struct WriterInner<'c, 's> {
 
 impl<'c, 's> WriterInner<'c, 's> {
 	fn serialize<T: Serialize>(&mut self, value: T) -> Result<(), SerError> {
-		let buf_len_before_attempt = self.serializer_state.writer.len();
+		let buf_len_before_attempt = self.serializer_state.writer().len();
 		value
 			.serialize(self.serializer_state.serializer())
 			.map_err(|e| {
 				// If the flush is going wrong though there's nothing we can do
 				self.serializer_state
-					.writer
+					.writer_mut()
 					.truncate(buf_len_before_attempt);
 				e
 			})?;
 		self.n_elements_in_block += 1;
-		if self.serializer_state.writer.len() >= self.aprox_block_size as usize {
+		if self.serializer_state.writer().len() >= self.aprox_block_size as usize {
 			self.finish_block()?;
 		}
 		Ok(())
@@ -522,14 +522,14 @@ impl<'c, 's> WriterInner<'c, 's> {
 		serialized_objects: &[u8],
 		n_objects: u64,
 	) -> Result<(), SerError> {
-		let buf_len_before_attempt = self.serializer_state.writer.len();
+		let buf_len_before_attempt = self.serializer_state.writer().len();
 		self.serializer_state
-			.writer
+			.writer_mut()
 			.write_all(serialized_objects)
 			.map_err(|e| {
 				// If the flush is going wrong though there's nothing we can do
 				self.serializer_state
-					.writer
+					.writer_mut()
 					.truncate(buf_len_before_attempt);
 				SerError::io(e)
 			})?;
@@ -539,7 +539,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 				.ok_or_else(|| {
 					SerError::new("Provided incorrect n_elements to write_serialized (too big)")
 				})?;
-		if self.serializer_state.writer.len() >= self.aprox_block_size as usize {
+		if self.serializer_state.writer().len() >= self.aprox_block_size as usize {
 			self.finish_block()?;
 		}
 		Ok(())
@@ -553,7 +553,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 			);
 
 			self.compression_codec_state
-				.encode(self.serializer_state.writer.as_slice())?;
+				.encode(self.serializer_state.writer().as_slice())?;
 
 			let n = <i64 as integer_encoding::VarInt>::encode_var(
 				self.n_elements_in_block as i64,
@@ -577,7 +577,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 			.compressed_buffer()
 			.unwrap_or_else(|| {
 				// No compression codec, use the serializer's buffer directly
-				self.serializer_state.writer.as_slice()
+				self.serializer_state.writer().as_slice()
 			})
 	}
 }
