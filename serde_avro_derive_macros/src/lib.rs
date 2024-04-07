@@ -26,7 +26,8 @@ use darling::FromDeriveInput;
 /// 	b: String,
 /// }
 ///
-/// let schema = Foo::schema();
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema = Foo::schema()?;
 ///
 /// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
 /// // generate the following schema:
@@ -58,6 +59,8 @@ use darling::FromDeriveInput;
 /// #     .unwrap()
 /// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, schema_str);
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Enums
@@ -76,7 +79,8 @@ use darling::FromDeriveInput;
 /// 	B,
 /// }
 ///
-/// let schema = UnitEnum::schema();
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema = UnitEnum::schema()?;
 ///
 /// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
 /// // generate the following schema:
@@ -93,6 +97,8 @@ use darling::FromDeriveInput;
 /// #     .unwrap()
 /// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, schema_str);
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Enums with newtype variants
@@ -110,7 +116,8 @@ use darling::FromDeriveInput;
 /// #[derive(BuildSchema)]
 /// struct OuterType([u8; 2]);
 ///
-/// let schema = NewtypeEnum::schema();
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema = NewtypeEnum::schema()?;
 ///
 /// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
 /// // generate the following schema:
@@ -133,6 +140,8 @@ use darling::FromDeriveInput;
 /// #     .unwrap()
 /// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, schema_str);
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Customize field schema
@@ -159,6 +168,7 @@ use darling::FromDeriveInput;
 /// 	_repr: (),
 /// }
 ///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let expected_schema = r#"{
 ///   "type": "record",
 ///   "name": "crate_name.path.to.LogicalTypes",
@@ -202,29 +212,41 @@ use darling::FromDeriveInput;
 /// #     .unwrap()
 /// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, expected_schema);
+/// # Ok(())
+/// # }
 /// ```
 ///
-/// # Namespace
+/// # Namespace and name override
 ///
 /// The namespace will be inferred from the module path of the type being
 /// derived. However it is possible to override this using the
-/// `#[avro_schema(namespace = "my.namespace")]` attribute:
+/// `#[avro_schema(namespace = "my.namespace")]` attribute.
+///
+/// Similarly, the name in the schema can be overridden using the
+/// `#[avro_schema(name = "NameOverride")]` attribute.
+/// In that second case, it is also required to rename the struct from `serde`'s
+/// point of view using `#[serde(rename = "NameOverride")]`, otherwise in some
+/// cases where enums are involved, the serializer won't be able to resolve the
+/// union variant.
+///
 /// ```
 /// use serde_avro_derive::BuildSchema;
 ///
-/// #[derive(BuildSchema)]
-/// #[avro_schema(namespace = "my.namespace")]
+/// #[derive(BuildSchema, serde_derive::Serialize)]
+/// #[avro_schema(namespace = "my.namespace", name = NameOverride)]
+/// #[serde(rename = "NameOverride")]
 /// struct Foo {
 /// 	bar: i32,
 /// }
 ///
-/// let schema = Foo::schema();
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let schema = Foo::schema()?;
 ///
 /// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
 /// // generate the following schema:
 /// let schema_str = r#"{
 ///   "type": "record",
-///   "name": "my.namespace.Foo",
+///   "name": "my.namespace.NameOverride",
 ///   "fields": [
 ///     {
 ///       "name": "bar",
@@ -236,6 +258,10 @@ use darling::FromDeriveInput;
 /// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut())
 /// #     .unwrap();
 /// assert_eq!(actual_schema, schema_str);
+/// #
+/// # serde_avro_derive::serde_avro_fast::to_datum_vec(&Foo { bar: 42 }, &mut serde_avro_derive::serde_avro_fast::ser::SerializerConfig::new(&schema)).unwrap();
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Generics
