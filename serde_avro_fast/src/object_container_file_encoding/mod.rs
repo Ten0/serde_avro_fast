@@ -25,14 +25,16 @@ pub enum Compression {
 	/// as specified in RFC 1951. Note that this format (unlike the "zlib
 	/// format" in RFC 1950) does not have a checksum.
 	Deflate {
-		/// Deflate compression level to use
+		/// Deflate compression level to use (1-9 or
+		/// [`CompressionLevel::default()`])
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "bzip2")]
 	/// The `BZip2` codec uses [BZip2](https://sourceware.org/bzip2/)
 	/// compression library.
 	Bzip2 {
-		/// BZip2 compression level to use
+		/// BZip2 compression level to use (1-9 or
+		/// [`CompressionLevel::default()`])
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "snappy")]
@@ -44,14 +46,16 @@ pub enum Compression {
 	/// The `Xz` codec uses [Xz utils](https://tukaani.org/xz/)
 	/// compression library.
 	Xz {
-		/// Xz compression level to use
+		/// Xz compression level to use (1-9 or
+		/// [`CompressionLevel::default()`])
 		level: CompressionLevel,
 	},
 	#[cfg(feature = "zstandard")]
 	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/)
 	/// compression library
 	Zstandard {
-		/// Zstandard compression level to use
+		/// Zstandard compression level to use (1-22 or
+		/// [`CompressionLevel::default()`])
 		level: CompressionLevel,
 	},
 }
@@ -68,15 +72,36 @@ impl CompressionLevel {
 	/// Specifies the compression level that will be used for the compression
 	/// algorithms
 	///
-	/// # Panics
-	/// If `level` is lower than `1` or greater than `9`
+	/// # Default value
+	/// All algorithms have a default compression level configured
+	/// that may be used by instantiating [`CompressionLevel::default()`].
 	///
-	/// This is because all algorithms expect compression levels between `1`
-	/// ("fast compression") and `9` ("take as long as you'd like").
-	pub const fn new(level: u8) -> Self {
+	/// Use [`CompressionLevel::new`] if you want to specify a specific
+	/// compression level.
+	///
+	/// # Clipping
+	/// Depending on the algorithm that will be used, `level` may get clipped
+	/// into the appropriate range (e.g. set to `9` if higher than `9`).
+	///
+	/// This is done to ensure that the compression level is always within the
+	/// valid range for the algorithm.
+	///
+	/// See the [`Compression`] enum for the effective ranges for each
+	/// algorithm.
+	///
+	/// # Panics
+	/// If `level` is lower than `1`
+	///
+	/// This is because compression level 0 means "actually don't compress" for
+	/// most algorithms, and in that case one should just use
+	/// [`Compression::Null`] instead.
+	pub const fn new(mut level: u8) -> Self {
+		if level == u8::MAX {
+			level -= 1;
+		}
 		match NonZeroU8::new(level) {
-			Some(n) if n.get() < 10 => Self { repr: n },
-			_ => panic!("Compression level must be between 1 and 9"),
+			Some(n) => Self { repr: n },
+			None => panic!("Compression level must be greater than 0"),
 		}
 	}
 
@@ -88,6 +113,18 @@ impl CompressionLevel {
 				None => unreachable!(),
 			},
 		}
+	}
+
+	#[allow(unused)]
+	/// may be unused depending on which compression codecs features are enabled
+	fn clip(mut self, high: u8) -> Self {
+		if self.repr.get() != u8::MAX {
+			self.repr = self.repr.min(NonZeroU8::new(high).expect(
+				"Highest compression level for \
+					algorithm should be greater than zero",
+			))
+		}
+		self
 	}
 
 	#[allow(unused)]

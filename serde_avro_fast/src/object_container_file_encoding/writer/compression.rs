@@ -14,22 +14,33 @@ impl CompressionCodecState {
 				#[cfg(feature = "deflate")]
 				Compression::Deflate { level } => Kind::Deflate {
 					compress: flate2::Compress::new(
-						level.instantiate(flate2::Compression::new),
+						level.clip(9).instantiate(flate2::Compression::new),
 						false,
 					),
 				},
 				#[cfg(feature = "bzip2")]
-				Compression::Bzip2 { level } => Kind::Bzip2 { len: 0, level },
+				Compression::Bzip2 { level } => Kind::Bzip2 {
+					len: 0,
+					level: level.clip(9),
+				},
 				#[cfg(feature = "snappy")]
 				Compression::Snappy => Kind::Snappy {
 					encoder: snap::raw::Encoder::new(),
 				},
 				#[cfg(feature = "xz")]
-				Compression::Xz { level } => Kind::Xz { len: 0, level },
+				Compression::Xz { level } => Kind::Xz {
+					len: 0,
+					level: level.clip(9),
+				},
 				#[cfg(feature = "zstandard")]
 				Compression::Zstandard { level } => Kind::Zstandard {
 					compressor: None,
-					level,
+					level: level.clip(
+						(*zstd::compression_level_range().end())
+							.max(0)
+							.try_into()
+							.unwrap_or(u8::MAX - 1),
+					),
 				},
 			},
 		}
