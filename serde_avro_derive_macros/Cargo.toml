@@ -13,7 +13,7 @@
 
 [dependencies]
 	darling = "0.20"
-	heck = "0.4"
+	heck = "0.5"
 	proc-macro2 = "1"
 	quote = "1"
 	syn = { version = "2", features = ["visit", "visit-mut", "extra-traits"] }
