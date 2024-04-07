@@ -173,9 +173,9 @@ pub(crate) enum SchemaNode<'a> {
 	Duration,
 }
 
-/// Component of a [`SchemaMut`]
+/// Component of a [`SchemaNode`]
 pub(crate) struct Union<'a> {
-	pub variants: Vec<NodeRef<'a>>,
+	pub(crate) variants: Vec<NodeRef<'a>>,
 	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
 }
 
@@ -188,11 +188,11 @@ impl std::fmt::Debug for Union<'_> {
 	}
 }
 
-/// Component of a [`SchemaMut`]
+/// Component of a [`SchemaNode`]
 pub(crate) struct Record<'a> {
-	pub fields: Vec<RecordField<'a>>,
-	pub name: Name,
-	pub per_name_lookup: HashMap<String, usize>,
+	pub(crate) fields: Vec<RecordField<'a>>,
+	pub(crate) name: Name,
+	pub(crate) per_name_lookup: HashMap<String, usize>,
 }
 
 impl<'a> std::fmt::Debug for Record<'a> {
@@ -205,19 +205,19 @@ impl<'a> std::fmt::Debug for Record<'a> {
 	}
 }
 
-/// Component of a [`SchemaMut`]
+/// Component of a [`SchemaNode`]
 #[derive(Debug)]
 pub(crate) struct RecordField<'a> {
-	pub name: String,
-	pub schema: NodeRef<'a>,
+	pub(crate) name: String,
+	pub(crate) schema: NodeRef<'a>,
 }
 
-/// Component of a [`SchemaMut`]
+/// Component of a [`SchemaNode`]
 #[derive(Clone)]
 pub(crate) struct Enum {
-	pub symbols: Vec<String>,
-	pub name: Name,
-	pub per_name_lookup: HashMap<String, usize>,
+	pub(crate) symbols: Vec<String>,
+	pub(crate) name: Name,
+	pub(crate) per_name_lookup: HashMap<String, usize>,
 }
 
 impl std::fmt::Debug for Enum {
@@ -230,15 +230,17 @@ impl std::fmt::Debug for Enum {
 	}
 }
 
-/// Component of a [`SchemaMut`]
+/// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub struct Decimal<'a> {
-	pub precision: usize,
-	pub scale: u32,
-	pub repr: DecimalRepr<'a>,
+pub(crate) struct Decimal<'a> {
+	/// Unused for now - TODO take this into account when serializing (tolerate
+	/// precision loss within the limits of this)
+	pub(crate) _precision: usize,
+	pub(crate) scale: u32,
+	pub(crate) repr: DecimalRepr<'a>,
 }
 #[derive(Clone, Debug)]
-pub enum DecimalRepr<'a> {
+pub(crate) enum DecimalRepr<'a> {
 	Bytes,
 	Fixed(NodeRef<'a, Fixed>),
 }
@@ -283,7 +285,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					match (logical_type, inner_type) {
 						(LogicalType::Decimal(decimal), SafeSchemaType::Bytes) => {
 							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
-								precision: decimal.precision,
+								_precision: decimal.precision,
 								scale: decimal.scale,
 								repr: DecimalRepr::Bytes,
 							}))
@@ -291,7 +293,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 						(LogicalType::Decimal(decimal), SafeSchemaType::Fixed(_)) => {
 							set_decimal_repr_to_fixed.push((i, inner.idx));
 							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
-								precision: decimal.precision,
+								_precision: decimal.precision,
 								scale: decimal.scale,
 								repr: DecimalRepr::Bytes,
 							}))
