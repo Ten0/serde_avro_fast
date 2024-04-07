@@ -27,7 +27,7 @@ pub(crate) struct SchemaDeriveInput {
 	data: darling::ast::Data<SchemaDeriveVariant, SchemaDeriveField>,
 	generics: syn::Generics,
 
-	namespace: Option<syn::LitStr>,
+	namespace: Option<String>,
 }
 
 #[derive(darling::FromField, Debug)]
@@ -79,7 +79,11 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			}
 		}
 		Some(namespace) => {
-			let type_name = format!("{}.{}", namespace.value(), type_ident);
+			let type_name = if namespace.is_empty() {
+				type_ident.to_string()
+			} else {
+				format!("{}.{}", namespace, type_ident)
+			};
 			quote! {
 				let mut type_name = #type_name.to_owned();
 			}

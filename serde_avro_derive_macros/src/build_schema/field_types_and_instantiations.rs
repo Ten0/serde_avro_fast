@@ -5,7 +5,7 @@ pub(super) struct FieldTypeAndInstantiationsBuilder<'t, 'm> {
 	pub(super) added_where_clause_predicate_for_types:
 		std::collections::HashSet<Cow<'t, syn::Type>>,
 	pub(super) errors: &'m mut TokenStream,
-	pub(super) namespace: &'m Option<syn::LitStr>,
+	pub(super) namespace: &'m Option<String>,
 	pub(super) expand_namespace_var: bool,
 }
 
@@ -115,18 +115,21 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 								}
 							}
 							Some(namespace) => {
+								let namespace_prefix = if namespace.is_empty() {
+									"".to_owned()
+								} else {
+									format!("{}.", namespace)
+								};
 								let type_name = match override_fixed_name {
 									OverrideFixedName::NewtypeStruct { struct_name } => {
-										format!("{}.{}", namespace.value(), struct_name)
+										format!("{}{}", namespace_prefix, struct_name)
 									}
 									OverrideFixedName::NewtypeVariant {
 										enum_name,
 										variant_name,
 									} => format!(
-										"{}.{}.{}",
-										namespace.value(),
-										enum_name,
-										variant_name
+										"{}{}.{}",
+										namespace_prefix, enum_name, variant_name
 									),
 								};
 								quote! { #type_name.to_owned() }
