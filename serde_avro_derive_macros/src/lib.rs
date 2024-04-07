@@ -11,6 +11,7 @@ use darling::FromDeriveInput;
 /// (implements `BuildSchema`)
 ///
 /// # Example
+///
 /// ```
 /// use serde_avro_derive::BuildSchema;
 ///
@@ -54,6 +55,81 @@ use darling::FromDeriveInput;
 /// }"#;
 ///
 /// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut())
+/// #     .unwrap()
+/// #     .replace("rust_out.", "crate_name.path.to.");
+/// assert_eq!(actual_schema, schema_str);
+/// ```
+///
+/// # Enums
+///
+/// Enums are supported. Unit variants are represented as avro enums, while
+/// newtype variants are represented as avro unions.
+///
+/// ## Enums with unit variants
+///
+/// ```
+/// use serde_avro_derive::BuildSchema;
+///
+/// #[derive(BuildSchema)]
+/// enum UnitEnum {
+/// 	A,
+/// 	B,
+/// }
+///
+/// let schema = UnitEnum::schema();
+///
+/// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
+/// // generate the following schema:
+/// let schema_str = r#"{
+///   "type": "enum",
+///   "name": "crate_name.path.to.UnitEnum",
+///   "symbols": [
+///     "A",
+///     "B"
+///   ]
+/// }"#;
+///
+/// # let actual_schema = serde_json::to_string_pretty(&UnitEnum::schema_mut())
+/// #     .unwrap()
+/// #     .replace("rust_out.", "crate_name.path.to.");
+/// assert_eq!(actual_schema, schema_str);
+/// ```
+///
+/// ## Enums with newtype variants
+///
+/// ```
+/// use serde_avro_derive::BuildSchema;
+///
+/// #[derive(BuildSchema)]
+/// enum NewtypeEnum {
+/// 	A(i32),
+/// 	B(String),
+/// 	C([u8; 4]),
+/// 	Outer(OuterType),
+/// }
+/// #[derive(BuildSchema)]
+/// struct OuterType([u8; 2]);
+///
+/// let schema = NewtypeEnum::schema();
+///
+/// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
+/// // generate the following schema:
+/// let schema_str = r#"[
+///   "int",
+///   "string",
+///   {
+///     "type": "fixed",
+///     "name": "crate_name.path.to.NewtypeEnum.C",
+///     "size": 4
+///   },
+///   {
+///     "type": "fixed",
+///     "name": "crate_name.path.to.OuterType",
+///     "size": 2
+///   }
+/// ]"#;
+///
+/// # let actual_schema = serde_json::to_string_pretty(&NewtypeEnum::schema_mut())
 /// #     .unwrap()
 /// #     .replace("rust_out.", "crate_name.path.to.");
 /// assert_eq!(actual_schema, schema_str);
