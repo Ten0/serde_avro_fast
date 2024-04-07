@@ -327,3 +327,69 @@ fn newtype() {
 }"#,
 	);
 }
+
+#[derive(BuildSchema)]
+#[avro_schema(namespace = "namespace_override")]
+#[allow(unused)]
+struct NewTypeNamespace([u8; 3]);
+
+#[test]
+fn newtype_namespace() {
+	test::<NewTypeNamespace>(
+		r#"{
+  "type": "fixed",
+  "name": "namespace_override.NewTypeNamespace",
+  "size": 3
+}"#,
+	);
+}
+
+#[derive(BuildSchema)]
+#[avro_schema(namespace = "namespace_override")]
+#[allow(unused)]
+enum FooEnumNamespace {
+	Bar,
+	Baz,
+}
+
+#[test]
+fn foo_enum_namespace() {
+	test::<FooEnumNamespace>(
+		r#"{
+  "type": "enum",
+  "name": "namespace_override.FooEnumNamespace",
+  "symbols": [
+    "Bar",
+    "Baz"
+  ]
+}"#,
+	);
+}
+
+#[derive(BuildSchema)]
+#[avro_schema(namespace = "namespace_override")]
+#[allow(unused)]
+enum IpNamespace {
+	Ipv4([u8; 4]),
+	Ipv6([u8; 16]),
+	Normal(String),
+}
+
+#[test]
+fn ip_enum_namespace() {
+	test::<IpNamespace>(
+		r#"[
+  {
+    "type": "fixed",
+    "name": "namespace_override.IpNamespace.Ipv4",
+    "size": 4
+  },
+  {
+    "type": "fixed",
+    "name": "namespace_override.IpNamespace.Ipv6",
+    "size": 16
+  },
+  "string"
+]"#,
+	);
+}

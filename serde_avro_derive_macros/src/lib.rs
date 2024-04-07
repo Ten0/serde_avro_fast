@@ -128,6 +128,40 @@ use darling::FromDeriveInput;
 /// assert_eq!(actual_schema, expected_schema);
 /// ```
 ///
+/// # Namespace
+///
+/// The namespace will be inferred from the module path of the type being
+/// derived. However it is possible to override this using the
+/// `#[avro_schema(namespace = "my.namespace")]` attribute:
+/// ```
+/// use serde_avro_derive::BuildSchema;
+///
+/// #[derive(BuildSchema)]
+/// #[avro_schema(namespace = "my.namespace")]
+/// struct Foo {
+/// 	bar: i32,
+/// }
+///
+/// let schema = Foo::schema();
+///
+/// // The [`serde_avro_fast::schema::BuildSchema`] implementation will
+/// // generate the following schema:
+/// let schema_str = r#"{
+///   "type": "record",
+///   "name": "my.namespace.Foo",
+///   "fields": [
+///     {
+///       "name": "bar",
+///       "type": "int"
+///     }
+///   ]
+/// }"#;
+///
+/// # let actual_schema = serde_json::to_string_pretty(&Foo::schema_mut())
+/// #     .unwrap();
+/// assert_eq!(actual_schema, schema_str);
+/// ```
+///
 /// # Generics
 ///
 /// Generics are supported - see
