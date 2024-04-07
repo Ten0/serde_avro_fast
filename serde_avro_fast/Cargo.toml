@@ -5,7 +5,7 @@
 	license = "LGPL-3.0-only"
 	name = "serde_avro_fast"
 	repository = "https://github.com/Ten0/serde_avro_fast"
-	version = "1.1.0"
+	version = "1.1.1"
 	workspace = ".."
 
 [features]
@@ -41,7 +41,7 @@
 	paste = "1"
 	pretty_assertions = "1"
 	serde-tuple-vec-map = "1"
-	serde_avro_derive = { path = "../serde_avro_derive", version = "0.1" }
+	serde_avro_derive = { path = "../serde_avro_derive", version = "0.2" }
 	serde_bytes = "0.11"
 
 [[bench]]
