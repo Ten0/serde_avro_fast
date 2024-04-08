@@ -375,10 +375,19 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
+		// The main thing we can skip here for performance is utf8 decoding of strings.
+		// However we still need to drive the deserializer mostly normally to properly
+		// advance the reader.
+
 		// TODO skip more efficiently using blocks size hints
 		// https://stackoverflow.com/a/42247224/3799609
-		// Ideally this would specialize if we have Seek on our generic reader but we
-		// don't have specialization
-		self.deserialize_any(visitor)
+
+		// Ideally this would also specialize if we have Seek on our generic reader but
+		// we don't have specialization
+
+		match *self.schema_node {
+			SchemaNode::String => read_length_delimited(self.state, BytesVisitor(visitor)),
+			_ => self.deserialize_any(visitor),
+		}
 	}
 }
