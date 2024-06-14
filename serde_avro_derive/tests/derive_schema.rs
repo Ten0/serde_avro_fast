@@ -419,24 +419,13 @@ fn name_override() {
 
 #[test]
 fn raw_identifiers() {
-	#[derive(BuildSchema)]
+	#[derive(BuildSchema, serde::Serialize, serde::Deserialize)]
 	#[avro_schema(name = Name, namespace = "namespace")]
 	#[allow(unused)]
 	struct Test {
 		r#inner: i32,
 		r#type: String,
 	}
-
-	// The following confirms that "raw" identifiers should be equivalent to their
-	// non-raw counterparts, as documented at
-	// https://doc.rust-lang.org/reference/identifiers.html#raw-identifiers Raw
-	// identifiers may either be a strange way to write an "ordinary" identifier,
-	// or may be the only way to use a keyword as an identifier.
-	let x = Test {
-		inner: 5,
-		r#type: "test".to_string(),
-	};
-	assert_eq!(x.inner, 5);
 
 	test::<Test>(
 		r#"{
@@ -454,4 +443,28 @@ fn raw_identifiers() {
   ]
 }"#,
 	);
+
+	let x = Test {
+		inner: 5,
+		r#type: "test".to_string(),
+	};
+
+	// Make sure serialization & deserialization both work in this scenario
+	let schema = &Test::schema().unwrap();
+	let _: Test = serde_avro_fast::from_datum_slice(
+		&serde_avro_fast::to_datum_vec(
+			&x,
+			&mut serde_avro_fast::ser::SerializerConfig::new(schema),
+		)
+		.unwrap(),
+		schema,
+	)
+	.unwrap();
+
+	// The following confirms that "raw" identifiers should be equivalent to their
+	// non-raw counterparts, as documented at
+	// https://doc.rust-lang.org/reference/identifiers.html#raw-identifiers Raw
+	// identifiers may either be a strange way to write an "ordinary" identifier,
+	// or may be the only way to use a keyword as an identifier.
+	assert_eq!(x.inner, 5);
 }

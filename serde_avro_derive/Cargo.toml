@@ -16,6 +16,7 @@
 	lazy_static = "1"
 	pretty_assertions = "1"
 	regex = "1"
+	serde = "1"
 	serde_json = "1"
 
 [lints]
