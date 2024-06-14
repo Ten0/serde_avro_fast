@@ -416,3 +416,42 @@ fn name_override() {
 }"#,
 	);
 }
+
+#[test]
+fn raw_identifiers() {
+	#[derive(BuildSchema)]
+	#[avro_schema(name = Name, namespace = "namespace")]
+	#[allow(unused)]
+	struct Test {
+		r#inner: i32,
+		r#type: String,
+	}
+
+	// The following confirms that "raw" identifiers should be equivalent to their
+	// non-raw counterparts, as documented at
+	// https://doc.rust-lang.org/reference/identifiers.html#raw-identifiers Raw
+	// identifiers may either be a strange way to write an "ordinary" identifier,
+	// or may be the only way to use a keyword as an identifier.
+	let x = Test {
+		inner: 5,
+		r#type: "test".to_string(),
+	};
+	assert_eq!(x.inner, 5);
+
+	test::<Test>(
+		r#"{
+  "type": "record",
+  "name": "namespace.Name",
+  "fields": [
+    {
+      "name": "inner",
+      "type": "int"
+    },
+    {
+      "name": "type",
+      "type": "string"
+    }
+  ]
+}"#,
+	);
+}
