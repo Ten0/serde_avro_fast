@@ -10,6 +10,7 @@ use {
 	quote::{format_ident, quote},
 	std::borrow::Cow,
 	syn::{
+		ext::IdentExt as _,
 		parse_quote, parse_quote_spanned,
 		visit::{self, Visit},
 		visit_mut::{self, VisitMut},
@@ -151,7 +152,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 					.ok_or_else(|| {
 						Error::new(Span::call_site(), "Unnamed fields are not supported")
 					})?;
-				let field_names = field_idents.iter().map(|ident| ident.to_string());
+				let field_names = field_idents.iter().map(|ident| ident.unraw().to_string());
 
 				let has_non_lifetime_generics;
 				(type_lookup, type_lookup_decl, has_non_lifetime_generics) =
