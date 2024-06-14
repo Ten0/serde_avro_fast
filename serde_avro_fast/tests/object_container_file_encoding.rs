@@ -167,7 +167,7 @@ fn test_reader_iterator() {
 	assert!(res.iter().all(|r| matches!(r.b, Cow::Borrowed(_))));
 }
 
-fn round_trip_writer(compression_codec: Compression, aprox_block_size: u32) {
+fn round_trip_writer(compression_codec: Compression, approx_block_size: u32) {
 	let input = &[
 		SchemaRecord {
 			a: 27,
@@ -184,7 +184,7 @@ fn round_trip_writer(compression_codec: Compression, aprox_block_size: u32) {
 	let mut serializer_config = SerializerConfig::new(&schema);
 	let mut writer = WriterBuilder::new(&mut serializer_config)
 		.compression(compression_codec)
-		.aprox_block_size(aprox_block_size)
+		.approx_block_size(approx_block_size)
 		.build(Vec::new())
 		.unwrap();
 	writer.serialize_all(input.iter()).unwrap();

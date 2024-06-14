@@ -103,7 +103,7 @@ where
 pub struct WriterBuilder<'c, 's> {
 	serializer_config: &'c mut SerializerConfig<'s>,
 	compression: Compression,
-	aprox_block_size: u32,
+	approx_block_size: u32,
 	/// Will otherwise be randomly generated
 	enforce_sync_marker_value: Option<[u8; 16]>,
 }
@@ -118,7 +118,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		Self {
 			serializer_config,
 			compression: Compression::Null,
-			aprox_block_size: 64 * 1024,
+			approx_block_size: 64 * 1024,
 			enforce_sync_marker_value: None,
 		}
 	}
@@ -135,9 +135,16 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	/// is greater than this value, the block will be compressed and flushed.
 	///
 	/// Default value is 64KiB.
-	pub fn aprox_block_size(mut self, aprox_block_size: u32) -> Self {
-		self.aprox_block_size = aprox_block_size;
+	pub fn approx_block_size(mut self, approx_block_size: u32) -> Self {
+		self.approx_block_size = approx_block_size;
 		self
+	}
+
+	#[doc(hidden)]
+	#[deprecated = "Use `approx_block_size` instead (spelling error)"]
+	/// A version of approx_block_size that has a spelling error in its name
+	pub fn aprox_block_size(self, approx_block_size: u32) -> Self {
+		self.approx_block_size(approx_block_size)
 	}
 
 	/// Enforce the 16-byte inter-block sync marker value
@@ -183,7 +190,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 
 		// We'll use this both for serializing the header and as a buffer when
 		// serializing blocks
-		let mut buf = Vec::with_capacity(self.aprox_block_size as usize * 5 / 4);
+		let mut buf = Vec::with_capacity(self.approx_block_size as usize * 5 / 4);
 
 		// Construct the header into the buf
 		buf.write_all(&HEADER_CONST).map_err(SerError::io)?;
@@ -220,7 +227,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 				sync_marker,
 				compression_codec_state: CompressionCodecState::new(self.compression),
 				n_elements_in_block: 0,
-				aprox_block_size: self.aprox_block_size,
+				approx_block_size: self.approx_block_size,
 				block_header_buffer: [0; 20],
 				block_header_size: None,
 			},
@@ -319,7 +326,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 	/// Serialize one value as an object in the object container file
 	pub fn serialize<T: Serialize>(&mut self, value: T) -> Result<(), SerError> {
 		self.flush_finished_block()?;
-		if self.inner.serializer_state.writer().len() >= self.inner.aprox_block_size as usize {
+		if self.inner.serializer_state.writer().len() >= self.inner.approx_block_size as usize {
 			self.finish_block()?;
 		}
 		self.inner.serialize(value)?;
@@ -355,7 +362,7 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 		n_objects: u64,
 	) -> Result<(), SerError> {
 		self.flush_finished_block()?;
-		if self.inner.serializer_state.writer().len() >= self.inner.aprox_block_size as usize {
+		if self.inner.serializer_state.writer().len() >= self.inner.approx_block_size as usize {
 			self.finish_block()?;
 		}
 		self.inner.push_serialized(serialized_objects, n_objects)?;
@@ -490,7 +497,7 @@ impl<'c, 's, W: Write> Drop for Writer<'c, 's, W> {
 struct WriterInner<'c, 's> {
 	serializer_state: SerializerState<'c, 's, Vec<u8>>,
 	n_elements_in_block: u64,
-	aprox_block_size: u32,
+	approx_block_size: u32,
 	sync_marker: [u8; 16],
 	block_header_buffer: [u8; 20],
 	block_header_size: Option<NonZeroUsize>,
@@ -511,7 +518,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 				e
 			})?;
 		self.n_elements_in_block += 1;
-		if self.serializer_state.writer().len() >= self.aprox_block_size as usize {
+		if self.serializer_state.writer().len() >= self.approx_block_size as usize {
 			self.finish_block()?;
 		}
 		Ok(())
@@ -539,7 +546,7 @@ impl<'c, 's> WriterInner<'c, 's> {
 				.ok_or_else(|| {
 					SerError::new("Provided incorrect n_elements to write_serialized (too big)")
 				})?;
-		if self.serializer_state.writer().len() >= self.aprox_block_size as usize {
+		if self.serializer_state.writer().len() >= self.approx_block_size as usize {
 			self.finish_block()?;
 		}
 		Ok(())
