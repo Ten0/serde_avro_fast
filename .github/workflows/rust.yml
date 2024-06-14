@@ -33,3 +33,17 @@ jobs:
           rustup component add miri
       - name: Run tests with MIRI
         run: cargo miri test
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup rustfmt-nightly-Compatible Toolchain
+        run: |
+          RUSTFMT_NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/rustfmt)
+          echo "Installing latest nightly with rustfmt: $RUSTFMT_NIGHTLY"
+          rustup set profile minimal
+          rustup default "$RUSTFMT_NIGHTLY"
+          rustup component add rustfmt
+      - name: Run rustfmt
+        run: cargo fmt -- --check
