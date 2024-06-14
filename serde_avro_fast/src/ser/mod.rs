@@ -44,7 +44,7 @@
 //! // because it also keeps track of the current schema node)
 //! // We build it through `SerializerState::serializer`
 //! serde::Serialize::serialize(&Test { field: "foo" }, serializer_state.serializer())
-//! .expect("Failed to serialize");
+//! 	.expect("Failed to serialize");
 //! let serialized = serializer_state.into_writer();
 //!
 //! assert_eq!(serialized, &[6, 102, 111, 111]);
