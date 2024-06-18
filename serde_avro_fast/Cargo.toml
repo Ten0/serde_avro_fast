@@ -22,7 +22,7 @@
 	integer-encoding = { default-features = false, version = "4" }
 	num-traits = "0.2"
 	rand = "0.8"
-	rust_decimal = { version = "1", default-features = false, features = ["std", "serde-with-str"] }
+	rust_decimal = { version = "1", default-features = false, features = ["serde-with-str"] }
 	serde = "1"
 	serde-transcode = "1"
 	serde_derive = "1"
