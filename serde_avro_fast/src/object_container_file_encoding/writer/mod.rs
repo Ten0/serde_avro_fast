@@ -5,7 +5,7 @@ use compression::CompressionCodecState;
 
 use crate::{
 	object_container_file_encoding::{Metadata, METADATA_SCHEMA},
-	ser::{SerError, SerializerConfig, SerializerState},
+	ser::{SerError, SerializerConfig, SerializerConfigRef, SerializerState},
 	Schema,
 };
 
@@ -101,7 +101,7 @@ where
 ///
 /// See [`Writer`] for an example.
 pub struct WriterBuilder<'c, 's> {
-	serializer_config: &'c mut SerializerConfig<'s>,
+	serializer_config: SerializerConfigRef<'c, 's>,
 	compression: Compression,
 	approx_block_size: u32,
 	/// Will otherwise be randomly generated
@@ -115,12 +115,33 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	/// be reused across serializations for performance, and other
 	/// serialization configuration.
 	pub fn new(serializer_config: &'c mut SerializerConfig<'s>) -> Self {
+		Self::with_opt_owned_config(SerializerConfigRef::Borrowed(serializer_config))
+	}
+
+	/// Construct a writer from an owned [`SerializerConfig`].
+	///
+	/// This is a less performant version of [`WriterBuilder::new`] because it
+	/// takes ownership of the [`SerializerConfig`], so the corresponding
+	/// buffers will not be re-used.
+	pub fn with_owned_config(serializer_config: SerializerConfig<'s>) -> Self {
+		Self::with_opt_owned_config(SerializerConfigRef::Owned(Box::new(serializer_config)))
+	}
+
+	fn with_opt_owned_config(serializer_config: SerializerConfigRef<'c, 's>) -> Self {
 		Self {
 			serializer_config,
 			compression: Compression::Null,
 			approx_block_size: 64 * 1024,
 			enforce_sync_marker_value: None,
 		}
+	}
+
+	/// Get a reference to the `SerializerConfig` object that was passed when
+	/// constructing this `WriterBuilder`
+	///
+	/// This allows to update its parameters.
+	pub fn serializer_config(&mut self) -> &mut SerializerConfig<'s> {
+		&mut *self.serializer_config
 	}
 
 	/// Specify the compression codec that each block will be compressed with
@@ -197,6 +218,8 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 
 		{
 			// Serialize metadata
+			// No buffers will be used here and default parameters of `SerializerConfig`
+			// will be enough, so we can create a dedicated `SerializerConfig` for this.
 			let mut header_serializer_config = SerializerConfig::new_with_optional_schema(None);
 			let mut header_serializer_state =
 				SerializerState::from_writer(buf, &mut header_serializer_config);
@@ -223,7 +246,10 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 
 		Ok(Writer {
 			inner: WriterInner {
-				serializer_state: SerializerState::from_writer(buf, self.serializer_config),
+				serializer_state: SerializerState::with_opt_owned_config(
+					buf,
+					self.serializer_config,
+				),
 				sync_marker,
 				compression_codec_state: CompressionCodecState::new(self.compression),
 				n_elements_in_block: 0,
