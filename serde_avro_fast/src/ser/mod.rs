@@ -86,7 +86,7 @@ pub struct SerializerState<'c, 's, W> {
 	/// Storing these here for reuse so that we can bypass the allocation,
 	/// and statistically obtain buffers that are already the proper length
 	/// (since we have used them for previous records)
-	config: &'c mut SerializerConfig<'s>,
+	config: SerializerConfigRef<'c, 's>,
 }
 
 /// Schema + serialization buffers
@@ -177,6 +177,34 @@ impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
 	pub fn from_writer(writer: W, serializer_config: &'c mut SerializerConfig<'s>) -> Self {
 		Self {
 			writer,
+			config: SerializerConfigRef::Borrowed(serializer_config),
+		}
+	}
+
+	/// Build a `SerializerState` from a writer and a `SerializerConfig`.
+	///
+	/// This behaves the same as [`SerializerState::from_writer`], but takes
+	/// ownership of the `SerializerConfig`.
+	///
+	/// Note that the `SerializerConfig` contains the buffers that
+	/// should be re-used for performance, so this function should only be used
+	/// if the [`SerializerState`] is rarely instantiated.
+	///
+	/// For all other matters, please see [`SerializerState::from_writer`]'s
+	/// documentation for more details.
+	pub fn with_owned_config(writer: W, serializer_config: SerializerConfig<'s>) -> Self {
+		Self {
+			writer,
+			config: SerializerConfigRef::Owned(Box::new(serializer_config)),
+		}
+	}
+
+	pub(crate) fn with_opt_owned_config(
+		writer: W,
+		serializer_config: SerializerConfigRef<'c, 's>,
+	) -> Self {
+		Self {
+			writer,
 			config: serializer_config,
 		}
 	}
@@ -234,4 +262,27 @@ impl<W> SerializerState<'_, '_, W> {
 struct Buffers {
 	field_reordering_buffers: Vec<Vec<u8>>,
 	field_reordering_super_buffers: Vec<Vec<Option<Vec<u8>>>>,
+}
+
+pub(crate) enum SerializerConfigRef<'c, 's> {
+	Borrowed(&'c mut SerializerConfig<'s>),
+	Owned(Box<SerializerConfig<'s>>),
+}
+impl<'c, 's> std::ops::Deref for SerializerConfigRef<'c, 's> {
+	type Target = SerializerConfig<'s>;
+
+	fn deref(&self) -> &Self::Target {
+		match self {
+			Self::Borrowed(config) => &**config,
+			Self::Owned(config) => &**config,
+		}
+	}
+}
+impl std::ops::DerefMut for SerializerConfigRef<'_, '_> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		match &mut *self {
+			Self::Borrowed(config) => &mut **config,
+			Self::Owned(config) => &mut **config,
+		}
+	}
 }
