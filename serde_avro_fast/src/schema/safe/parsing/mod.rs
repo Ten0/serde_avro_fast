@@ -48,43 +48,37 @@ impl std::str::FromStr for SchemaMut {
 				}
 			};
 			for schema_node in &mut state.nodes {
-				match schema_node {
-					SchemaNode::RegularType(schema_type) => match schema_type {
-						RegularType::Array(Array {
-							items: key,
-							_private,
-						})
-						| RegularType::Map(Map {
-							values: key,
-							_private,
-						}) => fix_key(key),
-						RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
-						RegularType::Record(record) => {
-							record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
-						}
-						RegularType::Null
-						| RegularType::Boolean
-						| RegularType::Int
-						| RegularType::Long
-						| RegularType::Float
-						| RegularType::Double
-						| RegularType::Bytes
-						| RegularType::String
-						| RegularType::Enum(Enum {
-							symbols: _,
-							name: _,
-							_private: (),
-						})
-						| RegularType::Fixed(Fixed {
-							size: _,
-							name: _,
-							_private: (),
-						}) => {}
-					},
-					SchemaNode::LogicalType {
-						inner: _,
-						logical_type: _,
-					} => {}
+				match &mut schema_node.type_ {
+					RegularType::Array(Array {
+						items: key,
+						_private,
+					})
+					| RegularType::Map(Map {
+						values: key,
+						_private,
+					}) => fix_key(key),
+					RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
+					RegularType::Record(record) => {
+						record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
+					}
+					RegularType::Null
+					| RegularType::Boolean
+					| RegularType::Int
+					| RegularType::Long
+					| RegularType::Float
+					| RegularType::Double
+					| RegularType::Bytes
+					| RegularType::String
+					| RegularType::Enum(Enum {
+						symbols: _,
+						name: _,
+						_private: (),
+					})
+					| RegularType::Fixed(Fixed {
+						size: _,
+						name: _,
+						_private: (),
+					}) => {}
 				}
 			}
 		}
@@ -128,27 +122,30 @@ impl<'a> SchemaConstructionState<'a> {
 		Ok(match *raw_schema {
 			raw::SchemaNode::Type(type_) => {
 				let idx = self.nodes.len();
-				self.nodes.push(SchemaNode::RegularType(match type_ {
-					raw::Type::Null => RegularType::Null,
-					raw::Type::Boolean => RegularType::Boolean,
-					raw::Type::Int => RegularType::Int,
-					raw::Type::Long => RegularType::Long,
-					raw::Type::Float => RegularType::Float,
-					raw::Type::Double => RegularType::Double,
-					raw::Type::Bytes => RegularType::Bytes,
-					raw::Type::String => RegularType::String,
-					complex_type @ (raw::Type::Array
-					| raw::Type::Map
-					| raw::Type::Record
-					| raw::Type::Enum
-					| raw::Type::Fixed) => {
-						return Err(SchemaError::msg(format_args!(
-							"Expected primitive type name, but got {:?} as type which is a complex \
-								type, so should be in an object.",
-							complex_type
-						)))
-					}
-				}));
+				self.nodes.push(SchemaNode {
+					type_: match type_ {
+						raw::Type::Null => RegularType::Null,
+						raw::Type::Boolean => RegularType::Boolean,
+						raw::Type::Int => RegularType::Int,
+						raw::Type::Long => RegularType::Long,
+						raw::Type::Float => RegularType::Float,
+						raw::Type::Double => RegularType::Double,
+						raw::Type::Bytes => RegularType::Bytes,
+						raw::Type::String => RegularType::String,
+						complex_type @ (raw::Type::Array
+						| raw::Type::Map
+						| raw::Type::Record
+						| raw::Type::Enum
+						| raw::Type::Fixed) => {
+							return Err(SchemaError::msg(format_args!(
+								"Expected primitive type name, but got {:?} as type which is \
+									a complex type, so should be in an object.",
+								complex_type
+							)))
+						}
+					},
+					logical_type: None,
+				});
 				SchemaKey { idx }
 			}
 			raw::SchemaNode::Object(ref object) => {
@@ -384,15 +381,15 @@ impl<'a> SchemaConstructionState<'a> {
 			}
 			raw::SchemaNode::Union(ref union_schemas) => {
 				let idx = self.nodes.len();
-				self.nodes.push(SchemaNode::RegularType(RegularType::Null)); // Reserve the spot for us
-				let new_node = SchemaNode::RegularType(RegularType::Union(Union {
+				self.nodes.push(RegularType::Null.into()); // Reserve the spot for us
+				let new_node = Union {
 					variants: union_schemas
 						.iter()
 						.map(|schema| self.register_node(schema, enclosing_namespace, None))
 						.collect::<Result<_, _>>()?,
 					_private: (),
-				}));
-				self.nodes[idx] = new_node;
+				};
+				self.nodes[idx] = new_node.into();
 				SchemaKey { idx }
 			}
 			raw::SchemaNode::Ref(ref reference) => {

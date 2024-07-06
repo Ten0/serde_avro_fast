@@ -225,7 +225,7 @@ impl<'a> PerTypeLookup<'a> {
 					register_type_name("Decimal");
 					match repr {
 						DecimalRepr::Fixed(fixed) => {
-							register_name(&fixed.as_ref().name);
+							register_name(&fixed.name);
 						}
 						DecimalRepr::Bytes => {}
 					}

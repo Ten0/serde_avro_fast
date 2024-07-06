@@ -72,6 +72,10 @@ lazy_static! {
 			r#"{"name": "null_or_string","type": ["null", "string"], "default": null}"#,
 			Value::Union(1, Box::new(Value::String("value".to_string())))
 		),
+		(
+			r#"{"type":"fixed","size":3,"name":"f", "logicalType": "decimal", "precision": 123, "scale": 1}"#,
+			Value::Decimal(apache_avro::Decimal::from(vec![1, 2]))
+		),
 	];
 }
 
@@ -261,6 +265,7 @@ tests! {
 	serde_bytes::ByteBuf, byte_buf => 03 08,
 	AB, ab => 09,
 	Option<String>, option_string => 15,
+	String, s => 16,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 enum AB {
@@ -320,7 +325,7 @@ fn test_decimal() {
 		serde_avro_fast::to_datum_vec(
 			&rust_decimal::Decimal::from_str_exact("-12.8").unwrap(),
 			&mut SerializerConfig::new(
-				&r#"{"type": {"type":"fixed","size":3,"name":"f"}, "logicalType": "decimal", "precision": 123, "scale": 1}"#.parse().unwrap()
+				&r#"{"type":"fixed", "size":3, "name":"f", "logicalType": "decimal", "precision": 123, "scale": 1}"#.parse().unwrap()
 			)
 		)
 		.unwrap(),

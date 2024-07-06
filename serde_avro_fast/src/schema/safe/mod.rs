@@ -157,17 +157,11 @@ impl std::fmt::Debug for SchemaKey {
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
-pub enum SchemaNode {
-	/// An Avro type that's not annotated with a logical type
-	RegularType(RegularType),
-	/// An Avro type that is annotated with a logical type
-	LogicalType {
-		/// The key of the [`RegularType`] (in the [`SchemaMut`]) that is
-		/// annotated with this logical type
-		inner: SchemaKey,
-		/// The LogicalType this node is annotated with
-		logical_type: LogicalType,
-	},
+pub struct SchemaNode {
+	/// The underlying regular type of this node
+	pub type_: RegularType,
+	/// Logical type that the avro type is annotated with, if any
+	pub logical_type: Option<LogicalType>,
 }
 
 /// A primitive or complex type of an avro schema, stored in a [`SchemaNode`].
@@ -520,7 +514,10 @@ impl LogicalType {
 
 impl From<RegularType> for SchemaNode {
 	fn from(regular_type: RegularType) -> Self {
-		Self::RegularType(regular_type)
+		Self {
+			type_: regular_type,
+			logical_type: None,
+		}
 	}
 }
 
@@ -534,7 +531,10 @@ macro_rules! impl_froms_for_regular_type {
 			}
 			impl From<$variant> for SchemaNode {
 				fn from(variant: $variant) -> Self {
-					SchemaNode::RegularType(RegularType::$variant(variant))
+					Self {
+						type_: RegularType::$variant(variant),
+						logical_type: None,
+					}
 				}
 			}
 		)*
