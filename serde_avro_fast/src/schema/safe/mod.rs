@@ -221,6 +221,48 @@ pub enum RegularType {
 	Fixed(Fixed),
 }
 
+impl RegularType {
+	/// If the type is a named type, returns the name of the type.
+	pub fn name(&self) -> Option<&Name> {
+		match self {
+			RegularType::Record(record) => Some(&record.name),
+			RegularType::Enum(enum_) => Some(&enum_.name),
+			RegularType::Fixed(fixed) => Some(&fixed.name),
+			RegularType::Null
+			| RegularType::Boolean
+			| RegularType::Int
+			| RegularType::Long
+			| RegularType::Float
+			| RegularType::Double
+			| RegularType::Bytes
+			| RegularType::String
+			| RegularType::Array(_)
+			| RegularType::Map(_)
+			| RegularType::Union(_) => None,
+		}
+	}
+
+	/// If the type is a named type, returns the name of the type (mutably).
+	pub fn name_mut(&mut self) -> Option<&mut Name> {
+		match self {
+			RegularType::Record(record) => Some(&mut record.name),
+			RegularType::Enum(enum_) => Some(&mut enum_.name),
+			RegularType::Fixed(fixed) => Some(&mut fixed.name),
+			RegularType::Null
+			| RegularType::Boolean
+			| RegularType::Int
+			| RegularType::Long
+			| RegularType::Float
+			| RegularType::Double
+			| RegularType::Bytes
+			| RegularType::String
+			| RegularType::Array(_)
+			| RegularType::Map(_)
+			| RegularType::Union(_) => None,
+		}
+	}
+}
+
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
 pub struct Array {

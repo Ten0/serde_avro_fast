@@ -20,12 +20,12 @@ fn test_no_cyclic_debug_on_schema() {
 	.parse()
 	.unwrap();
 	let root = schema.root();
-	let sub_root = match &root {
-		SchemaNode::RegularType(RegularType::Record(Record { fields, .. })) => fields[1].type_,
+	let sub_root = match &root.type_ {
+		RegularType::Record(Record { fields, .. }) => fields[1].type_,
 		_ => panic!(),
 	};
-	let sub_root_some = match &schema[sub_root] {
-		SchemaNode::RegularType(RegularType::Union(union)) => union.variants[1],
+	let sub_root_some = match &schema[sub_root].type_ {
+		RegularType::Union(union) => union.variants[1],
 		_ => panic!(),
 	};
 	assert_eq!(sub_root_some, SchemaKey::from_idx(0)); // This is a case where we have to pay attention

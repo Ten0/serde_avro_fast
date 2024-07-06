@@ -174,6 +174,8 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					| LogicalType::Duration => {}
 					LogicalType::Unknown(_) => {}
 				}
+			} else {
+				map.serialize_entry("type", type_)?;
 			}
 			Ok(())
 		};
@@ -218,9 +220,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				_private,
 			}) => {
 				if node.logical_type.is_some() {
-					return Err(S::Error::custom(
-						"Union type can't have a logical type, only its variants can",
-					));
+					return Err(S::Error::custom("Union type can't have a logical type"));
 				}
 				let no_cycle_guard = self.no_cycle_guard()?;
 				let mut seq = serializer.serialize_seq(Some(variants.len()))?;
