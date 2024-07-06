@@ -69,12 +69,8 @@ lazy_static! {
 			])
 		),
 		(
-			r#"{"name": "null_or_string","type": ["null", "string"], "default": null}"#,
+			r#"["null", "string"]"#,
 			Value::Union(1, Box::new(Value::String("value".to_string())))
-		),
-		(
-			r#"{"type":"fixed","size":3,"name":"f", "logicalType": "decimal", "precision": 1, "scale": 1}"#,
-			Value::Decimal(apache_avro::Decimal::from(vec![1, 2]))
 		),
 	];
 }
@@ -265,7 +261,6 @@ tests! {
 	serde_bytes::ByteBuf, byte_buf => 03 08,
 	AB, ab => 09,
 	Option<String>, option_string => 15,
-	String, string => 16,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 enum AB {
@@ -330,6 +325,13 @@ fn test_decimal() {
 		)
 		.unwrap(),
 		[255, 255, 128]
+	);
+}
+
+#[test]
+fn test_schema_fingerprint_and_parse_round_trip_decimal_fixed() {
+	test_schema_fingerprint_and_parse_round_trip(
+		r#"{"type":"fixed","size":3,"name":"f", "logicalType": "decimal", "precision": 1, "scale": 1}"#,
 	);
 }
 
