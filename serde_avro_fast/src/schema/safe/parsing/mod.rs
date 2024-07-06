@@ -192,9 +192,9 @@ impl<'a> SchemaConstructionState<'a> {
 					Some(name_key) => Ok((name_key.name(), name_key)),
 				};
 
-				self.nodes.push(SchemaNode::RegularType(RegularType::Null)); // Reserve the spot for us
-				let new_node: SchemaNode = match object.logical_type {
-					None => SchemaNode::RegularType({
+				self.nodes.push(RegularType::Null.into()); // Reserve the spot for us
+				let new_node = SchemaNode {
+					type_: {
 						macro_rules! field {
 							($type_: ident $name: ident) => {
 								match &object.$name {
@@ -321,60 +321,54 @@ impl<'a> SchemaConstructionState<'a> {
 								}
 							}
 						}
-					}),
-					Some(ref logical_type) => {
-						let logical_type = &*logical_type.0;
-						if let Some(will_have_logical_type) = will_have_logical_type {
-							return Err(SchemaError::msg(format_args!(
-								"Immediately-nested logical types: {:?} in {:?}",
-								logical_type, will_have_logical_type
-							)));
-						} else {
-							SchemaNode::LogicalType {
-								logical_type: {
-									macro_rules! field {
-										($name: ident) => {
-											match object.$name {
-												Some(v) => v,
-												_ => {
-													return Err(SchemaError::msg(format_args!(
-														concat!(
-															"Missing field `",
-															stringify!($name),
-															"` on logical type {:?}",
-														),
-														logical_type
-													)));
-												}
+					},
+					logical_type: match object.logical_type {
+						None => None,
+						Some(ref logical_type) => Some({
+							let logical_type = &*logical_type.0;
+							if let Some(will_have_logical_type) = will_have_logical_type {
+								return Err(SchemaError::msg(format_args!(
+									"Immediately-nested logical types: {:?} in {:?}",
+									logical_type, will_have_logical_type
+								)));
+							} else {
+								macro_rules! field {
+									($name: ident) => {
+										match object.$name {
+											Some(v) => v,
+											_ => {
+												return Err(SchemaError::msg(format_args!(
+													concat!(
+														"Missing field `",
+														stringify!($name),
+														"` on logical type {:?}",
+													),
+													logical_type
+												)));
 											}
-										};
-									}
-									match logical_type {
-										"decimal" => LogicalType::Decimal(Decimal {
-											precision: field!(precision),
-											scale: field!(scale),
-											_private: (),
-										}),
-										"uuid" => LogicalType::Uuid,
-										"date" => LogicalType::Date,
-										"time-millis" => LogicalType::TimeMillis,
-										"time-micros" => LogicalType::TimeMicros,
-										"timestamp-millis" => LogicalType::TimestampMillis,
-										"timestamp-micros" => LogicalType::TimestampMicros,
-										"duration" => LogicalType::Duration,
-										unknown => {
-											LogicalType::Unknown(UnknownLogicalType::new(unknown))
 										}
+									};
+								}
+								match logical_type {
+									"decimal" => LogicalType::Decimal(Decimal {
+										precision: field!(precision),
+										scale: field!(scale),
+										_private: (),
+									}),
+									"uuid" => LogicalType::Uuid,
+									"date" => LogicalType::Date,
+									"time-millis" => LogicalType::TimeMillis,
+									"time-micros" => LogicalType::TimeMicros,
+									"timestamp-millis" => LogicalType::TimestampMillis,
+									"timestamp-micros" => LogicalType::TimestampMicros,
+									"duration" => LogicalType::Duration,
+									unknown => {
+										LogicalType::Unknown(UnknownLogicalType::new(unknown))
 									}
-								},
-								inner: self.register_node(
-									&object.type_,
-									enclosing_namespace,
-									Some(logical_type),
-								)?,
+								}
 							}
-						}
-					}
+						}),
+					},
 				};
 				self.nodes[idx] = new_node;
 				SchemaKey { idx }
