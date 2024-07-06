@@ -85,9 +85,9 @@ pub fn from_avro_datum_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	dbg!(&avro_value);
 	let avro_value_reinterpreted = match (avro_value, schema) {
-		(Value::Bytes(v), Schema::Fixed { size, .. }) => {
-			assert_eq!(*size, v.len());
-			Value::Fixed(*size, v)
+		(Value::Bytes(v), Schema::Fixed(fixed)) => {
+			assert_eq!(fixed.size, v.len());
+			Value::Fixed(fixed.size, v)
 		}
 		(avro_value, schema) => avro_value.resolve(schema).unwrap(),
 	};
