@@ -197,7 +197,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			RegularType::String => serialize_primitive_type("string", serializer),
 			RegularType::Array(Array { items, _private }) => {
 				let no_cycle_guard = self.no_cycle_guard()?;
-				let mut map = serializer.serialize_map(Some(2))?;
+				let mut map = serializer.serialize_map(None)?;
 				serialize_type_and_logical_type("array", &mut map)?;
 				map.serialize_entry("items", &self.serializable(items))?;
 				let res = map.end();
@@ -206,7 +206,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			}
 			RegularType::Map(Map { values, _private }) => {
 				let no_cycle_guard = self.no_cycle_guard()?;
-				let mut map = serializer.serialize_map(Some(2))?;
+				let mut map = serializer.serialize_map(None)?;
 				serialize_type_and_logical_type("map", &mut map)?;
 				map.serialize_entry("values", &self.serializable(values))?;
 				let res = map.end();
