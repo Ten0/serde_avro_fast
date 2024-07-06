@@ -35,7 +35,7 @@
 
 [dev-dependencies]
 	anyhow = "1"
-	apache-avro = { version = "0.16", features = ["bzip", "snappy", "xz", "zstandard"] }
+	apache-avro = { git = "https://github.com/apache/avro", features = ["bzip", "snappy", "xz", "zstandard"] }
 	criterion = "0.5"
 	lazy_static = "1"
 	ouroboros = "0.18"
