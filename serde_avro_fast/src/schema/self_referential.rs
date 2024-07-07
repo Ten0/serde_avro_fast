@@ -157,8 +157,8 @@ pub(crate) enum SchemaNode<'a> {
 	Double,
 	Bytes,
 	String,
-	Array(NodeRef<'a, SchemaNode<'a>>), // Specify `N` generic explicitly because RA is struggling
-	Map(NodeRef<'a, SchemaNode<'a>>),   // Specify `N` generic explicitly because RA is struggling
+	Array(NodeRef<'a>),
+	Map(NodeRef<'a>),
 	Union(Union<'a>),
 	Record(Record<'a>),
 	Enum(Enum),
