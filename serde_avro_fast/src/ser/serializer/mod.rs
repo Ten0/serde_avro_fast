@@ -340,7 +340,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 		match self.schema_node {
 			SchemaNode::Array(elements_schema) => Ok(SerializeSeqOrTupleOrTupleStruct::array(
 				BlockWriter::new(self.state, len.unwrap_or(0))?,
-				elements_schema,
+				elements_schema.as_ref(),
 			)),
 			SchemaNode::Duration => {
 				if len.map_or(false, |l| l != 3) {
