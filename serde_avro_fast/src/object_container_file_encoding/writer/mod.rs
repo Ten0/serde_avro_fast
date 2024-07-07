@@ -122,7 +122,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 	///
 	/// This is a less performant version of [`WriterBuilder::new`] because it
 	/// takes ownership of the [`SerializerConfig`], so the corresponding
-	/// buffers will not be re-used.
+	/// buffers will not be re-used across [`Writer`]s.
 	pub fn with_owned_config(serializer_config: SerializerConfig<'s>) -> Self {
 		Self::with_opt_owned_config(SerializerConfigRef::Owned(Box::new(serializer_config)))
 	}
