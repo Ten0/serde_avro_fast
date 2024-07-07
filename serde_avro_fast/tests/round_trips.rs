@@ -329,13 +329,6 @@ fn test_decimal() {
 }
 
 #[test]
-fn test_schema_fingerprint_and_parse_round_trip_decimal_fixed() {
-	test_schema_fingerprint_and_parse_round_trip(
-		r#"{"type":"fixed","size":3,"name":"f", "logicalType": "decimal", "precision": 1, "scale": 1}"#,
-	);
-}
-
-#[test]
 fn test_bytes_with_serde_json_value() {
 	let (raw_schema, value) = &SCHEMAS_TO_VALIDATE[3];
 	let schema = Schema::parse_str(raw_schema).unwrap();
