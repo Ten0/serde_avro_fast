@@ -14,7 +14,7 @@ where
 {
 	let size = match decimal.repr {
 		DecimalRepr::Bytes => read_len(state)?,
-		DecimalRepr::Fixed(fixed) => fixed.size,
+		DecimalRepr::Fixed(ref fixed) => fixed.size,
 	};
 	let mut buf = [0u8; 16];
 	let start = buf.len().checked_sub(size).ok_or_else(|| {

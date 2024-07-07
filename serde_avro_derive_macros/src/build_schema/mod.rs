@@ -92,6 +92,11 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 			}
 		}
 	};
+	let lazy_compute_namespace = || {
+		quote! {
+			let mut namespace = serde_avro_derive::LazyNamespace::new(|| #compute_namespace_expr);
+		}
+	};
 
 	let mut errors = TokenStream::default();
 	let mut generics = input.generics;
@@ -116,13 +121,13 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 				let (field_type, field_instantiation) = field_types_and_instantiations
 					.field_type_and_instantiation(
 						field,
-						Some(OverrideFixedName::NewtypeStruct {
+						FieldKind::NewtypeStruct {
 							struct_name: name_ident,
-						}),
+						},
 					);
 				let namespace_var = field_types_and_instantiations
 					.expand_namespace_var
-					.then(|| quote! { let namespace = #compute_namespace_expr; });
+					.then(lazy_compute_namespace);
 				(type_lookup, type_lookup_decl, _) = type_lookup::build_type_lookup(
 					type_ident,
 					&generics,
@@ -137,14 +142,6 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 				}
 			} else {
 				// named struct
-				let (field_types, field_instantiations): (Vec<Cow<syn::Type>>, Vec<TokenStream>) =
-					fields
-						.iter()
-						.map(|field| {
-							field_types_and_instantiations.field_type_and_instantiation(field, None)
-						})
-						.unzip();
-
 				let field_idents = fields
 					.iter()
 					.map(|f| f.ident.as_ref())
@@ -152,6 +149,22 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 					.ok_or_else(|| {
 						Error::new(Span::call_site(), "Unnamed fields are not supported")
 					})?;
+
+				let (field_types, field_instantiations): (Vec<Cow<syn::Type>>, Vec<TokenStream>) =
+					fields
+						.iter()
+						.zip(&field_idents)
+						.map(|(field, field_name)| {
+							field_types_and_instantiations.field_type_and_instantiation(
+								field,
+								FieldKind::StructField {
+									struct_name: name_ident,
+									field_name,
+								},
+							)
+						})
+						.unzip();
+
 				let field_names = field_idents.iter().map(|ident| ident.unraw().to_string());
 
 				let has_non_lifetime_generics;
@@ -176,18 +189,17 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 					let reserved_schema_key = builder.reserve();
 					#type_name_var
 					#add_type_id_to_fqn
-					let new_node = schema::SchemaNode::RegularType(schema::RegularType::Record(
-						schema::Record::new(
-							schema::Name::from_fully_qualified_name(type_name),
-							vec![#(
-								schema::RecordField::new(
-									#field_names,
-									#field_instantiations,
-								),
-							)*],
+					let fields = vec![#(
+						schema::RecordField::new(
+							#field_names,
+							#field_instantiations,
 						),
-					));
-					builder.nodes[reserved_schema_key] = new_node;
+					)*];
+					let new_node = schema::Record::new(
+						schema::Name::from_fully_qualified_name(type_name),
+						fields,
+					);
+					builder.nodes[reserved_schema_key] = new_node.into();
 				}
 			}
 		}
@@ -200,12 +212,11 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 				quote! {
 					#type_name_var
 					builder.nodes.push(
-						schema::SchemaNode::RegularType(schema::RegularType::Enum(
-							schema::Enum::new(
-								schema::Name::from_fully_qualified_name(type_name),
-								vec![#(#variants.to_owned(),)*],
-							),
-						)),
+						schema::Enum::new(
+							schema::Name::from_fully_qualified_name(type_name),
+							vec![#(#variants.to_owned(),)*],
+						)
+						.into()
 					);
 				}
 			} else {
@@ -272,10 +283,10 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 								let (field_type, field_instantiation) =
 									field_types_and_instantiations.field_type_and_instantiation(
 										field,
-										Some(OverrideFixedName::NewtypeVariant {
+										FieldKind::NewtypeVariant {
 											enum_name: type_ident,
 											variant_name: &v.ident,
-										}),
+										},
 									);
 								field_types.push(field_type);
 								type_lookup_field_names.push(&v.ident);
@@ -293,7 +304,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 
 				let namespace_var = field_types_and_instantiations
 					.expand_namespace_var
-					.then(|| quote! { let namespace = #compute_namespace_expr; });
+					.then(lazy_compute_namespace);
 
 				(type_lookup, type_lookup_decl, _) = type_lookup::build_type_lookup(
 					type_ident,
@@ -305,12 +316,10 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 				quote! {
 					let reserved_schema_key = builder.reserve();
 					#namespace_var
-					let new_node = schema::SchemaNode::RegularType(schema::RegularType::Union(
-						schema::Union::new(vec![
-							#(#variant_instantiations,)*
-						]),
-					));
-					builder.nodes[reserved_schema_key] = new_node;
+					let new_node = schema::Union::new(vec![
+						#(#variant_instantiations,)*
+					]);
+					builder.nodes[reserved_schema_key] = new_node.into();
 				}
 			}
 		}

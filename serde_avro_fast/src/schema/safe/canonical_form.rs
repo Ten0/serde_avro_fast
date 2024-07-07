@@ -47,132 +47,122 @@ impl<W: Write> WriteCanonicalFormState<W> {
 			.get(key.idx)
 			.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
 
-		match *node {
-			s::SchemaNode::LogicalType {
-				inner,
-				logical_type: _,
-			} => {
-				// In PCF, logical types are completely ignored
-				// https://issues.apache.org/jira/browse/AVRO-1721
-				self.write_canonical_form(schema, inner)
+		let mut first_time = true;
+		let should_not_write_only_name =
+			|name: &s::Name, state: &mut WriteCanonicalFormState<W>| -> Result<bool, SchemaError> {
+				Ok(match &mut state.named_type_written[key.idx] {
+					b @ false => {
+						*b = true;
+						true
+					}
+					true => {
+						state.w.write_char('"')?;
+						state.w.write_str(name.fully_qualified_name())?;
+						state.w.write_char('"')?;
+						false
+					}
+				})
+			};
+
+		// In PCF, logical types are completely ignored
+		// https://issues.apache.org/jira/browse/AVRO-1721
+		match node.type_ {
+			RegularType::Null => {
+				self.w.write_str("\"null\"")?;
 			}
-			s::SchemaNode::RegularType(ref type_) => {
-				let mut first_time = true;
-				let should_not_write_only_name = |name: &s::Name,
-				                                  state: &mut WriteCanonicalFormState<W>|
-				 -> Result<bool, SchemaError> {
-					Ok(match &mut state.named_type_written[key.idx] {
-						b @ false => {
-							*b = true;
-							true
-						}
-						true => {
-							state.w.write_char('"')?;
-							state.w.write_str(name.fully_qualified_name())?;
-							state.w.write_char('"')?;
-							false
-						}
-					})
-				};
-				match *type_ {
-					RegularType::Null => {
-						self.w.write_str("\"null\"")?;
+			RegularType::Boolean => {
+				self.w.write_str("\"boolean\"")?;
+			}
+			RegularType::Bytes => {
+				self.w.write_str("\"bytes\"")?;
+			}
+			RegularType::Double => {
+				self.w.write_str("\"double\"")?;
+			}
+			RegularType::Float => {
+				self.w.write_str("\"float\"")?;
+			}
+			RegularType::Int => {
+				self.w.write_str("\"int\"")?;
+			}
+			RegularType::Long => {
+				self.w.write_str("\"long\"")?;
+			}
+			RegularType::String => {
+				self.w.write_str("\"string\"")?;
+			}
+			RegularType::Union(ref union) => {
+				self.w.write_char('[')?;
+				for &variant in &union.variants {
+					if !first_time {
+						self.w.write_char(',')?;
+					} else {
+						first_time = false;
 					}
-					RegularType::Boolean => {
-						self.w.write_str("\"boolean\"")?;
-					}
-					RegularType::Bytes => {
-						self.w.write_str("\"bytes\"")?;
-					}
-					RegularType::Double => {
-						self.w.write_str("\"double\"")?;
-					}
-					RegularType::Float => {
-						self.w.write_str("\"float\"")?;
-					}
-					RegularType::Int => {
-						self.w.write_str("\"int\"")?;
-					}
-					RegularType::Long => {
-						self.w.write_str("\"long\"")?;
-					}
-					RegularType::String => {
-						self.w.write_str("\"string\"")?;
-					}
-					RegularType::Union(ref union) => {
-						self.w.write_char('[')?;
-						for &variant in &union.variants {
-							if !first_time {
-								self.w.write_char(',')?;
-							} else {
-								first_time = false;
-							}
-							self.write_canonical_form(schema, variant)?;
-						}
-						self.w.write_char(']')?;
-					}
-					RegularType::Array(ref array) => {
-						self.w.write_str("{\"type\":\"array\",\"items\":")?;
-						self.write_canonical_form(schema, array.items)?;
-						self.w.write_char('}')?;
-					}
-					RegularType::Map(ref map) => {
-						self.w.write_str("{\"type\":\"map\",\"values\":")?;
-						self.write_canonical_form(schema, map.values)?;
-						self.w.write_char('}')?;
-					}
-					RegularType::Enum(ref enum_) => {
-						if should_not_write_only_name(&enum_.name, self)? {
-							self.w.write_str("{\"name\":\"")?;
-							self.w.write_str(enum_.name.fully_qualified_name())?;
-							self.w.write_str("\",\"type\":\"enum\",\"symbols\":[")?;
-							for enum_symbol in enum_.symbols.iter() {
-								if !first_time {
-									self.w.write_char(',')?;
-								} else {
-									first_time = false;
-								}
-								self.w.write_char('"')?;
-								self.w.write_str(enum_symbol)?;
-								self.w.write_char('"')?;
-							}
-							self.w.write_char(']')?;
-							self.w.write_char('}')?;
-						}
-					}
-					RegularType::Fixed(ref fixed) => {
-						if should_not_write_only_name(&fixed.name, self)? {
-							self.w.write_str("{\"name\":\"")?;
-							self.w.write_str(fixed.name.fully_qualified_name())?;
-							self.w.write_str("\",\"type\":\"fixed\",\"size\":")?;
-							write!(self.w.0, "{}", fixed.size).map_err(convert_error)?;
-							self.w.write_char('}')?;
-						}
-					}
-					RegularType::Record(ref record) => {
-						if should_not_write_only_name(&record.name, self)? {
-							self.w.write_str("{\"name\":\"")?;
-							self.w.write_str(record.name.fully_qualified_name())?;
-							self.w.write_str("\",\"type\":\"record\",\"fields\":[")?;
-							for field in record.fields.iter() {
-								if !first_time {
-									self.w.write_char(',')?;
-								} else {
-									first_time = false;
-								}
-								self.w.write_str("{\"name\":\"")?;
-								self.w.write_str(&field.name)?;
-								self.w.write_str("\",\"type\":")?;
-								self.write_canonical_form(schema, field.type_)?;
-								self.w.write_char('}')?;
-							}
-							self.w.write_str("]}")?;
-						}
-					}
+					self.write_canonical_form(schema, variant)?;
 				}
-				Ok(())
+				self.w.write_char(']')?;
+			}
+			RegularType::Array(ref array) => {
+				self.w.write_str("{\"type\":\"array\",\"items\":")?;
+				self.write_canonical_form(schema, array.items)?;
+				self.w.write_char('}')?;
+			}
+			RegularType::Map(ref map) => {
+				self.w.write_str("{\"type\":\"map\",\"values\":")?;
+				self.write_canonical_form(schema, map.values)?;
+				self.w.write_char('}')?;
+			}
+			RegularType::Enum(ref enum_) => {
+				if should_not_write_only_name(&enum_.name, self)? {
+					self.w.write_str("{\"name\":\"")?;
+					self.w.write_str(enum_.name.fully_qualified_name())?;
+					self.w.write_str("\",\"type\":\"enum\",\"symbols\":[")?;
+					for enum_symbol in enum_.symbols.iter() {
+						if !first_time {
+							self.w.write_char(',')?;
+						} else {
+							first_time = false;
+						}
+						self.w.write_char('"')?;
+						self.w.write_str(enum_symbol)?;
+						self.w.write_char('"')?;
+					}
+					self.w.write_char(']')?;
+					self.w.write_char('}')?;
+				}
+			}
+			RegularType::Fixed(ref fixed) => {
+				if should_not_write_only_name(&fixed.name, self)? {
+					self.w.write_str("{\"name\":\"")?;
+					self.w.write_str(fixed.name.fully_qualified_name())?;
+					self.w.write_str("\",\"type\":\"fixed\",\"size\":")?;
+					write!(self.w.0, "{}", fixed.size).map_err(convert_error)?;
+					self.w.write_char('}')?;
+				}
+			}
+			RegularType::Record(ref record) => {
+				if should_not_write_only_name(&record.name, self)? {
+					self.w.write_str("{\"name\":\"")?;
+					self.w.write_str(record.name.fully_qualified_name())?;
+					self.w.write_str("\",\"type\":\"record\",\"fields\":[")?;
+					for field in record.fields.iter() {
+						if !first_time {
+							self.w.write_char(',')?;
+						} else {
+							first_time = false;
+						}
+						self.w.write_str("{\"name\":\"")?;
+						self.w.write_str(&field.name)?;
+						self.w.write_str("\",\"type\":")?;
+						self.write_canonical_form(schema, field.type_)?;
+						self.w.write_char('}')?;
+					}
+					self.w.write_str("]}")?;
+				}
 			}
 		}
+		Ok(())
 	}
 }
 

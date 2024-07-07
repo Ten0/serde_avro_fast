@@ -69,7 +69,7 @@ lazy_static! {
 			])
 		),
 		(
-			r#"{"name": "null_or_string","type": ["null", "string"], "default": null}"#,
+			r#"["null", "string"]"#,
 			Value::Union(1, Box::new(Value::String("value".to_string())))
 		),
 	];
@@ -85,9 +85,9 @@ pub fn from_avro_datum_fast<T: serde::de::DeserializeOwned + serde::Serialize>(
 	let avro_value = apache_avro::to_value(sjv).unwrap();
 	dbg!(&avro_value);
 	let avro_value_reinterpreted = match (avro_value, schema) {
-		(Value::Bytes(v), Schema::Fixed { size, .. }) => {
-			assert_eq!(*size, v.len());
-			Value::Fixed(*size, v)
+		(Value::Bytes(v), Schema::Fixed(fixed)) => {
+			assert_eq!(fixed.size, v.len());
+			Value::Fixed(fixed.size, v)
 		}
 		(avro_value, schema) => avro_value.resolve(schema).unwrap(),
 	};
@@ -277,15 +277,15 @@ fn test_decimal() {
 			.unwrap();
 	dbg!(editable_schema.root());
 	assert!(matches!(
-		*editable_schema.root(),
-		SchemaNode::LogicalType {
-			logical_type: LogicalType::Decimal(Decimal {
-				scale: 1,
+		editable_schema.root(),
+		SchemaNode {
+			type_: RegularType::Bytes,
+			logical_type: Some(LogicalType::Decimal(Decimal {
 				precision: 4,
+				scale: 1,
 				..
-			}),
-			inner
-		} if matches!(editable_schema[inner], SchemaNode::RegularType(RegularType::Bytes))
+			}))
+		}
 	));
 	let schema = editable_schema.try_into().unwrap();
 	let serializer_config = &mut SerializerConfig::new(&schema);
@@ -320,7 +320,7 @@ fn test_decimal() {
 		serde_avro_fast::to_datum_vec(
 			&rust_decimal::Decimal::from_str_exact("-12.8").unwrap(),
 			&mut SerializerConfig::new(
-				&r#"{"type": {"type":"fixed","size":3,"name":"f"}, "logicalType": "decimal", "precision": 123, "scale": 1}"#.parse().unwrap()
+				&r#"{"type":"fixed", "size":3, "name":"f", "logicalType": "decimal", "precision": 123, "scale": 1}"#.parse().unwrap()
 			)
 		)
 		.unwrap(),

@@ -41,9 +41,8 @@ impl std::fmt::Debug for Duration {
 }
 
 #[test]
-fn decimal() {
-	let raw_schema =
-		r#"{"type":{"name":"duration","type":"fixed","size":12},"logicalType":"duration"}"#;
+fn duration() {
+	let raw_schema = r#"{"type":"fixed", "name":"duration","size":12,"logicalType":"duration"}"#;
 	let apache_schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
 	let schema: Schema = raw_schema.parse().unwrap();
 

@@ -31,10 +31,18 @@ pub(super) enum Type {
 #[serde(rename_all = "camelCase")]
 #[serde(bound = "'a: 'de, 'de: 'a")]
 pub(super) struct SchemaNodeObject<'a> {
-	/// If there is a logical type, this can be a primitive type or type object
-	/// but not a ComplexType, but if there is none it must be a ComplexType.
+	/// Like the reference Java implementation, we won't allow the `type` field
+	/// to be a nested `SchemaNodeObject`
+	/// https://github.com/apache/avro/blob/06c8b5ddfa3540b466b144503b150e30bf8afc15/lang/java/avro/src/main/java/org/apache/avro/Schema.java#L1830
+	/// If we did, it's unclear in node like this:
+	/// `{"type":{"type": "fixed", "name":"foo"}, "logicalType":"decimal"}`
+	/// whether the `foo` name would refer to the fixed type or the logical
+	/// type.
+	/// Because there's no reference implementation to decide this (because Java
+	/// just rejects this), we'll be conservative here and reject it as well
+	/// until this is *specified*.
 	#[serde(rename = "type")]
-	pub(super) type_: SchemaNode<'a>,
+	pub(super) type_: Type,
 	pub(super) logical_type: Option<BorrowedCowIfPossible<'a>>,
 	/// For named types
 	pub(super) name: Option<BorrowedCowIfPossible<'a>>,

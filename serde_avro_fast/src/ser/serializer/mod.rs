@@ -562,7 +562,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 							.map_err(SerError::io)?;
 						buf
 					}
-					DecimalRepr::Fixed(fixed) => {
+					DecimalRepr::Fixed(ref fixed) => {
 						let start = bytes.len().checked_sub(fixed.size).ok_or_else(|| {
 							SerError::custom("Decimals of size larger than 16 are not supported")
 						})?;
