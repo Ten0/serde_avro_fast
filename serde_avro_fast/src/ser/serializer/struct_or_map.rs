@@ -316,7 +316,7 @@ where
 					v
 				})
 				.unwrap_or_else(Vec::new),
-			config: serializer_state.config,
+			config: SerializerConfigRef::Borrowed(&mut *serializer_state.config),
 		};
 		value.serialize(DatumSerializer {
 			state: &mut buf_serializer_state,

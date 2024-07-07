@@ -38,7 +38,6 @@
 	apache-avro = { git = "https://github.com/apache/avro", features = ["bzip", "snappy", "xz", "zstandard"] }
 	criterion = "0.5"
 	lazy_static = "1"
-	ouroboros = "0.18"
 	paste = "1"
 	pretty_assertions = "1"
 	serde-tuple-vec-map = "1"
