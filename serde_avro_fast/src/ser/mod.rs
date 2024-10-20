@@ -118,7 +118,7 @@ pub struct SerializerConfig<'s> {
 }
 
 impl<'s> SerializerConfig<'s> {
-	/// Build a new `SerializerConfig` with a given `schema`, default options
+	/// Build a `SerializerConfig` with a given `schema`, default options
 	/// and empty serialization buffers.
 	///
 	/// The `schema` will be used when instantiating a serializer from this

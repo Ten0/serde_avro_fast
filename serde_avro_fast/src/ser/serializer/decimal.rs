@@ -153,7 +153,7 @@ where
 	if !scale_to_write.is_empty() {
 		state
 			.writer
-			.write_all(&scale_to_write)
+			.write_all(scale_to_write)
 			.map_err(SerError::io)?;
 	}
 	Ok(())

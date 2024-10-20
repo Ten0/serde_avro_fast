@@ -292,8 +292,8 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			//   available.
 			// - We only use pointers from the point at which we call `as_mut_ptr` so the
 			//   compiler will not have aliasing constraints.
-			// - We don't dereference the references we create in key_to_node until they
-			//   they are all initialized.
+			// - We don't dereference the ~references (NodeRef) we create in key_to_ref
+			//   until are nodes are initialized.
 
 			let new_node = match safe_node {
 				SafeSchemaNode {
@@ -459,7 +459,7 @@ impl<'a> std::fmt::Debug for SchemaNode<'a> {
 		use std::cell::Cell;
 		struct SchemaNodeRenderingDepthGuard;
 		thread_local! {
-			static DEPTH: Cell<u32> = Cell::new(0);
+			static DEPTH: Cell<u32> = const { Cell::new(0) };
 		}
 		impl Drop for SchemaNodeRenderingDepthGuard {
 			fn drop(&mut self) {

@@ -85,7 +85,7 @@ impl SchemaMut {
 	/// [`Schema`](crate::Schema) is necessary for use with the serializer and
 	/// deserializer.
 	///
-	/// This will fail if the schema is invalid (e.g. incorrect [`SchemaKey`]`).
+	/// This will fail if the schema is invalid (e.g. incorrect [`SchemaKey`]).
 	pub fn freeze(self) -> Result<super::Schema, SchemaError> {
 		self.try_into()
 	}
@@ -99,6 +99,10 @@ impl SchemaMut {
 	pub fn get(&self, key: SchemaKey) -> Option<&SchemaNode> {
 		self.nodes.get(key.idx)
 	}
+
+	// There is no `get_mut` or `IndexMut` impl because
+	// each would have to set `self.schema_json = None`, so using this API
+	// would be bad perf-wise. (you only want to call `nodes_mut()` once)
 }
 
 /// The location of a node in a [`SchemaMut`]
@@ -166,7 +170,7 @@ pub struct SchemaNode {
 }
 
 impl SchemaNode {
-	/// Build a new [`SchemaNode`] from the given regular type, with no logical
+	/// Build a `SchemaNode` from the given regular type, with no logical
 	/// type.
 	///
 	/// This is equivalent to `type_.into()`.
@@ -174,7 +178,7 @@ impl SchemaNode {
 		type_.into()
 	}
 
-	/// Build a new [`SchemaNode`] from the given regular type and logical type.
+	/// Build a `SchemaNode` from the given regular type and logical type.
 	pub fn with_logical_type(type_: RegularType, logical_type: LogicalType) -> Self {
 		Self {
 			type_,

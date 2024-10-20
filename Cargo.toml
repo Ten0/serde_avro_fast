@@ -11,6 +11,7 @@
 	[workspace.lints.clippy]
 		explicit_auto_deref = "allow"
 		missing_safety_doc = "deny"
+		needless_lifetimes = "allow"
 		single_match = "allow"
 		tabs_in_doc_comments = "allow"
 		undocumented_unsafe_blocks = "deny"

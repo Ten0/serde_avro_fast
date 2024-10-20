@@ -388,7 +388,7 @@ fn test_big_decimal() {
 
 	assert_eq!(
 		apache_avro::to_avro_datum(
-			&&apache_avro::Schema::BigDecimal,
+			&apache_avro::Schema::BigDecimal,
 			Value::BigDecimal("-0.2".parse().unwrap())
 		)
 		.unwrap(),
