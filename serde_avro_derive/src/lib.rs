@@ -56,6 +56,7 @@ pub trait BuildSchema {
 ///
 /// You should typically not use this directly
 #[derive(Default)]
+#[non_exhaustive]
 pub struct SchemaBuilder {
 	/// The current set of nodes that have been built
 	///
@@ -74,7 +75,6 @@ pub struct SchemaBuilder {
 	/// the same named schema node is used for the same type, so this map is
 	/// necessary. (This is used for de-duplication of named types.)
 	pub already_built_types: HashMap<TypeId, SchemaKey>,
-	_private: (),
 }
 
 impl SchemaBuilder {

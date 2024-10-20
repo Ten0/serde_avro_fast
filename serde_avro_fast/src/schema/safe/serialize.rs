@@ -198,7 +198,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			RegularType::Double => serialize_primitive_type("double", serializer),
 			RegularType::Bytes => serialize_primitive_type("bytes", serializer),
 			RegularType::String => serialize_primitive_type("string", serializer),
-			RegularType::Array(Array { items, _private }) => {
+			RegularType::Array(Array { items }) => {
 				let no_cycle_guard = self.no_cycle_guard()?;
 				let mut map = serializer.serialize_map(None)?;
 				serialize_type_and_logical_type("array", &mut map)?;
@@ -207,7 +207,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				no_cycle_guard.release();
 				res
 			}
-			RegularType::Map(Map { values, _private }) => {
+			RegularType::Map(Map { values }) => {
 				let no_cycle_guard = self.no_cycle_guard()?;
 				let mut map = serializer.serialize_map(None)?;
 				serialize_type_and_logical_type("map", &mut map)?;
@@ -216,10 +216,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 				no_cycle_guard.release();
 				res
 			}
-			RegularType::Union(Union {
-				ref variants,
-				_private,
-			}) => {
+			RegularType::Union(Union { ref variants }) => {
 				if node.logical_type.is_some() {
 					return Err(S::Error::custom("Union type can't have a logical type"));
 				}
@@ -235,7 +232,6 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			RegularType::Record(Record {
 				ref name,
 				ref fields,
-				_private,
 			}) => {
 				if self.should_write_as_ref() {
 					serializer.serialize_str(&self.str_for_ref(name))
@@ -253,7 +249,6 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			RegularType::Enum(Enum {
 				ref name,
 				ref symbols,
-				_private,
 			}) => {
 				if self.should_write_as_ref() {
 					serializer.serialize_str(&self.str_for_ref(name))
@@ -265,11 +260,7 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					map.end()
 				}
 			}
-			RegularType::Fixed(Fixed {
-				ref name,
-				ref size,
-				_private,
-			}) => {
+			RegularType::Fixed(Fixed { ref name, ref size }) => {
 				if self.should_write_as_ref() {
 					serializer.serialize_str(&self.str_for_ref(name))
 				} else {

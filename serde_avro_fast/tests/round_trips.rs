@@ -284,7 +284,8 @@ fn test_decimal() {
 				precision: 4,
 				scale: 1,
 				..
-			}))
+			})),
+			..
 		}
 	));
 	let schema = editable_schema.try_into().unwrap();
@@ -339,7 +340,8 @@ fn test_big_decimal() {
 		editable_schema.root(),
 		SchemaNode {
 			type_: RegularType::Bytes,
-			logical_type: Some(LogicalType::BigDecimal)
+			logical_type: Some(LogicalType::BigDecimal),
+			..
 		}
 	));
 

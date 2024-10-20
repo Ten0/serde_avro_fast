@@ -29,15 +29,14 @@ impl SchemaMut {
 	}
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("The schema contains a record that ends up always containing itself")]
 /// Error: Detected unconditional cycle in provided schema
 ///
 /// It was detected that the schema contains a record that ends up always
 /// containing itself
-pub struct UnconditionalCycle {
-	_private: (),
-}
+#[derive(Debug, thiserror::Error)]
+#[error("The schema contains a record that ends up always containing itself")]
+#[non_exhaustive]
+pub struct UnconditionalCycle {}
 fn check_no_zero_sized_cycle_inner(
 	schema: &SchemaMut,
 	node_idx: usize,
@@ -51,7 +50,7 @@ fn check_no_zero_sized_cycle_inner(
 	} {
 		if let RegularType::Record(_) = &schema.nodes[field.type_.idx].type_ {
 			if visited_nodes[field.type_.idx] {
-				return Err(UnconditionalCycle { _private: () });
+				return Err(UnconditionalCycle {});
 			} else {
 				check_no_zero_sized_cycle_inner(
 					schema,

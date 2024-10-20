@@ -157,11 +157,30 @@ impl std::fmt::Debug for SchemaKey {
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`SchemaMut`].
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SchemaNode {
 	/// The underlying regular type of this node
 	pub type_: RegularType,
 	/// Logical type that the avro type is annotated with, if any
 	pub logical_type: Option<LogicalType>,
+}
+
+impl SchemaNode {
+	/// Build a new [`SchemaNode`] from the given regular type, with no logical
+	/// type.
+	///
+	/// This is equivalent to `type_.into()`.
+	pub fn new(type_: RegularType) -> Self {
+		type_.into()
+	}
+
+	/// Build a new [`SchemaNode`] from the given regular type and logical type.
+	pub fn with_logical_type(type_: RegularType, logical_type: LogicalType) -> Self {
+		Self {
+			type_,
+			logical_type: Some(logical_type),
+		}
+	}
 }
 
 /// A primitive or complex type of an avro schema, stored in a [`SchemaNode`].
@@ -265,20 +284,17 @@ impl RegularType {
 
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Array {
 	/// The key (in the [`SchemaMut`]) of the schema of each item that will be
 	/// in the array
 	pub items: SchemaKey,
-	pub(crate) _private: (),
 }
 impl Array {
 	/// `items` is the key (in the [`SchemaMut`]) of the schema of each item
 	/// that will be in the array
 	pub fn new(items: SchemaKey) -> Self {
-		Self {
-			items,
-			_private: (),
-		}
+		Self { items }
 	}
 }
 
@@ -287,13 +303,13 @@ impl Array {
 /// An Avro map is a collection of key-value pairs, where the keys are assumed
 /// to be strings.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Map {
 	/// The key (in the [`SchemaMut`]) of the schema of each value that will be
 	/// in the map
 	///
 	/// In an Avro map, all keys are assumed to be strings.
 	pub values: SchemaKey,
-	pub(crate) _private: (),
 }
 impl Map {
 	/// `values` is the key (in the [`SchemaMut`]) of the schema of each value
@@ -301,29 +317,23 @@ impl Map {
 	///
 	/// In an Avro map, all keys are assumed to be strings.
 	pub fn new(values: SchemaKey) -> Self {
-		Self {
-			values,
-			_private: (),
-		}
+		Self { values }
 	}
 }
 
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Union {
 	/// The keys (in the [`SchemaMut`]) of the schemas of each variant that
 	/// this Avro *union* supports.
 	pub variants: Vec<SchemaKey>,
-	pub(crate) _private: (),
 }
 impl Union {
 	/// `variants` is the keys (in the [`SchemaMut`]) of the schemas of each
 	/// variant that this Avro *union* supports.
 	pub fn new(variants: Vec<SchemaKey>) -> Self {
-		Self {
-			variants,
-			_private: (),
-		}
+		Self { variants }
 	}
 }
 
@@ -331,33 +341,29 @@ impl Union {
 ///
 /// An avro `record` is ~equivalent to a Rust struct.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Record {
 	/// The list of fields in this *record* (~= `struct`)
 	pub fields: Vec<RecordField>,
 	/// The name of the record (including namespace)
 	pub name: Name,
-	pub(crate) _private: (),
 }
 impl Record {
 	/// `name` is the name of the record (including namespace), and `fields` is
 	/// the list of fields in this record.
 	pub fn new(name: Name, fields: Vec<RecordField>) -> Self {
-		Self {
-			fields,
-			name,
-			_private: (),
-		}
+		Self { fields, name }
 	}
 }
 
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct RecordField {
 	/// Name of the field
 	pub name: String,
 	/// The key (in the [`SchemaMut`]) of the schema of the type of this field
 	pub type_: SchemaKey,
-	pub(crate) _private: (),
 }
 impl RecordField {
 	/// `schema` is the key (in the [`SchemaMut`]) of the schema of the type of
@@ -366,7 +372,6 @@ impl RecordField {
 		Self {
 			name: name.into(),
 			type_: schema,
-			_private: (),
 		}
 	}
 }
@@ -376,22 +381,18 @@ impl RecordField {
 /// This is the ~equivalent of a Rust `enum` where none of the variants would
 /// hold any inner value. (e.g. `enum Foo { Bar, Baz }`)
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Enum {
 	/// All the variants of the enum (e.g. `["Bar", "Baz"]`)
 	pub symbols: Vec<String>,
 	/// The name of the enum (including namespace)
 	pub name: Name,
-	pub(crate) _private: (),
 }
 impl Enum {
 	/// `name` is the name of the enum (including namespace), and `symbols` is
 	/// the list of variants of the enum.
 	pub fn new(name: Name, symbols: Vec<String>) -> Self {
-		Self {
-			symbols,
-			name,
-			_private: (),
-		}
+		Self { symbols, name }
 	}
 }
 
@@ -488,6 +489,7 @@ pub enum LogicalType {
 
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Decimal {
 	/// The scale of the decimal number, which is the number of digits to the
 	/// right of the decimal point.
@@ -495,17 +497,12 @@ pub struct Decimal {
 	/// The precision of the decimal number, which is the number of significant
 	/// digits in the number.
 	pub precision: usize,
-	pub(crate) _private: (),
 }
 impl Decimal {
 	/// `scale` is the number of digits to the right of the decimal point, and
 	/// `precision` is the number of significant digits in the number.
 	pub fn new(scale: u32, precision: usize) -> Self {
-		Self {
-			precision,
-			scale,
-			_private: (),
-		}
+		Self { precision, scale }
 	}
 }
 
@@ -514,10 +511,10 @@ impl Decimal {
 /// Represents a logical type that is not known or not handled in any particular
 /// way by this library.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct UnknownLogicalType {
 	/// The name of the logical type, as it appears in the schema JSON
 	pub logical_type_name: String,
-	_private: (),
 }
 impl UnknownLogicalType {
 	/// `logical_type_name` is the name of the logical type, as it appears in
@@ -525,7 +522,6 @@ impl UnknownLogicalType {
 	pub fn new(logical_type_name: impl Into<String>) -> Self {
 		Self {
 			logical_type_name: logical_type_name.into(),
-			_private: (),
 		}
 	}
 

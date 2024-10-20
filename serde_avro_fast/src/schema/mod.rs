@@ -19,22 +19,18 @@ impl std::str::FromStr for Schema {
 
 /// Component of a [`SchemaMut`]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Fixed {
 	/// The size in bytes of the *fixed* type
 	pub size: usize,
 	/// The name of the *fixed* type, including the namespace
 	pub name: Name,
-	pub(crate) _private: (),
 }
 impl Fixed {
 	/// `name` is name of the *fixed* type, including the namespace, `size` is
 	/// the size in bytes of the fixed type
 	pub fn new(name: Name, size: usize) -> Self {
-		Self {
-			size,
-			name,
-			_private: (),
-		}
+		Self { size, name }
 	}
 }
 

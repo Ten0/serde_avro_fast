@@ -49,14 +49,8 @@ impl std::str::FromStr for SchemaMut {
 			};
 			for schema_node in &mut state.nodes {
 				match &mut schema_node.type_ {
-					RegularType::Array(Array {
-						items: key,
-						_private,
-					})
-					| RegularType::Map(Map {
-						values: key,
-						_private,
-					}) => fix_key(key),
+					RegularType::Array(Array { items: key })
+					| RegularType::Map(Map { values: key }) => fix_key(key),
 					RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
 					RegularType::Record(record) => {
 						record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
@@ -72,13 +66,8 @@ impl std::str::FromStr for SchemaMut {
 					| RegularType::Enum(Enum {
 						symbols: _,
 						name: _,
-						_private: (),
 					})
-					| RegularType::Fixed(Fixed {
-						size: _,
-						name: _,
-						_private: (),
-					}) => {}
+					| RegularType::Fixed(Fixed { size: _, name: _ }) => {}
 				}
 			}
 		}
@@ -210,7 +199,6 @@ impl<'a> SchemaConstructionState<'a> {
 					.iter()
 					.map(|schema| self.register_node(schema, enclosing_namespace))
 					.collect::<Result<_, _>>()?,
-				_private: (),
 			}),
 			TypeOrUnion::Type(type_) => {
 				let name = || name(type_);
@@ -237,21 +225,17 @@ impl<'a> SchemaConstructionState<'a> {
 				match type_ {
 					raw::Type::Array => RegularType::Array(Array {
 						items: self.register_node(field!(items), enclosing_namespace)?,
-						_private: (),
 					}),
 					raw::Type::Map => RegularType::Map(Map {
 						values: self.register_node(field!(values), enclosing_namespace)?,
-						_private: (),
 					}),
 					raw::Type::Enum => RegularType::Enum(Enum {
 						name: name()?.0,
 						symbols: field!(symbols).iter().map(|e| (*e.0).to_owned()).collect(),
-						_private: (),
 					}),
 					raw::Type::Fixed => RegularType::Fixed(Fixed {
 						name: name()?.0,
 						size: *field!(size),
-						_private: (),
 					}),
 					raw::Type::Record => {
 						let (name, name_key) = name()?;
@@ -263,12 +247,10 @@ impl<'a> SchemaConstructionState<'a> {
 										name: (*field.name.0).to_owned(),
 										type_: self
 											.register_node(&field.type_, name_key.namespace)?,
-										_private: (),
 									})
 								})
 								.collect::<Result<_, SchemaError>>()?,
 							name,
-							_private: (),
 						})
 					}
 					raw::Type::Null => RegularType::Null,
@@ -315,7 +297,6 @@ impl<'a> SchemaConstructionState<'a> {
 						"decimal" => LogicalType::Decimal(Decimal {
 							precision: field!(precision),
 							scale: field!(scale),
-							_private: (),
 						}),
 						"uuid" => LogicalType::Uuid,
 						"date" => LogicalType::Date,
