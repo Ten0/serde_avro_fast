@@ -161,13 +161,6 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 		self
 	}
 
-	#[doc(hidden)]
-	#[deprecated = "Use `approx_block_size` instead (spelling error)"]
-	/// A version of approx_block_size that has a spelling error in its name
-	pub fn aprox_block_size(self, approx_block_size: u32) -> Self {
-		self.approx_block_size(approx_block_size)
-	}
-
 	/// Enforce the 16-byte inter-block sync marker value
 	///
 	/// This is [the 16-byte value that is written at the end of each block to help detect corrupt blocks](https://avro.apache.org/docs/current/specification/#object-container-files).
