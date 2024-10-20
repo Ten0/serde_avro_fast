@@ -9,7 +9,11 @@ pub(super) struct FieldTypeAndInstantiationsBuilder<'t, 'm> {
 	pub(super) expand_namespace_var: bool,
 }
 
-pub(super) enum OverrideFixedName<'a> {
+pub(super) enum FieldKind<'a> {
+	StructField {
+		struct_name: &'a syn::Ident,
+		field_name: &'a syn::Ident,
+	},
 	NewtypeStruct {
 		struct_name: &'a syn::Ident,
 	},
@@ -23,7 +27,7 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 	pub(super) fn field_type_and_instantiation(
 		&mut self,
 		field: &'t SchemaDeriveField,
-		override_fixed_name: Option<OverrideFixedName<'_>>,
+		field_kind: FieldKind<'_>,
 	) -> (Cow<'t, syn::Type>, TokenStream) {
 		// Choose type
 		let mut ty = field.has_same_type_as.as_ref().unwrap_or(&field.ty);
@@ -61,99 +65,6 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 		}
 		let mut ty = Cow::Borrowed(ty);
 
-		fn regular_field_instantiation(ty: &syn::Type) -> TokenStream {
-			quote! { builder.find_or_build::<#ty>() }
-		}
-
-		let mut override_regular_field_instantiation = None;
-		if let Some(override_fixed_name) = override_fixed_name {
-			// If the type is a [u8; N] that should map to a Fixed, we should not just send
-			// towards the implementation for [u8; N], but instead create a new node for it,
-			// overriding the name
-			// This is done with:
-			// `struct NewType([u8; 4]);`
-			// `enum Ip { V4([u8; 4]), V6([u8; 16]) }`
-			if let syn::Type::Array(array) = &*ty {
-				if let syn::Type::Path(path) = &*array.elem {
-					if path.path.is_ident("u8") {
-						let len = match &array.len {
-							syn::Expr::Lit(syn::ExprLit {
-								lit: syn::Lit::Int(i),
-								..
-							}) => match i.base10_parse::<usize>() {
-								Ok(len) => len,
-								Err(e) => {
-									self.errors.extend(e.to_compile_error());
-									0
-								}
-							},
-							_ => {
-								self.errors.extend(
-									Error::new_spanned(
-										&array.len,
-										"Fixed array length must be a constant integer",
-									)
-									.to_compile_error(),
-								);
-								0
-							}
-						};
-						let fixed_name = match self.namespace {
-							None => {
-								self.expand_namespace_var = true;
-								let pattern = match override_fixed_name {
-									OverrideFixedName::NewtypeStruct { struct_name } => {
-										format!(r#"{{}}.{struct_name}"#)
-									}
-									OverrideFixedName::NewtypeVariant {
-										enum_name,
-										variant_name,
-									} => format!(r#"{{}}.{enum_name}.{variant_name}"#),
-								};
-								quote! {
-									format!(#pattern, namespace)
-								}
-							}
-							Some(namespace) => {
-								let namespace_prefix = if namespace.is_empty() {
-									"".to_owned()
-								} else {
-									format!("{}.", namespace)
-								};
-								let type_name = match override_fixed_name {
-									OverrideFixedName::NewtypeStruct { struct_name } => {
-										format!("{}{}", namespace_prefix, struct_name)
-									}
-									OverrideFixedName::NewtypeVariant {
-										enum_name,
-										variant_name,
-									} => format!(
-										"{}{}.{}",
-										namespace_prefix, enum_name, variant_name
-									),
-								};
-								quote! { #type_name.to_owned() }
-							}
-						};
-						override_regular_field_instantiation = Some(quote! {
-							{
-								let schema_key = schema::SchemaKey::from_idx(builder.nodes.len());
-								builder.nodes.push(schema::SchemaNode::RegularType(
-									schema::RegularType::Fixed(
-										schema::Fixed::new(
-											schema::Name::from_fully_qualified_name(#fixed_name),
-											#len
-										)
-									)
-								));
-								schema_key
-							}
-						});
-					}
-				}
-			}
-		}
-
 		// Identify logical types and prepare field instantiation
 		let mut logical_type_litstr = field.logical_type.as_ref().map(Cow::Borrowed);
 		let mut inferred_decimal_logical_type = false;
@@ -180,10 +91,124 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 				}
 			}
 		}
+
+		let mut new_name_for_owned_subnode = || match self.namespace {
+			None => 'new_name: {
+				let pattern = match field_kind {
+					FieldKind::NewtypeStruct { struct_name } => {
+						format!(r#"{{}}.{struct_name}"#)
+					}
+					FieldKind::StructField {
+						struct_name: _,
+						field_name,
+					} => {
+						let pattern = format!(r#"{{}}.{}"#, field_name.unraw());
+						break 'new_name quote! { format!(#pattern, type_name) };
+					}
+					FieldKind::NewtypeVariant {
+						enum_name,
+						variant_name,
+					} => format!(r#"{{}}.{}.{}"#, enum_name.unraw(), variant_name.unraw()),
+				};
+				self.expand_namespace_var = true;
+				quote! {
+					format!(#pattern, namespace.get())
+				}
+			}
+			Some(namespace) => {
+				let namespace_prefix = if namespace.is_empty() {
+					"".to_owned()
+				} else {
+					format!("{}.", namespace)
+				};
+				let type_name = match field_kind {
+					FieldKind::NewtypeStruct { struct_name } => {
+						format!("{}{}", namespace_prefix, struct_name.unraw())
+					}
+					FieldKind::StructField {
+						struct_name: type_name,
+						field_name: field_or_variant_name,
+					}
+					| FieldKind::NewtypeVariant {
+						enum_name: type_name,
+						variant_name: field_or_variant_name,
+					} => format!(
+						"{}{}.{}",
+						namespace_prefix,
+						type_name.unraw(),
+						field_or_variant_name.unraw(),
+					),
+				};
+				quote! { #type_name.to_owned() }
+			}
+		};
+
 		// If it's a logical type, wrap it
 		let field_instantiation = match logical_type_litstr.as_deref() {
-			None => override_regular_field_instantiation
-				.unwrap_or_else(|| regular_field_instantiation(&ty)),
+			None => {
+				let mut override_field_instantiation = None;
+				let override_fixed_name = match field_kind {
+					FieldKind::StructField { .. } => false,
+					FieldKind::NewtypeStruct { .. } | FieldKind::NewtypeVariant { .. } => true,
+				};
+				if override_fixed_name {
+					// If the type is a [u8; N] that should map to a Fixed, we should not just send
+					// towards the implementation for [u8; N], but instead create a new node for it,
+					// overriding the name
+					// This is done with:
+					// `struct NewType([u8; 4]);`
+					// `enum Ip { V4([u8; 4]), V6([u8; 16]) }`
+
+					// This is only useful if type is not a logical type, because if it is
+					// we always override the name anyway (we are already in the "no logical type"
+					// branch)
+
+					if let syn::Type::Array(array) = &*ty {
+						if let syn::Type::Path(path) = &*array.elem {
+							if path.path.is_ident("u8") {
+								let len = match &array.len {
+									syn::Expr::Lit(syn::ExprLit {
+										lit: syn::Lit::Int(i),
+										..
+									}) => match i.base10_parse::<usize>() {
+										Ok(len) => len,
+										Err(e) => {
+											self.errors.extend(e.to_compile_error());
+											0
+										}
+									},
+									_ => {
+										self.errors.extend(
+											Error::new_spanned(
+												&array.len,
+												"Fixed array length must be a constant integer",
+											)
+											.to_compile_error(),
+										);
+										0
+									}
+								};
+								let fixed_name = new_name_for_owned_subnode();
+								override_field_instantiation = Some(quote! {
+									{
+										let schema_key = schema::SchemaKey::from_idx(builder.nodes.len());
+										builder.nodes.push(
+											schema::Fixed::new(
+												schema::Name::from_fully_qualified_name(#fixed_name),
+												#len
+											)
+											.into()
+										);
+										schema_key
+									}
+								});
+							}
+						}
+					}
+				}
+				override_field_instantiation
+					.unwrap_or_else(|| quote! { builder.find_or_build::<#ty>() })
+			}
 			Some(logical_type_litstr) => {
 				let logical_type_str_raw = logical_type_litstr.value();
 				let logical_type_str_pascal = logical_type_str_raw.to_pascal_case();
@@ -300,9 +325,14 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 						error(f);
 					}
 				}
-				let instantiation = override_regular_field_instantiation
-					.unwrap_or_else(|| regular_field_instantiation(&ty));
-				quote! { builder.build_logical_type(#logical_type, |builder| #instantiation) }
+				let name_override = new_name_for_owned_subnode();
+				quote! {
+					builder.build_logical_type(
+						#logical_type,
+						|builder| builder.build_duplicate::<#ty>(),
+						|| #name_override,
+					)
+				}
 			}
 		};
 

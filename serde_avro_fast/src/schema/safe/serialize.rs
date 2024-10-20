@@ -155,15 +155,11 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 			.schema_nodes
 			.get(self.key.idx)
 			.ok_or_else(|| S::Error::custom("SchemaKey refers to non-existing node"))?;
-		match node {
-			SchemaNode::LogicalType {
-				inner,
-				logical_type,
-			} => {
-				let no_cycle_guard = self.no_cycle_guard()?;
-				let mut map = serializer.serialize_map(None)?;
+
+		let serialize_type_and_logical_type = |type_: &str, map: &mut S::SerializeMap| {
+			if let Some(logical_type) = &node.logical_type {
 				map.serialize_entry("logicalType", logical_type.as_str())?;
-				map.serialize_entry("type", &self.serializable(*inner))?;
+				map.serialize_entry("type", type_)?;
 				match logical_type {
 					LogicalType::Decimal(decimal) => {
 						map.serialize_entry("scale", &decimal.scale)?;
@@ -178,99 +174,111 @@ impl Serialize for SerializeSchema<'_, SchemaKey> {
 					| LogicalType::Duration => {}
 					LogicalType::Unknown(_) => {}
 				}
+			} else {
+				map.serialize_entry("type", type_)?;
+			}
+			Ok(())
+		};
+		let serialize_primitive_type = |type_: &str, serializer: S| match node.logical_type {
+			None => serializer.serialize_str(type_),
+			Some(_) => {
+				let mut map = serializer.serialize_map(None)?;
+				serialize_type_and_logical_type(type_, &mut map)?;
+				map.end()
+			}
+		};
+
+		match node.type_ {
+			RegularType::Null => serialize_primitive_type("null", serializer),
+			RegularType::Boolean => serialize_primitive_type("boolean", serializer),
+			RegularType::Int => serialize_primitive_type("int", serializer),
+			RegularType::Long => serialize_primitive_type("long", serializer),
+			RegularType::Float => serialize_primitive_type("float", serializer),
+			RegularType::Double => serialize_primitive_type("double", serializer),
+			RegularType::Bytes => serialize_primitive_type("bytes", serializer),
+			RegularType::String => serialize_primitive_type("string", serializer),
+			RegularType::Array(Array { items, _private }) => {
+				let no_cycle_guard = self.no_cycle_guard()?;
+				let mut map = serializer.serialize_map(None)?;
+				serialize_type_and_logical_type("array", &mut map)?;
+				map.serialize_entry("items", &self.serializable(items))?;
 				let res = map.end();
 				no_cycle_guard.release();
 				res
 			}
-			SchemaNode::RegularType(schema_type) => match *schema_type {
-				RegularType::Null => serializer.serialize_str("null"),
-				RegularType::Boolean => serializer.serialize_str("boolean"),
-				RegularType::Int => serializer.serialize_str("int"),
-				RegularType::Long => serializer.serialize_str("long"),
-				RegularType::Float => serializer.serialize_str("float"),
-				RegularType::Double => serializer.serialize_str("double"),
-				RegularType::Bytes => serializer.serialize_str("bytes"),
-				RegularType::String => serializer.serialize_str("string"),
-				RegularType::Array(Array { items, _private }) => {
-					let no_cycle_guard = self.no_cycle_guard()?;
-					let mut map = serializer.serialize_map(Some(2))?;
-					map.serialize_entry("type", "array")?;
-					map.serialize_entry("items", &self.serializable(items))?;
-					let res = map.end();
-					no_cycle_guard.release();
-					res
+			RegularType::Map(Map { values, _private }) => {
+				let no_cycle_guard = self.no_cycle_guard()?;
+				let mut map = serializer.serialize_map(None)?;
+				serialize_type_and_logical_type("map", &mut map)?;
+				map.serialize_entry("values", &self.serializable(values))?;
+				let res = map.end();
+				no_cycle_guard.release();
+				res
+			}
+			RegularType::Union(Union {
+				ref variants,
+				_private,
+			}) => {
+				if node.logical_type.is_some() {
+					return Err(S::Error::custom("Union type can't have a logical type"));
 				}
-				RegularType::Map(Map { values, _private }) => {
-					let no_cycle_guard = self.no_cycle_guard()?;
-					let mut map = serializer.serialize_map(Some(2))?;
-					map.serialize_entry("type", "map")?;
-					map.serialize_entry("values", &self.serializable(values))?;
-					let res = map.end();
-					no_cycle_guard.release();
-					res
+				let no_cycle_guard = self.no_cycle_guard()?;
+				let mut seq = serializer.serialize_seq(Some(variants.len()))?;
+				for &union_variant_key in variants {
+					seq.serialize_element(&self.serializable(union_variant_key))?;
 				}
-				RegularType::Union(Union {
-					ref variants,
-					_private,
-				}) => {
-					let no_cycle_guard = self.no_cycle_guard()?;
-					let mut seq = serializer.serialize_seq(Some(variants.len()))?;
-					for &union_variant_key in variants {
-						seq.serialize_element(&self.serializable(union_variant_key))?;
-					}
-					let res = seq.end();
-					no_cycle_guard.release();
-					res
+				let res = seq.end();
+				no_cycle_guard.release();
+				res
+			}
+			RegularType::Record(Record {
+				ref name,
+				ref fields,
+				_private,
+			}) => {
+				if self.should_write_as_ref() {
+					serializer.serialize_str(&self.str_for_ref(name))
+				} else {
+					let mut map = serializer.serialize_map(None)?;
+					serialize_type_and_logical_type("record", &mut map)?;
+					self.serialize_name(&mut map, name)?;
+					map.serialize_entry(
+						"fields",
+						&self.serializable_with_namespace(fields.as_slice(), name.namespace()),
+					)?;
+					map.end()
 				}
-				RegularType::Record(Record {
-					ref name,
-					ref fields,
-					_private,
-				}) => {
-					if self.should_write_as_ref() {
-						serializer.serialize_str(&self.str_for_ref(name))
-					} else {
-						let mut map = serializer.serialize_map(None)?;
-						map.serialize_entry("type", "record")?;
-						self.serialize_name(&mut map, name)?;
-						map.serialize_entry(
-							"fields",
-							&self.serializable_with_namespace(fields.as_slice(), name.namespace()),
-						)?;
-						map.end()
-					}
+			}
+			RegularType::Enum(Enum {
+				ref name,
+				ref symbols,
+				_private,
+			}) => {
+				if self.should_write_as_ref() {
+					serializer.serialize_str(&self.str_for_ref(name))
+				} else {
+					let mut map = serializer.serialize_map(None)?;
+					serialize_type_and_logical_type("enum", &mut map)?;
+					self.serialize_name(&mut map, name)?;
+					map.serialize_entry("symbols", symbols)?;
+					map.end()
 				}
-				RegularType::Enum(Enum {
-					ref name,
-					ref symbols,
-					_private,
-				}) => {
-					if self.should_write_as_ref() {
-						serializer.serialize_str(&self.str_for_ref(name))
-					} else {
-						let mut map = serializer.serialize_map(None)?;
-						map.serialize_entry("type", "enum")?;
-						self.serialize_name(&mut map, name)?;
-						map.serialize_entry("symbols", symbols)?;
-						map.end()
-					}
+			}
+			RegularType::Fixed(Fixed {
+				ref name,
+				ref size,
+				_private,
+			}) => {
+				if self.should_write_as_ref() {
+					serializer.serialize_str(&self.str_for_ref(name))
+				} else {
+					let mut map = serializer.serialize_map(None)?;
+					serialize_type_and_logical_type("fixed", &mut map)?;
+					self.serialize_name(&mut map, name)?;
+					map.serialize_entry("size", size)?;
+					map.end()
 				}
-				RegularType::Fixed(Fixed {
-					ref name,
-					ref size,
-					_private,
-				}) => {
-					if self.should_write_as_ref() {
-						serializer.serialize_str(&self.str_for_ref(name))
-					} else {
-						let mut map = serializer.serialize_map(None)?;
-						map.serialize_entry("type", "fixed")?;
-						self.serialize_name(&mut map, name)?;
-						map.serialize_entry("size", size)?;
-						map.end()
-					}
-				}
-			},
+			}
 		}
 	}
 }

@@ -10,7 +10,7 @@ fn prevents_stack_overflow() {
       "fields": [
         {
             "name": "b",
-            "type": {"type": ["null", "test"]}
+            "type": ["null", "test"]
         }
       ]
     }"#

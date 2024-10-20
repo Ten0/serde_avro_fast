@@ -163,7 +163,7 @@ pub(crate) enum SchemaNode<'a> {
 	Record(Record<'a>),
 	Enum(Enum),
 	Fixed(Fixed),
-	Decimal(Decimal<'a>),
+	Decimal(Decimal),
 	Uuid,
 	Date,
 	TimeMillis,
@@ -232,17 +232,17 @@ impl std::fmt::Debug for Enum {
 
 /// Component of a [`SchemaNode`]
 #[derive(Clone, Debug)]
-pub(crate) struct Decimal<'a> {
+pub(crate) struct Decimal {
 	/// Unused for now - TODO take this into account when serializing (tolerate
 	/// precision loss within the limits of this)
 	pub(crate) _precision: usize,
 	pub(crate) scale: u32,
-	pub(crate) repr: DecimalRepr<'a>,
+	pub(crate) repr: DecimalRepr,
 }
 #[derive(Clone, Debug)]
-pub(crate) enum DecimalRepr<'a> {
+pub(crate) enum DecimalRepr {
 	Bytes,
-	Fixed(NodeRef<'a, Fixed>),
+	Fixed(Fixed),
 }
 
 impl TryFrom<super::safe::SchemaMut> for Schema {
@@ -252,80 +252,6 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			return Err(SchemaError::new(
 				"Schema must have at least one node (the root)",
 			));
-		}
-
-		// Pre-compute logical types
-		enum LogicalTypeResolution {
-			NotLogicalType,
-			UnresolvedRemapped(usize),
-			Resolved(SchemaNode<'static>),
-		}
-		let mut logical_types = Vec::with_capacity(safe.nodes.len());
-		let mut set_decimal_repr_to_fixed: Vec<(usize, usize)> = Vec::new();
-		for (i, n) in safe.nodes.iter().enumerate() {
-			logical_types.push(match n {
-				SafeSchemaNode::LogicalType {
-					logical_type,
-					inner,
-				} => {
-					let inner_type = match safe.nodes.get(inner.idx).ok_or_else(|| {
-						SchemaError::new("Logical type refers to node that doesn't exist")
-					})? {
-						SafeSchemaNode::RegularType(inner) => inner,
-						SafeSchemaNode::LogicalType {
-							logical_type: inner_logical_type,
-							..
-						} => {
-							return Err(SchemaError::msg(format_args!(
-								"Immediately-nested logical types: \
-									{inner_logical_type:?} in {logical_type:?}"
-							)))
-						}
-					};
-					match (logical_type, inner_type) {
-						(LogicalType::Decimal(decimal), SafeSchemaType::Bytes) => {
-							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
-								_precision: decimal.precision,
-								scale: decimal.scale,
-								repr: DecimalRepr::Bytes,
-							}))
-						}
-						(LogicalType::Decimal(decimal), SafeSchemaType::Fixed(_)) => {
-							set_decimal_repr_to_fixed.push((i, inner.idx));
-							LogicalTypeResolution::Resolved(SchemaNode::Decimal(Decimal {
-								_precision: decimal.precision,
-								scale: decimal.scale,
-								repr: DecimalRepr::Bytes,
-							}))
-						}
-						(LogicalType::Uuid, SafeSchemaType::String) => {
-							LogicalTypeResolution::Resolved(SchemaNode::Uuid)
-						}
-						(LogicalType::Date, SafeSchemaType::Int) => {
-							LogicalTypeResolution::Resolved(SchemaNode::Date)
-						}
-						(LogicalType::TimeMillis, SafeSchemaType::Int) => {
-							LogicalTypeResolution::Resolved(SchemaNode::TimeMillis)
-						}
-						(LogicalType::TimeMicros, SafeSchemaType::Long) => {
-							LogicalTypeResolution::Resolved(SchemaNode::TimeMicros)
-						}
-						(LogicalType::TimestampMillis, SafeSchemaType::Long) => {
-							LogicalTypeResolution::Resolved(SchemaNode::TimestampMillis)
-						}
-						(LogicalType::TimestampMicros, SafeSchemaType::Long) => {
-							LogicalTypeResolution::Resolved(SchemaNode::TimestampMicros)
-						}
-						(LogicalType::Duration, SafeSchemaType::Fixed(fixed))
-							if fixed.size == 12 =>
-						{
-							LogicalTypeResolution::Resolved(SchemaNode::Duration)
-						}
-						_ => LogicalTypeResolution::UnresolvedRemapped(inner.idx),
-					}
-				}
-				SafeSchemaNode::RegularType(_) => LogicalTypeResolution::NotLogicalType,
-			});
 		}
 
 		// The `nodes` allocation should never be moved otherwise references will become
@@ -342,34 +268,22 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		// Let's be extra-sure (second condition is for calls to add)
 		assert!(len > 0 && len == safe.nodes.len() && len <= (isize::MAX as usize));
 		let storage_start_ptr = ret.nodes.as_mut_ptr();
-		let key_to_ref = |schema_key: super::safe::SchemaKey,
-		                  logical_types: &[LogicalTypeResolution]|
-		 -> Result<NodeRef<'static>, SchemaError> {
-			let mut idx = schema_key.idx;
-			if idx >= len {
-				return Err(SchemaError::msg(format_args!(
-					"SchemaKey index {} is out of bounds (len: {})",
-					idx, len
-				)));
-			}
-			if let LogicalTypeResolution::UnresolvedRemapped(remapped_idx) = logical_types[idx] {
-				idx = remapped_idx;
-				// There cannot be nested logical types so there cannot be a second remapping
-				// Also we know the index is low enough because that has been checked
-				// when loading inner_type above
-				// But we're doing unsafe so let's still make extra sure that is true
-				assert!(
-					idx < len,
-					"id should be low enough - bug in serde_avro_fast"
-				);
-			}
-			// SAFETY: see below
-			Ok(unsafe { NodeRef::new(storage_start_ptr.add(idx)) })
-		};
+		let key_to_ref =
+			|schema_key: super::safe::SchemaKey| -> Result<NodeRef<'static>, SchemaError> {
+				let idx = schema_key.idx;
+				if idx >= len {
+					return Err(SchemaError::msg(format_args!(
+						"SchemaKey index {} is out of bounds (len: {})",
+						idx, len
+					)));
+				}
+				// SAFETY: see below
+				Ok(unsafe { NodeRef::new(storage_start_ptr.add(idx)) })
+			};
 
 		// Now we can initialize the nodes
 		let mut curr_storage_node_ptr = storage_start_ptr;
-		for (i, safe_node) in safe.nodes.into_iter().enumerate() {
+		for safe_node in safe.nodes {
 			// SAFETY:
 			// - The nodes we create here are never moving in memory since the entire vec is
 			//   preallocated, and even when moving a vec, the pointed space doesn't move.
@@ -381,19 +295,51 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			//   they are all initialized.
 
 			let new_node = match safe_node {
-				SafeSchemaNode::LogicalType { .. } => match &mut logical_types[i] {
-					LogicalTypeResolution::Resolved(ref mut resolved) => {
-						// We can take it, nobody but us reads it
-						std::mem::replace(resolved, SchemaNode::Null)
-					}
-					LogicalTypeResolution::NotLogicalType => unreachable!(),
-					LogicalTypeResolution::UnresolvedRemapped(_) => {
-						// We're remapping all nodes pointing to this node to another node
-						// so we can leave Null here, that won't be used.
-						SchemaNode::Null
-					}
-				},
-				SafeSchemaNode::RegularType(regular_type) => match regular_type {
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::Decimal(decimal)),
+					type_: SafeSchemaType::Bytes,
+				} => SchemaNode::Decimal(Decimal {
+					_precision: decimal.precision,
+					scale: decimal.scale,
+					repr: DecimalRepr::Bytes,
+				}),
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::Decimal(decimal)),
+					type_: SafeSchemaType::Fixed(fixed),
+				} => SchemaNode::Decimal(Decimal {
+					_precision: decimal.precision,
+					scale: decimal.scale,
+					repr: DecimalRepr::Fixed(fixed),
+				}),
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::Uuid),
+					type_: SafeSchemaType::String,
+				} => SchemaNode::Uuid,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::Date),
+					type_: SafeSchemaType::Int,
+				} => SchemaNode::Date,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::TimeMillis),
+					type_: SafeSchemaType::Int,
+				} => SchemaNode::TimeMillis,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::TimeMicros),
+					type_: SafeSchemaType::Long,
+				} => SchemaNode::TimeMicros,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::TimestampMillis),
+					type_: SafeSchemaType::Long,
+				} => SchemaNode::TimestampMillis,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::TimestampMicros),
+					type_: SafeSchemaType::Long,
+				} => SchemaNode::TimestampMicros,
+				SafeSchemaNode {
+					logical_type: Some(LogicalType::Duration),
+					type_: SafeSchemaType::Fixed(fixed),
+				} if fixed.size == 12 => SchemaNode::Duration,
+				_ => match safe_node.type_ {
 					SafeSchemaType::Null => SchemaNode::Null,
 					SafeSchemaType::Boolean => SchemaNode::Boolean,
 					SafeSchemaType::Int => SchemaNode::Int,
@@ -402,18 +348,14 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 					SafeSchemaType::Double => SchemaNode::Double,
 					SafeSchemaType::Bytes => SchemaNode::Bytes,
 					SafeSchemaType::String => SchemaNode::String,
-					SafeSchemaType::Array(array) => {
-						SchemaNode::Array(key_to_ref(array.items, &logical_types)?)
-					}
-					SafeSchemaType::Map(map) => {
-						SchemaNode::Map(key_to_ref(map.values, &logical_types)?)
-					}
+					SafeSchemaType::Array(array) => SchemaNode::Array(key_to_ref(array.items)?),
+					SafeSchemaType::Map(map) => SchemaNode::Map(key_to_ref(map.values)?),
 					SafeSchemaType::Union(union) => SchemaNode::Union({
 						Union {
 							variants: {
 								let mut variants = Vec::with_capacity(union.variants.len());
 								for schema_key in union.variants {
-									variants.push(key_to_ref(schema_key, &logical_types)?);
+									variants.push(key_to_ref(schema_key)?);
 								}
 								variants
 							},
@@ -436,7 +378,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 							for field in record.fields {
 								fields.push(RecordField {
 									name: field.name,
-									schema: key_to_ref(field.type_, &logical_types)?,
+									schema: key_to_ref(field.type_)?,
 								});
 							}
 							fields
@@ -462,28 +404,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 				curr_storage_node_ptr = curr_storage_node_ptr.add(1);
 			};
 		}
-		// Now that all the nodes have been partially we can set the references to
-		// `Fixed` for `Decimal` nodes
-		for (i, to) in set_decimal_repr_to_fixed {
-			// SAFETY: indexes are valid, and there are no live references
-			// to this (live NodeRef don't count because they contain pointers, and that is
-			// allowed)
-			unsafe {
-				match *storage_start_ptr.add(i) {
-					SchemaNode::Decimal(ref mut decimal) => {
-						assert_ne!(i, to, "That would violate aliasing rules");
-						match *storage_start_ptr.add(to) {
-							SchemaNode::Fixed(ref fixed) => {
-								decimal.repr =
-									DecimalRepr::Fixed(NodeRef::new(fixed as *const _ as *mut _));
-							}
-							_ => unreachable!("set_decimal_repr_to_fixed was built incorrectly"),
-						}
-					}
-					_ => unreachable!("set_decimal_repr_to_fixed was built incorrectly"),
-				}
-			}
-		}
+
 		// Now that all the nodes have been **fully** initialized (except their
 		// `per_type_lookup` tables) we can initialize the `per_type_lookup` tables
 		// Note that this has to be done after all nodes have been initialized because

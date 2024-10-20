@@ -329,6 +329,44 @@ fn newtype() {
 }
 
 #[derive(BuildSchema)]
+#[allow(unused)]
+struct NewTypeDecimalFixed(
+	#[avro_schema(logical_type = "Decimal", scale = 3, precision = 5)] [u8; 4],
+);
+
+#[test]
+fn newtype_decimal_fixed() {
+	test::<NewTypeDecimalFixed>(
+		r#"{
+  "logicalType": "decimal",
+  "type": "fixed",
+  "scale": 3,
+  "precision": 5,
+  "name": "derive_schema.NewTypeDecimalFixed",
+  "size": 4
+}"#,
+	);
+}
+
+#[derive(BuildSchema)]
+#[allow(unused)]
+struct NewTypeDecimalBytes(
+	#[avro_schema(logical_type = "Decimal", scale = 3, precision = 5)] Vec<u8>,
+);
+
+#[test]
+fn newtype_decimal_bytes() {
+	test::<NewTypeDecimalBytes>(
+		r#"{
+  "logicalType": "decimal",
+  "type": "bytes",
+  "scale": 3,
+  "precision": 5
+}"#,
+	);
+}
+
+#[derive(BuildSchema)]
 #[avro_schema(namespace = "namespace_override")]
 #[allow(unused)]
 struct NewTypeNamespace([u8; 3]);

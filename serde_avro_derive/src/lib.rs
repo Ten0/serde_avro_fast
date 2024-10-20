@@ -84,7 +84,7 @@ impl SchemaBuilder {
 	/// position in `nodes`.
 	pub fn reserve(&mut self) -> usize {
 		let idx = self.nodes.len();
-		self.nodes.push(SchemaNode::RegularType(RegularType::Null));
+		self.nodes.push(RegularType::Null.into());
 		idx
 	}
 
@@ -102,34 +102,59 @@ impl SchemaBuilder {
 		{
 			std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
 			std::collections::hash_map::Entry::Vacant(entry) => {
-				let idx = SchemaKey::from_idx(self.nodes.len());
-				entry.insert(idx);
+				let schema_key = SchemaKey::from_idx(self.nodes.len());
+				entry.insert(schema_key);
 				T::append_schema(self);
 				assert!(
-					self.nodes.len() > idx.idx(),
+					self.nodes.len() > schema_key.idx(),
 					"append_schema should always insert at least a node \
 					(and its dependencies below itself)"
 				);
-				idx
+				schema_key
 			}
 		}
+	}
+
+	/// Insert a new [`SchemaNode`] corresponding to the schema for the type `T`
+	/// into [`nodes`](SchemaBuilder::nodes), regardless of whether it has
+	/// already been built.
+	///
+	/// This is only useful if using a type as a base for the definition of
+	/// another type, but patching it afterwards (e.g. adding a logical type).
+	/// Otherwise, use [`find_or_build`](SchemaBuilder::find_or_build) to avoid
+	/// duplicate nodes.
+	pub fn build_duplicate<T: BuildSchema + ?Sized>(&mut self) -> SchemaKey {
+		let schema_key = SchemaKey::from_idx(self.nodes.len());
+		T::append_schema(self);
+		assert!(
+			self.nodes.len() > schema_key.idx(),
+			"append_schema should always insert at least a node \
+				(and its dependencies below itself)"
+		);
+		schema_key
 	}
 
 	/// Register a new node for this logical type, where the regular type
 	/// specified with `T` is annotated with the logical type specified as the
 	/// `logical_type` argument.
+	///
+	/// `name_override` specifies how to override the name if the underlying
+	/// node ends up generating a named node
 	pub fn build_logical_type(
 		&mut self,
 		logical_type: LogicalType,
-		inner_type: impl FnOnce(&mut Self) -> SchemaKey,
+		inner_type_duplicate: impl FnOnce(&mut Self) -> SchemaKey,
+		name_override: impl FnOnce() -> String,
 	) -> SchemaKey {
-		let reserved_schema_key = self.reserve();
-		let new_node = SchemaNode::LogicalType {
-			logical_type,
-			inner: inner_type(self),
-		};
-		self.nodes[reserved_schema_key] = new_node;
-		SchemaKey::from_idx(reserved_schema_key)
+		let inner_type_duplicate_key = inner_type_duplicate(self);
+		let node = &mut self.nodes[inner_type_duplicate_key.idx()];
+		node.logical_type = Some(logical_type);
+
+		if let Some(name) = node.type_.name_mut() {
+			*name = Name::from_fully_qualified_name(name_override());
+		}
+
+		inner_type_duplicate_key
 	}
 }
 
@@ -138,7 +163,7 @@ macro_rules! impl_primitive {
 		$(
 			impl BuildSchema for $ty {
 				fn append_schema(builder: &mut SchemaBuilder) {
-					builder.nodes.push(SchemaNode::RegularType(RegularType::$variant));
+					builder.nodes.push(RegularType::$variant.into());
 				}
 				type TypeLookup = Self;
 			}
@@ -214,8 +239,7 @@ impl<T: BuildSchema + ?Sized> BuildSchema for &'_ mut T {
 impl<T: BuildSchema> BuildSchema for Vec<T> {
 	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
-		let new_node =
-			SchemaNode::RegularType(RegularType::Array(Array::new(builder.find_or_build::<T>())));
+		let new_node = Array::new(builder.find_or_build::<T>()).into();
 		builder.nodes[reserved_schema_key] = new_node;
 	}
 
@@ -232,10 +256,11 @@ impl<T: BuildSchema> BuildSchema for [T] {
 impl<T: BuildSchema> BuildSchema for Option<T> {
 	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
-		let new_node = SchemaNode::RegularType(RegularType::Union(Union::new(vec![
+		let new_node = Union::new(vec![
 			builder.find_or_build::<()>(),
 			builder.find_or_build::<T>(),
-		])));
+		])
+		.into();
 		builder.nodes[reserved_schema_key] = new_node;
 	}
 
@@ -244,12 +269,13 @@ impl<T: BuildSchema> BuildSchema for Option<T> {
 
 impl<const N: usize> BuildSchema for [u8; N] {
 	fn append_schema(builder: &mut SchemaBuilder) {
-		builder
-			.nodes
-			.push(SchemaNode::RegularType(RegularType::Fixed(Fixed::new(
+		builder.nodes.push(
+			Fixed::new(
 				Name::from_fully_qualified_name(format!("u8_array_{}", N)),
 				N,
-			))));
+			)
+			.into(),
+		);
 	}
 	type TypeLookup = Self;
 }
@@ -257,8 +283,7 @@ impl<const N: usize> BuildSchema for [u8; N] {
 impl<S: std::ops::Deref<Target = str>, V: BuildSchema> BuildSchema for HashMap<S, V> {
 	fn append_schema(builder: &mut SchemaBuilder) {
 		let reserved_schema_key = builder.reserve();
-		let new_node =
-			SchemaNode::RegularType(RegularType::Map(Map::new(builder.find_or_build::<V>())));
+		let new_node = Map::new(builder.find_or_build::<V>()).into();
 		builder.nodes[reserved_schema_key] = new_node;
 	}
 	type TypeLookup = HashMap<String, V::TypeLookup>;
@@ -284,4 +309,28 @@ pub fn hash_type_id(struct_name: &mut String, type_id: TypeId) {
 	let mut hasher = std::hash::SipHasher::new();
 	type_id.hash(&mut hasher);
 	write!(struct_name, "_{:016x?}", hasher.finish()).unwrap();
+}
+
+#[doc(hidden)]
+pub enum LazyNamespace {
+	Pending(fn() -> String),
+	Computed(String),
+}
+impl LazyNamespace {
+	pub fn new(f: fn() -> String) -> Self {
+		Self::Pending(f)
+	}
+	pub fn get(&mut self) -> &str {
+		match self {
+			Self::Pending(f) => {
+				let n = f();
+				*self = Self::Computed(n);
+				match self {
+					Self::Computed(n) => n,
+					_ => unreachable!(),
+				}
+			}
+			Self::Computed(n) => n,
+		}
+	}
 }
