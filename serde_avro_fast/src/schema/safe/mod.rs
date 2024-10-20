@@ -6,10 +6,14 @@ mod check_for_cycles;
 mod parsing;
 mod rabin;
 mod serialize;
+mod unused_properties;
 
-use super::{Fixed, Name, SchemaError};
+use {
+	super::{Fixed, Name, SchemaError},
+	unused_properties::UnusedProperties,
+};
 
-pub use check_for_cycles::UnconditionalCycle;
+pub use {check_for_cycles::UnconditionalCycle, unused_properties::JsonValue};
 
 /// An editable representation of an Avro schema
 ///
@@ -364,6 +368,7 @@ pub struct RecordField {
 	pub name: String,
 	/// The key (in the [`SchemaMut`]) of the schema of the type of this field
 	pub type_: SchemaKey,
+	pub(crate) unused_properties: UnusedProperties,
 }
 impl RecordField {
 	/// `schema` is the key (in the [`SchemaMut`]) of the schema of the type of
@@ -372,9 +377,12 @@ impl RecordField {
 		Self {
 			name: name.into(),
 			type_: schema,
+			unused_properties: UnusedProperties::default(),
 		}
 	}
 }
+
+unused_properties::unused_properties!(RecordField);
 
 /// Component of a [`SchemaMut`]
 ///
