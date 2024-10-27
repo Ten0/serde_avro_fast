@@ -1,5 +1,6 @@
 use super::*;
 
+/// Returned boolean is `has_non_lifetime_generics`
 pub(super) fn build_type_lookup(
 	type_ident: &syn::Ident,
 	generics: &syn::Generics,

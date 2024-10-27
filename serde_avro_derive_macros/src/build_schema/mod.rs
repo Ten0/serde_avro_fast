@@ -102,6 +102,7 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 		errors: &mut errors,
 		namespace: &input.namespace,
 		expand_namespace_var: false,
+		has_direct_lookup: false,
 	};
 
 	let type_lookup: syn::Type;
@@ -120,20 +121,31 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 							struct_name: name_ident,
 						}),
 					);
-				let namespace_var = field_types_and_instantiations
-					.expand_namespace_var
-					.then(|| quote! { let namespace = #compute_namespace_expr; });
-				(type_lookup, type_lookup_decl, _) = type_lookup::build_type_lookup(
-					type_ident,
-					&generics,
-					None,
-					std::slice::from_ref(&field_type),
-				);
-				quote! {
-					let n_nodes = builder.nodes.len();
-					#namespace_var
-					let new_node_key = #field_instantiation;
-					assert_eq!(n_nodes, new_node_key.idx());
+				if field_types_and_instantiations.has_direct_lookup {
+					// This single field is a direct lookup (no logical type,
+					// etc), so this is the special case we need to just
+					// expand into forwarding.
+					type_lookup = parse_quote! { <#field_type as serde_avro_derive::BuildSchema>::TypeLookup };
+					type_lookup_decl = None;
+					quote! {
+						<#field_type as serde_avro_derive::BuildSchema>::append_schema(builder);
+					}
+				} else {
+					let namespace_var = field_types_and_instantiations
+						.expand_namespace_var
+						.then(|| quote! { let namespace = #compute_namespace_expr; });
+					(type_lookup, type_lookup_decl, _) = type_lookup::build_type_lookup(
+						type_ident,
+						&generics,
+						None,
+						std::slice::from_ref(&field_type),
+					);
+					quote! {
+						let n_nodes = builder.nodes.len();
+						#namespace_var
+						let new_node_key = #field_instantiation;
+						assert_eq!(n_nodes, new_node_key.idx());
+					}
 				}
 			} else {
 				// named struct
