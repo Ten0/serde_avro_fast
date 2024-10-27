@@ -60,9 +60,6 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 			}
 			break;
 		}
-		while let syn::Type::Reference(reference) = ty {
-			ty = &reference.elem;
-		}
 		let mut ty = Cow::Borrowed(ty);
 
 		// Identify logical types and prepare field instantiation
