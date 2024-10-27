@@ -7,6 +7,11 @@ pub(super) struct FieldTypeAndInstantiationsBuilder<'t, 'm> {
 	pub(super) errors: &'m mut TokenStream,
 	pub(super) namespace: &'m Option<String>,
 	pub(super) expand_namespace_var: bool,
+	/// Whether at least one of the fields id directly looked up in the schema,
+	/// without necessarily inserting a new node. This is useful for newtype
+	/// struct serialization without logical type, whose type (and lookup)
+	/// should be directly the inner one
+	pub(super) has_direct_lookup: bool,
 }
 
 pub(super) enum FieldKind<'a> {
@@ -203,8 +208,10 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 						}
 					}
 				}
-				override_field_instantiation
-					.unwrap_or_else(|| quote! { builder.find_or_build::<#ty>() })
+				override_field_instantiation.unwrap_or_else(|| {
+					self.has_direct_lookup = true;
+					quote! { builder.find_or_build::<#ty>() }
+				})
 			}
 			Some(logical_type_litstr) => {
 				let logical_type_str_raw = logical_type_litstr.value();
