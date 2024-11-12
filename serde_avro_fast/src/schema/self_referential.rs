@@ -293,7 +293,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			// - We only use pointers from the point at which we call `as_mut_ptr` so the
 			//   compiler will not have aliasing constraints.
 			// - We don't dereference the ~references (NodeRef) we create in key_to_ref
-			//   until are nodes are initialized.
+			//   until all nodes are initialized.
 
 			let new_node = match safe_node {
 				SafeSchemaNode {
@@ -419,9 +419,7 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		for _ in 0..len {
 			// Safety:
 			// - UnionVariantsPerTypeLookup won't ever read `per_type_lookup` of the other
-			//   nodes, so there are no aliasing issues. (Tbh I'm not even sure that would
-			//   really be an issue because we'd have `& &mut` anyway but with that I'm sure
-			//   there isn't an issue)
+			//   nodes, so there are no aliasing issues.
 			unsafe {
 				match *curr_storage_node_ptr {
 					SchemaNode::Union(Union {
