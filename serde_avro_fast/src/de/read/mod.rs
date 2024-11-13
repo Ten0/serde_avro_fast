@@ -30,6 +30,22 @@ pub trait Read: std::io::Read + Sized + private::Sealed {
 		self.read_exact(&mut buf).map_err(DeError::io)?;
 		Ok(buf)
 	}
+	/// Skip `n_bytes` bytes from the underlying buffer
+	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError> {
+		let written = std::io::copy(
+			&mut <&mut Self as std::io::Read>::take(self, n_bytes),
+			&mut std::io::sink(),
+		)
+		.map_err(DeError::io)?;
+		if written == n_bytes {
+			Ok(())
+		} else {
+			Err(DeError::custom(format_args!(
+				"Expected to skip {} bytes, but only skipped {}",
+				n_bytes, written
+			)))
+		}
+	}
 }
 
 /// Abstracts reading from slices (propagating lifetime) or any other `impl
@@ -72,6 +88,18 @@ impl<'de> Read for SliceRead<'de> {
 				self.slice = &self.slice[read..];
 				Ok(val)
 			}
+		}
+	}
+	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError> {
+		let n_bytes: usize = n_bytes
+			.try_into()
+			.map_err(|_| DeError::custom("Invalid number of bytes to skip"))?;
+		match self.slice.get(n_bytes..) {
+			Some(rest) => {
+				self.slice = rest;
+				Ok(())
+			}
+			None => Err(DeError::unexpected_eof()),
 		}
 	}
 }

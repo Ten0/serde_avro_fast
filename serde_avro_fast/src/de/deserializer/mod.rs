@@ -38,11 +38,11 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 			SchemaNode::String => read_length_delimited(self.state, StringVisitor(visitor)),
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema: elements_schema.as_ref(),
-				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
+				block_reader: BlockReader::new(self.state, false, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Map(elements_schema) => visitor.visit_map(MapMapAccess {
 				elements_schema: elements_schema.as_ref(),
-				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
+				block_reader: BlockReader::new(self.state, false, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Union(ref union) => Self {
 				schema_node: read_union_discriminant(self.state, union)?,
@@ -283,7 +283,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema: elements_schema.as_ref(),
-				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
+				block_reader: BlockReader::new(self.state, false, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration => visitor.visit_seq(DurationMapAndSeqAccess {
 				duration_buf: &self.state.read_const_size_buf::<12>()?,
@@ -300,7 +300,7 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 		match *self.schema_node {
 			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
 				elements_schema: elements_schema.as_ref(),
-				block_reader: BlockReader::new(self.state, self.allowed_depth.dec()?),
+				block_reader: BlockReader::new(self.state, false, self.allowed_depth.dec()?),
 			}),
 			SchemaNode::Duration if len == 3 => visitor.visit_seq(DurationMapAndSeqAccess {
 				duration_buf: &self.state.read_const_size_buf::<12>()?,
@@ -417,18 +417,20 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 	where
 		V: Visitor<'de>,
 	{
-		// The main thing we can skip here for performance is utf8 decoding of strings.
-		// However we still need to drive the deserializer mostly normally to properly
-		// advance the reader.
-
-		// TODO skip more efficiently using blocks size hints
-		// https://stackoverflow.com/a/42247224/3799609
-
-		// Ideally this would also specialize if we have Seek on our generic reader but
-		// we don't have specialization
+		// We can skip here for performance:
+		// - utf8 decoding of strings
+		// - block reads when serialized data provides serialized block size in bytes
 
 		match *self.schema_node {
 			SchemaNode::String => read_length_delimited(self.state, BytesVisitor(visitor)),
+			SchemaNode::Array(elements_schema) => visitor.visit_seq(ArraySeqAccess {
+				elements_schema: elements_schema.as_ref(),
+				block_reader: BlockReader::new(self.state, true, self.allowed_depth.dec()?),
+			}),
+			SchemaNode::Map(elements_schema) => visitor.visit_map(MapMapAccess {
+				elements_schema: elements_schema.as_ref(),
+				block_reader: BlockReader::new(self.state, true, self.allowed_depth.dec()?),
+			}),
 			_ => self.deserialize_any(visitor),
 		}
 	}

@@ -2,26 +2,42 @@ use super::*;
 
 use std::num::NonZeroUsize;
 
-fn read_block_len<'de, R>(state: &mut DeserializerState<R>) -> Result<Option<NonZeroUsize>, DeError>
+fn read_block_len<'de, R>(
+	state: &mut DeserializerState<R>,
+	ignored: bool,
+) -> Result<Option<NonZeroUsize>, DeError>
 where
 	R: ReadSlice<'de>,
 {
-	let len: i64 = state.read_varint()?;
-	let res;
-	if len < 0 {
-		// res = -len, properly handling i64::MIN
-		res = u64::from_ne_bytes(len.to_ne_bytes()).wrapping_neg();
-		// Drop the number of bytes in the block to properly advance the reader
-		// Since we don't use that value, decode as u64 instead of i64 (skip zigzag
-		// decoding) TODO enable fast skipping when encountering
-		// `deserialize_ignored_any`
-		let _: u64 = state.read_varint()?;
-	} else {
-		res = len as u64;
+	loop {
+		let len: i64 = state.read_varint()?;
+		let res;
+		if len < 0 {
+			if ignored {
+				// We have block length hint in the data, and we are ignoring the data, so we
+				// can skip the block efficiently
+				let block_len_in_bytes: i64 = state.read_varint()?;
+				let block_len_in_bytes: u64 = block_len_in_bytes.try_into().map_err(|e| {
+					DeError::custom(format_args!("Invalid block length in stream: {e}"))
+				})?;
+				state.skip_bytes(block_len_in_bytes)?;
+				continue; // Also discard next blocks if any
+			} else {
+				// res = -len, properly handling i64::MIN
+				res = u64::from_ne_bytes(len.to_ne_bytes()).wrapping_neg();
+				// Drop the number of bytes in the block to properly advance the reader
+				// Since we don't use that value, decode as u64 instead of i64 (skip zigzag
+				// decoding)
+				let _: u64 = state.read_varint()?;
+			}
+		} else {
+			res = len as u64;
+		}
+		break res
+			.try_into()
+			.map_err(|e| DeError::custom(format_args!("Invalid array length in stream: {e}")))
+			.map(NonZeroUsize::new);
 	}
-	res.try_into()
-		.map_err(|e| DeError::custom(format_args!("Invalid array length in stream: {e}")))
-		.map(NonZeroUsize::new)
 }
 
 pub(in super::super) struct BlockReader<'r, 's, R> {
@@ -29,10 +45,14 @@ pub(in super::super) struct BlockReader<'r, 's, R> {
 	n_read: usize,
 	reader: &'r mut DeserializerState<'s, R>,
 	allowed_depth: AllowedDepth,
+	/// Represents whether we were hinted deserialize_ignored_any. If yes, we
+	/// can use the block length to skip the block.
+	ignored: bool,
 }
 impl<'r, 's, R> BlockReader<'r, 's, R> {
 	pub(in super::super) fn new(
 		reader: &'r mut DeserializerState<'s, R>,
+		hinted_ignored: bool,
 		allowed_depth: AllowedDepth,
 	) -> Self {
 		Self {
@@ -40,6 +60,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 			current_block_len: 0,
 			n_read: 0,
 			allowed_depth,
+			ignored: hinted_ignored,
 		}
 	}
 	fn has_more<'de>(&mut self) -> Result<bool, DeError>
@@ -48,7 +69,7 @@ impl<'r, 's, R> BlockReader<'r, 's, R> {
 	{
 		self.current_block_len = match self.current_block_len.checked_sub(1) {
 			None => {
-				let new_len = read_block_len(self.reader)?;
+				let new_len = read_block_len(self.reader, self.ignored)?;
 				match new_len {
 					None => return Ok(false),
 					Some(new_len) => {
@@ -137,9 +158,17 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for StringDeserializer<'_, '_, R>
 		read_length_delimited(self.reader, StringVisitor(visitor))
 	}
 
+	fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+	where
+		V: Visitor<'de>,
+	{
+		// Skip utf-8 validation
+		read_length_delimited(self.reader, BytesVisitor(visitor))
+	}
+
 	serde::forward_to_deserialize_any! {
 		bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
 		bytes byte_buf option unit unit_struct newtype_struct seq tuple
-		tuple_struct map struct enum identifier ignored_any
+		tuple_struct map struct enum identifier
 	}
 }
