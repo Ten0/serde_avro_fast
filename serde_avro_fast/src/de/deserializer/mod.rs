@@ -431,6 +431,20 @@ impl<'de, R: ReadSlice<'de>> Deserializer<'de> for DatumDeserializer<'_, '_, R> 
 				elements_schema: elements_schema.as_ref(),
 				block_reader: BlockReader::new(self.state, true, self.allowed_depth.dec()?),
 			}),
+			SchemaNode::Int => {
+				// Skip zigzag decoding
+				let _: u32 = self.state.read_varint()?;
+				visitor.visit_unit()
+			}
+			SchemaNode::Long | SchemaNode::Enum(_) => {
+				// Skip zigzag decoding
+				let _: u64 = self.state.read_varint()?;
+				visitor.visit_unit()
+			}
+			SchemaNode::Duration => {
+				self.state.read_const_size_buf::<12>()?;
+				visitor.visit_unit()
+			}
 			_ => self.deserialize_any(visitor),
 		}
 	}
