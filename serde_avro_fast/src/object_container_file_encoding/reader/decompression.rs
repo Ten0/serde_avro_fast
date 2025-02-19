@@ -10,7 +10,7 @@ impl CompressionCodec {
 		config: DeserializerConfig<'s>,
 		decompression_buffer: Vec<u8>,
 		block_size: usize,
-	) -> Result<DecompressionState<R>, de::DeError>
+	) -> Result<DecompressionState<'s, R>, de::DeError>
 	where
 		R: de::read::take::Take + de::read::ReadSlice<'de>,
 		<R as de::read::take::Take>::Take: de::read::ReadSlice<'de> + std::io::BufRead,
