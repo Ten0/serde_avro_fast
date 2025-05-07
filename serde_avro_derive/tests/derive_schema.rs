@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_derive::BuildSchema;
 
 use pretty_assertions::assert_eq;
