@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 //! Tests are ported over from from
 //! https://github.com/apache/avro/blob/6d90ec4b1c4ba47dba16650c54b4c15265016190/lang/rust/avro/src/reader.rs#L470
 //! updated to match this crate's interface

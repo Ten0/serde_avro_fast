@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use {
 	serde::Serialize,
 	serde_avro_derive::BuildSchema,

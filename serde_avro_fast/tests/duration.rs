@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_fast::{from_datum_slice, ser::SerializerConfig, to_datum_vec, Schema};
 
 fn test<'de, T: serde::Serialize + serde::Deserialize<'de> + PartialEq + std::fmt::Debug>(

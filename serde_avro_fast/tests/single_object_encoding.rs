@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_fast::{
 	from_single_object_reader, from_single_object_slice, schema::SchemaMut, Schema,
 };

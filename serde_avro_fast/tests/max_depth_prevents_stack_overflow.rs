@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::io::Read;
 
 use serde_avro_fast::Schema;

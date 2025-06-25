@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_fast::ser::SerializerConfig;
 
 const RAW_BIG_SCHEMA: &str = r#"

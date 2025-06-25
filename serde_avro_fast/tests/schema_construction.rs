@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use {pretty_assertions::assert_eq, serde_avro_fast::schema::*};
 
 #[test]

@@ -2,6 +2,7 @@
 //! https://github.com/apache/avro/blob/5016cd5c3f2054ebacce7983785c228798e47f59/lang/rust/avro/tests/io.rs
 
 #![allow(clippy::zero_prefixed_literal)]
+#![allow(missing_docs)]
 
 use {
 	apache_avro::{types::Value, Schema},

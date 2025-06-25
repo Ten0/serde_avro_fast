@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde_avro_fast::Schema;
 
 const SCHEMA: &str = r#"
