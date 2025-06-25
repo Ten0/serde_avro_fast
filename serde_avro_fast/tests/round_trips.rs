@@ -269,6 +269,16 @@ enum AB {
 	B,
 }
 
+/// On miri we don't get exactly the same float display as what we input (e.g.
+/// 0.2 gives 0.20000000000000x)
+///
+/// What we really care about is that it's essentially the same value - equality
+/// will otherwise be tested by the other equality tests
+fn float_approx_eq(f1: f64, f: f64) -> bool {
+	const EPSILON: f64 = 0.00000000000001;
+	(f1 - f).abs() < EPSILON
+}
+
 #[test]
 fn test_decimal() {
 	use serde_avro_fast::schema::*;
@@ -294,7 +304,7 @@ fn test_decimal() {
 
 	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
-	assert_eq!(deserialized, 0.2);
+	assert!(float_approx_eq(deserialized, 0.2));
 	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2");
 	let deserialized: rust_decimal::Decimal =
@@ -307,7 +317,7 @@ fn test_decimal() {
 
 	// - 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
-	assert_eq!(deserialized, -0.2);
+	assert!(float_approx_eq(deserialized, -0.2));
 	let deserialized: String = serde_avro_fast::from_datum_slice(&[2, 0xFE], &schema).unwrap();
 	assert_eq!(deserialized, "-0.2");
 	let deserialized: rust_decimal::Decimal =
@@ -351,7 +361,7 @@ fn test_big_decimal() {
 
 	// 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
-	assert_eq!(deserialized, 0.2);
+	assert!(float_approx_eq(deserialized, 0.2));
 	let deserialized: String = serde_avro_fast::from_datum_slice(&[6, 2, 2, 2], &schema).unwrap();
 	assert_eq!(deserialized, "0.2");
 	let deserialized: rust_decimal::Decimal =
@@ -364,7 +374,7 @@ fn test_big_decimal() {
 
 	// - 0.2
 	let deserialized: f64 = serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
-	assert_eq!(deserialized, -0.2);
+	assert!(float_approx_eq(deserialized, -0.2));
 	let deserialized: String =
 		serde_avro_fast::from_datum_slice(&[6, 2, 0xFE, 2], &schema).unwrap();
 	assert_eq!(deserialized, "-0.2");
