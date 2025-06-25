@@ -11,7 +11,7 @@ pub(in super::super) enum DecimalMode<'a> {
 }
 
 pub(in super::super) fn read_decimal<'de, R, V>(
-	state: &mut DeserializerState<R>,
+	state: &mut DeserializerState<'_, R>,
 	decimal_mode: DecimalMode<'_>,
 	hint: VisitorHint,
 	visitor: V,

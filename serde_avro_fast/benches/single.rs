@@ -234,7 +234,7 @@ fn bench_small_schema_read_record(c: &mut Criterion) {
 		&datum.as_slice(),
 		|b, &datum| {
 			b.iter(|| {
-				serde_avro_fast::from_datum_slice::<SmallStruct>(datum, &fast_schema).unwrap()
+				serde_avro_fast::from_datum_slice::<SmallStruct<'_>>(datum, &fast_schema).unwrap()
 			})
 		},
 	);
@@ -257,7 +257,9 @@ fn bench_big_schema_read_record(c: &mut Criterion) {
 		BenchmarkId::new("serde_avro_fast", "big"),
 		&datum.as_slice(),
 		|b, &datum| {
-			b.iter(|| serde_avro_fast::from_datum_slice::<BigStruct>(datum, &fast_schema).unwrap())
+			b.iter(|| {
+				serde_avro_fast::from_datum_slice::<BigStruct<'_>>(datum, &fast_schema).unwrap()
+			})
 		},
 	);
 }

@@ -2,7 +2,7 @@
 ///
 /// The digest is returned as the 8-byte little-endian encoding of the Rabin
 /// hash. This is what is used for avro [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding)
-pub struct Rabin {
+pub(crate) struct Rabin {
 	result: u64,
 }
 

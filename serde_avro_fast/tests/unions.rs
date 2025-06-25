@@ -68,11 +68,11 @@ fn union_as_enum() {
 	let schema: Schema = SCHEMA.parse().unwrap();
 	let test = |s: &'static [u8], value: Union<'static>| test::<Union<'static>>(s, value, &schema);
 	assert_eq!(
-		from_datum_slice::<Union>(&[0, 2, b'a'], &schema).unwrap(),
+		from_datum_slice::<Union<'_>>(&[0, 2, b'a'], &schema).unwrap(),
 		Union::String
 	);
 	assert_eq!(
-		from_datum_slice::<Union>(&[2], &schema).unwrap(),
+		from_datum_slice::<Union<'_>>(&[2], &schema).unwrap(),
 		Union::Null
 	);
 	test(&[4, 2], Union::Long(1));
@@ -98,7 +98,7 @@ fn option_complex() {
 		test::<Option<Union<'static>>>(s, value, &schema)
 	};
 	assert_eq!(
-		from_datum_slice::<Option<Union>>(&[0, 2, b'a'], &schema).unwrap(),
+		from_datum_slice::<Option<Union<'_>>>(&[0, 2, b'a'], &schema).unwrap(),
 		Some(Union::String)
 	);
 	test(&[2], None);

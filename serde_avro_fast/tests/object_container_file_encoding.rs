@@ -63,7 +63,7 @@ fn test_from_avro_datum() {
 	let encoded: &'static [u8] = &[54, 6, 102, 111, 111];
 
 	assert_eq!(
-		from_datum_slice::<SchemaRecord>(encoded, &schema).unwrap(),
+		from_datum_slice::<SchemaRecord<'_>>(encoded, &schema).unwrap(),
 		SchemaRecord {
 			a: 27,
 			b: "foo".into()
@@ -159,8 +159,8 @@ fn test_reader_iterator() {
 			b: "bar".into(),
 		},
 	];
-	let res: Vec<SchemaRecord> = reader
-		.deserialize_borrowed::<SchemaRecord>()
+	let res: Vec<SchemaRecord<'_>> = reader
+		.deserialize_borrowed::<SchemaRecord<'_>>()
 		.collect::<Result<_, _>>()
 		.unwrap();
 	std::mem::drop(reader);
@@ -193,8 +193,8 @@ fn round_trip_writer(compression_codec: Compression, approx_block_size: u32) {
 	let serialized = writer.into_inner().unwrap();
 
 	let mut reader = Reader::from_slice(&serialized).unwrap();
-	let res: Vec<SchemaRecord> = reader
-		.deserialize_borrowed::<SchemaRecord>()
+	let res: Vec<SchemaRecord<'_>> = reader
+		.deserialize_borrowed::<SchemaRecord<'_>>()
 		.collect::<Result<_, _>>()
 		.unwrap();
 
@@ -306,7 +306,7 @@ fn test_reader_invalid_block() {
 	let invalid = &ENCODED[0..(ENCODED.len() - 19)];
 	let mut reader = Reader::from_slice(invalid).unwrap();
 	// TODO more precise err matching
-	let res: Result<Vec<SchemaRecord>, _> = reader.deserialize_borrowed().collect();
+	let res: Result<Vec<SchemaRecord<'_>>, _> = reader.deserialize_borrowed().collect();
 	assert!(res.is_err());
 }
 
@@ -324,7 +324,7 @@ fn test_reader_only_header() {
 	let invalid = &ENCODED[..165];
 	let mut reader = Reader::from_slice(invalid).unwrap();
 	// TODO more precise err matching
-	let res: Result<Vec<SchemaRecord>, _> = reader.deserialize_borrowed().collect();
+	let res: Result<Vec<SchemaRecord<'_>>, _> = reader.deserialize_borrowed().collect();
 	assert!(res.is_err());
 }
 

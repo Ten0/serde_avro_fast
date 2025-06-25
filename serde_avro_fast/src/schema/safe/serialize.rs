@@ -65,7 +65,7 @@ impl<'a, K> SerializeSchema<'a, K> {
 }
 impl<'a> SerializeSchema<'a, SchemaKey> {
 	/// Make sure we aren't cycling
-	fn no_cycle_guard<E: serde::ser::Error>(&self) -> Result<NoCycleGuard, E> {
+	fn no_cycle_guard<E: serde::ser::Error>(&self) -> Result<NoCycleGuard<'_>, E> {
 		let cell = &self.node_traversal_state[self.key.idx];
 		let n_written_names = self.n_written_names.get();
 		let prev_n_written_names = cell.replace(n_written_names);

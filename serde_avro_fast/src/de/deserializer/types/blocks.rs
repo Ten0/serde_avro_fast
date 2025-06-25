@@ -3,7 +3,7 @@ use super::*;
 use std::num::NonZeroUsize;
 
 fn read_block_len<'de, R>(
-	state: &mut DeserializerState<R>,
+	state: &mut DeserializerState<'_, R>,
 	ignored: bool,
 ) -> Result<Option<NonZeroUsize>, DeError>
 where

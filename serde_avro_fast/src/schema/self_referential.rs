@@ -450,7 +450,7 @@ impl<N: std::fmt::Debug> std::fmt::Debug for NodeRef<'_, N> {
 }
 
 impl<'a> std::fmt::Debug for SchemaNode<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> ::std::fmt::Result {
 		// Avoid going into stack overflow when rendering SchemaNode's debug impl, in
 		// case there are loops
 

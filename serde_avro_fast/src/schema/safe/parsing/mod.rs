@@ -21,7 +21,7 @@ impl std::str::FromStr for SchemaMut {
 			unresolved_names: Vec::new(),
 		};
 
-		let raw_schema: raw::SchemaNode =
+		let raw_schema: raw::SchemaNode<'_> =
 			serde_json::from_str(s).map_err(SchemaError::serde_json)?;
 
 		state.register_node(&raw_schema, None)?;

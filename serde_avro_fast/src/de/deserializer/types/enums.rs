@@ -1,7 +1,7 @@
 use super::*;
 
 pub(in super::super) fn read_enum_as_str<'de, R, V>(
-	state: &mut DeserializerState<R>,
+	state: &mut DeserializerState<'_, R>,
 	symbols: &[String],
 	visitor: V,
 ) -> Result<V::Value, DeError>

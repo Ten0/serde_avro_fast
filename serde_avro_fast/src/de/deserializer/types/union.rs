@@ -106,7 +106,7 @@ impl<'de> Deserializer<'de> for SchemaTypeNameDeserializer<'_> {
 	}
 }
 
-pub struct SchemaTypeNameVariantAccess<'r, 's, R> {
+pub(in super::super) struct SchemaTypeNameVariantAccess<'r, 's, R> {
 	datum_deserializer: DatumDeserializer<'r, 's, R>,
 }
 

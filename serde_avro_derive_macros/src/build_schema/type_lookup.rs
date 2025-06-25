@@ -5,7 +5,7 @@ pub(super) fn build_type_lookup(
 	type_ident: &syn::Ident,
 	generics: &syn::Generics,
 	field_idents: Option<&[&syn::Ident]>,
-	field_types: &[Cow<syn::Type>],
+	field_types: &[Cow<'_, syn::Type>],
 ) -> (syn::Type, Option<syn::ItemStruct>, bool) {
 	let has_non_lifetime_generics = generics
 		.params

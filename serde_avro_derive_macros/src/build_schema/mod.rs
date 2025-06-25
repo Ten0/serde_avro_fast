@@ -162,20 +162,22 @@ pub(crate) fn schema_impl(input: SchemaDeriveInput) -> Result<TokenStream, Error
 						Error::new(Span::call_site(), "Unnamed fields are not supported")
 					})?;
 
-				let (field_types, field_instantiations): (Vec<Cow<syn::Type>>, Vec<TokenStream>) =
-					fields
-						.iter()
-						.zip(&field_idents)
-						.map(|(field, field_name)| {
-							field_types_and_instantiations.field_type_and_instantiation(
-								field,
-								FieldKind::StructField {
-									struct_name: name_ident,
-									field_name,
-								},
-							)
-						})
-						.unzip();
+				let (field_types, field_instantiations): (
+					Vec<Cow<'_, syn::Type>>,
+					Vec<TokenStream>,
+				) = fields
+					.iter()
+					.zip(&field_idents)
+					.map(|(field, field_name)| {
+						field_types_and_instantiations.field_type_and_instantiation(
+							field,
+							FieldKind::StructField {
+								struct_name: name_ident,
+								field_name,
+							},
+						)
+					})
+					.unzip();
 
 				let field_names = field_idents.iter().map(|ident| ident.unraw().to_string());
 

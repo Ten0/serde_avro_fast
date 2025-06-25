@@ -1,7 +1,7 @@
 use super::*;
 
 pub(in super::super) fn read_bool<'de, R, V>(
-	state: &mut DeserializerState<R>,
+	state: &mut DeserializerState<'_, R>,
 	visitor: V,
 ) -> Result<V::Value, DeError>
 where

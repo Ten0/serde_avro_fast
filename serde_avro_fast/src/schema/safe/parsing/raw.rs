@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 		impl<'de> Visitor<'de> for SchemaNodeVisitor<'de> {
 			type Value = SchemaNode<'de>;
 
-			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+			fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				write!(
 					formatter,
 					"A string (type) or an object with a `type` field or an array (union)"

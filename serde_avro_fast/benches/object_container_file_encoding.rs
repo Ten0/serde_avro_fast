@@ -114,7 +114,7 @@ struct AddressOwned {
 fn bench_object_container_file_serialization(c: &mut Criterion) {
 	let apache_schema = apache_avro::Schema::parse_str(RAW_BIG_SCHEMA).unwrap();
 	let schema: serde_avro_fast::Schema = RAW_BIG_SCHEMA.parse().unwrap();
-	let inputs: Vec<BigStruct> = (0..100000)
+	let inputs: Vec<BigStruct<'_>> = (0..100000)
 		.map(|i| BigStruct {
 			username: "John Doe",
 			age: i,
