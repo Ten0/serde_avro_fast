@@ -19,7 +19,7 @@ pub struct DatumSerializer<'r, 'c, 's, W> {
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
-impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
@@ -33,11 +33,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 
 	fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Boolean => self
-				.state
-				.writer
-				.write_all(&[v as u8])
-				.map_err(SerError::io),
+			SchemaNode::Boolean => self.state.writer.write_all(&[v as u8]),
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Boolean, |ser| {
 					ser.serialize_bool(v)
@@ -92,11 +88,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 
 	fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Float => self
-				.state
-				.writer
-				.write_all(&v.to_le_bytes())
-				.map_err(SerError::io),
+			SchemaNode::Float => self.state.writer.write_all(&v.to_le_bytes()),
 			SchemaNode::Double => Err(SerError::custom(
 				"Attempting to serialize a f32 as Avro Double - \
 					the receiver seems to be expecting higher precision, please use f64",
@@ -115,16 +107,8 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 
 	fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
-			SchemaNode::Double => self
-				.state
-				.writer
-				.write_all(&v.to_le_bytes())
-				.map_err(SerError::io),
-			SchemaNode::Float => self
-				.state
-				.writer
-				.write_all(&(v as f32).to_le_bytes())
-				.map_err(SerError::io),
+			SchemaNode::Double => self.state.writer.write_all(&v.to_le_bytes()),
+			SchemaNode::Float => self.state.writer.write_all(&(v as f32).to_le_bytes()),
 			SchemaNode::Decimal(decimal) => {
 				let rust_decimal: rust_decimal::Decimal = num_traits::FromPrimitive::from_f64(v)
 					.ok_or_else(|| {
@@ -182,8 +166,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 					.writer
 					.write_varint::<i64>(discriminant.try_into().map_err(|_| {
 						SerError::new("Number does not fit i64 for encoding as Enum discriminant")
-					})?)
-					.map_err(SerError::io)?;
+					})?)?;
 				Ok(())
 			}
 			SchemaNode::Fixed(Fixed { size, .. }) => {
@@ -192,10 +175,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 						"Can't serialize str as Fixed: str's len does not match Fixed's size",
 					))
 				} else {
-					self.state
-						.writer
-						.write_all(v.as_bytes())
-						.map_err(SerError::io)
+					self.state.writer.write_all(v.as_bytes())
 				}
 			}
 			SchemaNode::Decimal(decimal) => {
@@ -241,7 +221,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 						"Can't serialize &[u8] as Fixed: slice's len does not match Fixed's size",
 					))
 				} else {
-					self.state.writer.write_all(v).map_err(SerError::io)
+					self.state.writer.write_all(v)
 				}
 			}
 			SchemaNode::Duration => {
@@ -254,7 +234,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 							We got a too long slice here.",
 					))
 				} else {
-					self.state.writer.write_all(v).map_err(SerError::io)
+					self.state.writer.write_all(v)
 				}
 			}
 			SchemaNode::Union(union) => {
@@ -476,16 +456,15 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	}
 }
 
-impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
+impl<'c, 's, W: VecWriter> SerializerState<'c, 's, W> {
 	fn write_length_delimited(&mut self, data: &[u8]) -> Result<(), SerError> {
 		self.writer
 			.write_varint::<i64>(data.len().try_into().map_err(|_| {
 				SerError::new(
 					"Buffer len does not fit i64 for encoding as length-delimited field size",
 				)
-			})?)
-			.map_err(SerError::io)?;
-		self.writer.write_all(data).map_err(SerError::io)
+			})?)?;
+		self.writer.write_all(data)
 	}
 
 	fn check_allowed_slow_sequence_to_bytes(&self) -> Result<(), SerError> {
@@ -503,7 +482,7 @@ impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
 	}
 }
 
-impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> DatumSerializer<'r, 'c, 's, W> {
 	fn serialize_union_unnamed<O>(
 		self,
 		union: &'s Union<'s>,
@@ -519,10 +498,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 				variant_lookup, self.schema_node
 			))),
 			Some((discriminant, union_node)) => {
-				self.state
-					.writer
-					.write_varint(discriminant)
-					.map_err(SerError::io)?;
+				self.state.writer.write_varint(discriminant)?;
 				with_serializer(Self {
 					state: self.state,
 					schema_node: union_node,
@@ -541,8 +517,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 					.writer
 					.write_varint::<i32>(num.try_into().map_err(|_| {
 						SerError::new("Number does not fit i32 for encoding as Int")
-					})?)
-					.map_err(SerError::io)?;
+					})?)?;
 				Ok(())
 			}
 			SchemaNode::Long
@@ -553,8 +528,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 					.writer
 					.write_varint::<i64>(num.try_into().map_err(|_| {
 						SerError::new("Number does not fit i64 for encoding as Long")
-					})?)
-					.map_err(SerError::io)?;
+					})?)?;
 				Ok(())
 			}
 			SchemaNode::Decimal(decimal) => {
@@ -584,8 +558,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 								SerError::new(
 									"Buffer len does not fit i64 for encoding as bytes size",
 								)
-							})?)
-							.map_err(SerError::io)?;
+							})?)?;
 						buf
 					}
 					DecimalRepr::Fixed(ref fixed) => {
@@ -595,20 +568,19 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 						&bytes[start..]
 					}
 				};
-				self.state.writer.write_all(buf).map_err(SerError::io)
+				self.state.writer.write_all(buf)
 			}
 			SchemaNode::Enum(_) => {
 				self.state
 					.writer
 					.write_varint::<i64>(num.try_into().map_err(|_| {
 						SerError::new("Number does not fit i64 for encoding as Enum discriminant")
-					})?)
-					.map_err(SerError::io)?;
+					})?)?;
 				Ok(())
 			}
 			SchemaNode::Union(union) => self.serialize_union_unnamed(
 				union,
-				match std::mem::size_of::<N>() {
+				match core::mem::size_of::<N>() {
 					4 => UnionVariantLookupKey::Integer4,
 					8 => UnionVariantLookupKey::Integer8,
 					_ => UnionVariantLookupKey::Integer,
@@ -635,10 +607,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 					f(self)
 				}
 				Some((discriminant, schema_node)) => {
-					self.state
-						.writer
-						.write_varint(discriminant)
-						.map_err(SerError::io)?;
+					self.state.writer.write_varint(discriminant)?;
 					f(DatumSerializer {
 						state: self.state,
 						schema_node,

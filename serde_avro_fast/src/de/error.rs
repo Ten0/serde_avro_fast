@@ -1,4 +1,6 @@
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::string::ToString;
 
 /// Any error that may happen during deserialization
 #[derive(thiserror::Error)]
@@ -7,17 +9,21 @@ pub struct DeError {
 	inner: Box<ErrorInner>,
 }
 
-impl std::fmt::Debug for DeError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for DeError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		#[cfg(feature = "std")]
 		match self.inner.io_error.as_ref() {
 			Some(io_error) => write!(f, "{}: {}", self.inner.value, io_error),
-			None => std::fmt::Debug::fmt(&*self.inner.value, f),
+			None => core::fmt::Debug::fmt(&*self.inner.value, f),
 		}
+		#[cfg(not(feature = "std"))]
+		core::fmt::Debug::fmt(&*self.inner.value, f)
 	}
 }
 
 struct ErrorInner {
 	value: Cow<'static, str>,
+	#[cfg(feature = "std")]
 	io_error: Option<std::io::Error>,
 }
 
@@ -27,6 +33,7 @@ impl DeError {
 		Self {
 			inner: Box::new(ErrorInner {
 				value: Cow::Borrowed(s),
+				#[cfg(feature = "std")]
 				io_error: None,
 			}),
 		}
@@ -34,12 +41,14 @@ impl DeError {
 	pub(crate) fn unexpected_eof() -> Self {
 		Self::new("Unexpected end of slice while deserializing")
 	}
+	#[cfg(feature = "std")]
 	pub(crate) fn io(io_error: std::io::Error) -> Self {
 		Self::custom_io(
 			"Encountered IO error when attempting to read for deserialization",
 			io_error,
 		)
 	}
+	#[cfg(feature = "std")]
 	pub(crate) fn custom_io(msg: &'static str, io_error: std::io::Error) -> Self {
 		Self {
 			inner: Box::new(ErrorInner {
@@ -49,6 +58,7 @@ impl DeError {
 		}
 	}
 	/// If this error was caused by an IO error, return it
+	#[cfg(feature = "std")]
 	pub fn io_error(&self) -> Option<&std::io::Error> {
 		self.inner.io_error.as_ref()
 	}
@@ -57,11 +67,12 @@ impl DeError {
 impl serde::de::Error for DeError {
 	fn custom<T>(msg: T) -> Self
 	where
-		T: std::fmt::Display,
+		T: core::fmt::Display,
 	{
 		Self {
 			inner: Box::new(ErrorInner {
 				value: Cow::Owned(msg.to_string()),
+				#[cfg(feature = "std")]
 				io_error: None,
 			}),
 		}
@@ -73,7 +84,7 @@ impl serde::de::Error for DeError {
 impl serde::ser::Error for DeError {
 	fn custom<T>(msg: T) -> Self
 	where
-		T: std::fmt::Display,
+		T: core::fmt::Display,
 	{
 		<Self as serde::de::Error>::custom(msg)
 	}

@@ -11,7 +11,7 @@ pub(super) fn serialize<'r, 'c, 's, W>(
 	mut rust_decimal: rust_decimal::Decimal,
 ) -> Result<(), SerError>
 where
-	W: Write,
+	W: VecWriter,
 {
 	let mut scale_buf = [0; 10];
 	let scale_to_write = match decimal_mode {
@@ -79,22 +79,15 @@ where
 					let len_len = <i32 as integer_encoding::VarInt>::encode_var(len, &mut len_buf);
 					state
 						.writer
-						.write_varint::<i32>(len_len as i32 + len + scale_to_write.len() as i32)
-						.map_err(SerError::io)?;
-					state
-						.writer
-						.write_all(&len_buf[0..len_len])
-						.map_err(SerError::io)?;
+						.write_varint::<i32>(len_len as i32 + len + scale_to_write.len() as i32)?;
+					state.writer.write_all(&len_buf[0..len_len])?;
 				}
 				DecimalMode::Regular(Decimal {
 					repr: DecimalRepr::Bytes,
 					..
 				}) => {
 					// We need to write the length of the bytes
-					state
-						.writer
-						.write_varint::<i32>(len)
-						.map_err(SerError::io)?;
+					state.writer.write_varint::<i32>(len)?;
 				}
 				DecimalMode::Regular(Decimal {
 					repr: DecimalRepr::Fixed(_),
@@ -139,22 +132,16 @@ where
 				None => {
 					let byte: u8 = if buf[0] & 0x80 == 0 { 0x00 } else { 0xFF };
 					for _ in buf.len()..size {
-						state.writer.write_all(&[byte]).map_err(SerError::io)?;
+						state.writer.write_all(&[byte])?;
 					}
 					0
 				}
 			}
 		}
 	};
-	state
-		.writer
-		.write_all(&buf[start..])
-		.map_err(SerError::io)?;
+	state.writer.write_all(&buf[start..])?;
 	if !scale_to_write.is_empty() {
-		state
-			.writer
-			.write_all(scale_to_write)
-			.map_err(SerError::io)?;
+		state.writer.write_all(scale_to_write)?;
 	}
 	Ok(())
 }

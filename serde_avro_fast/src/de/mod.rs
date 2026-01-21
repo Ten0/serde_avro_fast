@@ -10,7 +10,7 @@
 //! [`serde::Deserializer`], as well as its building blocks in order to set
 //! configuration parameters meant to prevent DOS:
 //! - [`DeserializerConfig::max_seq_size`]
-//! - [`read::ReaderRead::max_alloc_size`]
+#![cfg_attr(feature = "std", doc = "- [`read::ReaderRead::max_alloc_size`]")]
 //!
 //! Such usage would go as follows:
 //! ```
@@ -39,32 +39,55 @@
 //!
 //! let avro_datum: &[u8] = &[6, 102, 111, 111]; // Any `impl BufRead`
 //!
-//! // Of course, don't actually use `ReaderRead` if you have a slice
-//! let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum);
-//!
-//! // Now we can set some custom parameters
-//! avro_reader.max_alloc_size = 32 * 1024;
-//!
-//! // We can also set parameters that are common to the slice version and the reader version
-//! let mut deserializer_config = serde_avro_fast::de::DeserializerConfig::new(&schema);
-//! deserializer_config.max_seq_size = 1_000_000;
-//!
-//! // Now we can build the struct that will generally serve through deserialization
-//! let mut deserializer_state =
-//! 	serde_avro_fast::de::DeserializerState::with_config(avro_reader, deserializer_config);
-//!
-//! // It's not the `&mut DeserializerState` that implements `serde::Deserializer` directly, instead
-//! // it is `DatumDeserializer` (which is essentially an `&mut DeserializerState` but not exactly
-//! // because it also keeps track of the current schema node)
-//! // We build it through `DeserializerState::deserializer`
-//! let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer())
-//! 	.expect("Failed to deserialize");
-//! assert_eq!(
-//! 	result,
-//! 	Test {
-//! 		field: "foo".to_owned()
-//! 	}
-//! );
+#![cfg_attr(
+	feature = "std",
+	doc = r#"// Of course, don't actually use `ReaderRead` if you have a slice
+let mut avro_reader = serde_avro_fast::de::read::ReaderRead::new(avro_datum);
+
+// Now we can set some custom parameters
+avro_reader.max_alloc_size = 32 * 1024;
+
+// We can also set parameters that are common to the slice version and the reader version
+let mut deserializer_config = serde_avro_fast::de::DeserializerConfig::new(&schema);
+deserializer_config.max_seq_size = 1_000_000;
+
+// Now we can build the struct that will generally serve through deserialization
+let mut deserializer_state =
+	serde_avro_fast::de::DeserializerState::with_config(avro_reader, deserializer_config);
+
+// It's not the `&mut DeserializerState` that implements `serde::Deserializer` directly, instead
+// it is `DatumDeserializer` (which is essentially an `&mut DeserializerState` but not exactly
+// because it also keeps track of the current schema node)
+// We build it through `DeserializerState::deserializer`
+let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer())
+	.expect("Failed to deserialize");
+assert_eq!(
+	result,
+	Test {
+		field: "foo".to_owned()
+	}
+);"#
+)]
+#![cfg_attr(
+	not(feature = "std"),
+	doc = r#"// Slice-based deserialization
+let mut deserializer_config = serde_avro_fast::de::DeserializerConfig::new(&schema);
+deserializer_config.max_seq_size = 1_000_000;
+
+let mut deserializer_state = serde_avro_fast::de::DeserializerState::with_config(
+	serde_avro_fast::de::read::SliceRead::new(avro_datum),
+	deserializer_config,
+);
+
+let result: Test = serde::Deserialize::deserialize(deserializer_state.deserializer())
+	.expect("Failed to deserialize");
+assert_eq!(
+	result,
+	Test {
+		field: "foo".to_owned()
+	}
+);"#
+)]
 //! ```
 
 mod deserializer;
@@ -186,6 +209,7 @@ impl<'s, 'a> DeserializerState<'s, read::SliceRead<'a>> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<'s, R: std::io::BufRead> DeserializerState<'s, read::ReaderRead<R>> {
 	/// Construct a `DeserializerState` from an
 	/// [`impl BufRead`](std::io::BufRead) and a schema, otherwise initializing
@@ -199,14 +223,14 @@ impl<'s, R: std::io::BufRead> DeserializerState<'s, read::ReaderRead<R>> {
 	}
 }
 
-impl<R> std::ops::Deref for DeserializerState<'_, R> {
+impl<R> core::ops::Deref for DeserializerState<'_, R> {
 	type Target = R;
 	fn deref(&self) -> &Self::Target {
 		&self.reader
 	}
 }
 
-impl<R> std::ops::DerefMut for DeserializerState<'_, R> {
+impl<R> core::ops::DerefMut for DeserializerState<'_, R> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.reader
 	}

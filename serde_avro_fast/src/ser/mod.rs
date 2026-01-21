@@ -73,7 +73,10 @@ pub use {error::SerError, serializer::*};
 
 use crate::schema::{self_referential::*, UnionVariantLookupKey};
 
-use {integer_encoding::VarIntWriter, serde::ser::*, std::io::Write};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use integer_encoding::VarInt;
+use serde::ser::*;
 
 /// All configuration and state necessary for the serialization to run
 ///
@@ -102,7 +105,7 @@ pub struct SerializerState<'c, 's, W> {
 ///
 /// // reuse config & output buffer across serializations for ideal performance (~40% perf gain)
 /// serialized.clear();
-/// let serialized = serde_avro_fast::to_datum(&4, serialized, serializer_config).unwrap();
+/// let serialized = serde_avro_fast::to_datum_vec(&4, serializer_config).unwrap();
 /// assert_eq!(serialized, &[8]);
 /// ```
 pub struct SerializerConfig<'s> {
@@ -165,7 +168,7 @@ impl<'s> SerializerConfig<'s> {
 	}
 }
 
-impl<'c, 's, W: std::io::Write> SerializerState<'c, 's, W> {
+impl<'c, 's, W: VecWriter> SerializerState<'c, 's, W> {
 	/// Build a `SerializerState` from a writer and a `SerializerConfig`.
 	///
 	/// This contains all that's needed to perform serialization.
@@ -268,7 +271,7 @@ pub(crate) enum SerializerConfigRef<'c, 's> {
 	Borrowed(&'c mut SerializerConfig<'s>),
 	Owned(Box<SerializerConfig<'s>>),
 }
-impl<'c, 's> std::ops::Deref for SerializerConfigRef<'c, 's> {
+impl<'c, 's> core::ops::Deref for SerializerConfigRef<'c, 's> {
 	type Target = SerializerConfig<'s>;
 
 	fn deref(&self) -> &Self::Target {
@@ -278,11 +281,76 @@ impl<'c, 's> std::ops::Deref for SerializerConfigRef<'c, 's> {
 		}
 	}
 }
-impl std::ops::DerefMut for SerializerConfigRef<'_, '_> {
+impl core::ops::DerefMut for SerializerConfigRef<'_, '_> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		match &mut *self {
 			Self::Borrowed(config) => &mut **config,
 			Self::Owned(config) => &mut **config,
 		}
 	}
+}
+
+/// Trait for types that can be written to (used for serialization).
+///
+/// This is implemented for `Vec<u8>` and when the `std` feature is enabled,
+/// for any type implementing `std::io::Write`.
+pub trait VecWriter {
+	/// Write all bytes from the buffer.
+	fn write_all(&mut self, buf: &[u8]) -> Result<(), SerError>;
+	/// Write a varint-encoded integer.
+	fn write_varint<I: VarInt>(&mut self, n: I) -> Result<(), SerError>;
+}
+
+impl VecWriter for Vec<u8> {
+	fn write_all(&mut self, buf: &[u8]) -> Result<(), SerError> {
+		self.extend_from_slice(buf);
+		Ok(())
+	}
+	fn write_varint<I: VarInt>(&mut self, n: I) -> Result<(), SerError> {
+		let mut buf = [0u8; 10];
+		let len = n.encode_var(&mut buf);
+		self.extend_from_slice(&buf[..len]);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write> VecWriter for StdWriter<W> {
+	fn write_all(&mut self, buf: &[u8]) -> Result<(), SerError> {
+		std::io::Write::write_all(&mut self.0, buf).map_err(SerError::io)
+	}
+	fn write_varint<I: VarInt>(&mut self, n: I) -> Result<(), SerError> {
+		<Self as integer_encoding::VarIntWriter>::write_varint(&mut *self, n).map_err(SerError::io)
+	}
+}
+
+/// Wrapper for std::io::Write to implement VecWriter
+#[cfg(feature = "std")]
+pub struct StdWriter<W>(pub W);
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write> std::io::Write for StdWriter<W> {
+	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+		self.0.write(buf)
+	}
+	fn flush(&mut self) -> std::io::Result<()> {
+		self.0.flush()
+	}
+}
+
+/// Serialize an avro "datum" (raw data, no headers...)
+///
+/// to a newly allocated Vec
+///
+/// See [`to_datum`](crate::to_datum) for more details when `std` feature is enabled.
+pub fn to_datum_vec<T>(
+	value: &T,
+	serializer_config: &mut SerializerConfig<'_>,
+) -> Result<Vec<u8>, SerError>
+where
+	T: serde::Serialize + ?Sized,
+{
+	let mut serializer_state = SerializerState::from_writer(Vec::new(), serializer_config);
+	serde::Serialize::serialize(value, serializer_state.serializer())?;
+	Ok(serializer_state.into_writer())
 }

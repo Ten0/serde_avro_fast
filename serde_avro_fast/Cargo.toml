@@ -9,24 +9,33 @@
 	workspace = ".."
 
 [features]
-	default = ["deflate"]
-	deflate = ["flate2"]
-	snappy = ["snap", "crc32fast"]
-	xz = ["xz2"]
-	zstandard = ["zstd"]
+	default = ["std", "deflate"]
+	std = [
+		"serde/std",
+		"serde_json/std",
+		"num-traits/std",
+		"rand/std",
+		"rand/std_rng",
+		"rust_decimal/std",
+	]
+	deflate = ["std", "flate2"]
+	snappy = ["std", "snap", "crc32fast"]
+	xz = ["std", "xz2"]
+	zstandard = ["std", "zstd"]
+	bzip2 = ["std", "dep:bzip2"]
 
 [dependencies]
 	bzip2 = { version = "0.4", optional = true }
 	crc32fast = { version = "1", optional = true }
 	flate2 = { version = "1", optional = true }
 	integer-encoding = { default-features = false, version = "4" }
-	num-traits = "0.2"
-	rand = "0.8"
+	num-traits = { version = "0.2", default-features = false }
+	rand = { version = "0.8", default-features = false, features = ["small_rng"] }
 	rust_decimal = { version = "1", default-features = false, features = ["serde-with-str"] }
-	serde = "1"
+	serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 	serde-transcode = "1"
 	serde_derive = "1"
-	serde_json = "1"
+	serde_json = { version = "1", default-features = false, features = ["alloc"] }
 	serde_serializer_quick_unsupported = "0.1"
 	snap = { version = "1", optional = true }
 	thiserror = "1"

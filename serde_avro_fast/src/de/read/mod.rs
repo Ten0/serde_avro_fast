@@ -7,13 +7,16 @@ pub mod take;
 
 use super::{DeError, Error};
 
-use integer_encoding::{VarInt, VarIntReader};
+use alloc::vec::Vec;
+use integer_encoding::VarInt;
+#[cfg(feature = "std")]
+use integer_encoding::VarIntReader;
 
 /// Abstracts reading from slices or any other `impl BufRead` behind the same
 /// interface
 ///
 /// The deserializer is implemented generically on this.
-pub trait Read: std::io::Read + Sized + private::Sealed {
+pub trait Read: Sized + private::Sealed {
 	/// Read an integer of type `I` from the underlying buffer using varint
 	/// encoding
 	///
@@ -25,27 +28,9 @@ pub trait Read: std::io::Read + Sized + private::Sealed {
 	/// Read a buffer of size `N` from the underlying buffer, returning it
 	/// as an array. This is a convenience method because the deserializer often
 	/// needs to run fixed-size buffers to immediately turn them into values.
-	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
-		let mut buf = [0u8; N];
-		self.read_exact(&mut buf).map_err(DeError::io)?;
-		Ok(buf)
-	}
+	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError>;
 	/// Skip `n_bytes` bytes from the underlying buffer
-	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError> {
-		let written = std::io::copy(
-			&mut <&mut Self as std::io::Read>::take(self, n_bytes),
-			&mut std::io::sink(),
-		)
-		.map_err(DeError::io)?;
-		if written == n_bytes {
-			Ok(())
-		} else {
-			Err(DeError::custom(format_args!(
-				"Expected to skip {} bytes, but only skipped {}",
-				n_bytes, written
-			)))
-		}
-	}
+	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError>;
 }
 
 /// Abstracts reading from slices (propagating lifetime) or any other `impl
@@ -90,6 +75,16 @@ impl<'de> Read for SliceRead<'de> {
 			}
 		}
 	}
+	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
+		if self.slice.len() < N {
+			return Err(DeError::unexpected_eof());
+		}
+		let (buf, rest) = self.slice.split_at(N);
+		self.slice = rest;
+		let mut result = [0u8; N];
+		result.copy_from_slice(buf);
+		Ok(result)
+	}
 	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError> {
 		let n_bytes: usize = n_bytes
 			.try_into()
@@ -117,25 +112,9 @@ impl<'de> ReadSlice<'de> for SliceRead<'de> {
 		}
 	}
 }
-impl std::io::Read for SliceRead<'_> {
-	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-		self.slice.read(buf)
-	}
-	fn read_vectored(&mut self, bufs: &mut [std::io::IoSliceMut<'_>]) -> std::io::Result<usize> {
-		self.slice.read_vectored(bufs)
-	}
-}
-impl std::io::BufRead for SliceRead<'_> {
-	fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-		self.slice.fill_buf()
-	}
-
-	fn consume(&mut self, amt: usize) {
-		self.slice.consume(amt)
-	}
-}
 
 /// Implements `Read<'de>` reading from any `impl BufRead`
+#[cfg(feature = "std")]
 pub struct ReaderRead<R> {
 	reader: R,
 	scratch: Vec<u8>,
@@ -149,7 +128,9 @@ pub struct ReaderRead<R> {
 	/// this.
 	pub max_alloc_size: usize,
 }
+#[cfg(feature = "std")]
 impl<R: std::io::Read> private::Sealed for ReaderRead<R> {}
+#[cfg(feature = "std")]
 impl<R: std::io::BufRead> ReaderRead<R> {
 	/// Construct a `ReaderRead` from an `impl BufRead`
 	///
@@ -163,12 +144,14 @@ impl<R: std::io::BufRead> ReaderRead<R> {
 		}
 	}
 }
+#[cfg(feature = "std")]
 impl<R> ReaderRead<R> {
 	/// Consume the `ReaderRead` and return the inner reader
 	pub fn into_inner(self) -> R {
 		self.reader
 	}
 }
+#[cfg(feature = "std")]
 impl<R: std::io::BufRead> Read for ReaderRead<R> {
 	fn read_varint<I>(&mut self) -> Result<I, DeError>
 	where
@@ -187,7 +170,29 @@ impl<R: std::io::BufRead> Read for ReaderRead<R> {
 			}
 		}
 	}
+	fn read_const_size_buf<const N: usize>(&mut self) -> Result<[u8; N], DeError> {
+		use std::io::Read;
+		let mut buf = [0u8; N];
+		self.read_exact(&mut buf).map_err(DeError::io)?;
+		Ok(buf)
+	}
+	fn skip_bytes(&mut self, n_bytes: u64) -> Result<(), DeError> {
+		let written = std::io::copy(
+			&mut <&mut Self as std::io::Read>::take(self, n_bytes),
+			&mut std::io::sink(),
+		)
+		.map_err(DeError::io)?;
+		if written == n_bytes {
+			Ok(())
+		} else {
+			Err(DeError::custom(format_args!(
+				"Expected to skip {} bytes, but only skipped {}",
+				n_bytes, written
+			)))
+		}
+	}
 }
+#[cfg(feature = "std")]
 impl<'de, R: std::io::BufRead> ReadSlice<'de> for ReaderRead<R> {
 	fn read_slice<V>(&mut self, n: usize, read_visitor: V) -> Result<V::Value, DeError>
 	where
@@ -219,6 +224,7 @@ impl<'de, R: std::io::BufRead> ReadSlice<'de> for ReaderRead<R> {
 		}
 	}
 }
+#[cfg(feature = "std")]
 impl<R: std::io::Read> std::io::Read for ReaderRead<R> {
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
 		self.reader.read(buf)
@@ -227,6 +233,7 @@ impl<R: std::io::Read> std::io::Read for ReaderRead<R> {
 		self.reader.read_vectored(bufs)
 	}
 }
+#[cfg(feature = "std")]
 impl<R: std::io::BufRead> std::io::BufRead for ReaderRead<R> {
 	fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
 		self.reader.fill_buf()

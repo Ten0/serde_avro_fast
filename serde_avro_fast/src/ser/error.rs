@@ -1,4 +1,7 @@
-use {serde::ser::Error, std::borrow::Cow};
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::string::ToString;
+use serde::ser::Error;
 
 /// Any error that may happen during serialization
 #[derive(thiserror::Error)]
@@ -7,9 +10,9 @@ pub struct SerError {
 	inner: Box<ErrorInner>,
 }
 
-impl std::fmt::Debug for SerError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Debug::fmt(&*self.inner.value, f)
+impl core::fmt::Debug for SerError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Debug::fmt(&*self.inner.value, f)
 	}
 }
 
@@ -26,6 +29,7 @@ impl SerError {
 			}),
 		}
 	}
+	#[cfg(feature = "std")]
 	pub(crate) fn io(io_error: std::io::Error) -> Self {
 		Self::custom(format_args!(
 			"Encountered IO error when attempting to write for serialization: {io_error}"
@@ -36,7 +40,7 @@ impl SerError {
 impl serde::ser::Error for SerError {
 	fn custom<T>(msg: T) -> Self
 	where
-		T: std::fmt::Display,
+		T: core::fmt::Display,
 	{
 		Self {
 			inner: Box::new(ErrorInner {

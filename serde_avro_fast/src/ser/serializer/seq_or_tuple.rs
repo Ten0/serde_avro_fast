@@ -1,5 +1,7 @@
 use super::*;
 
+use alloc::vec::Vec;
+
 pub struct SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 	kind: Kind<'r, 'c, 's, W>,
 }
@@ -24,7 +26,7 @@ enum Kind<'r, 'c, 's, W> {
 	Finished,
 }
 
-impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 	pub(super) fn array(
 		block_writer: BlockWriter<'r, 'c, 's, W>,
 		elements_schema: &'s SchemaNode<'s>,
@@ -75,8 +77,7 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 				SerError::new(
 					"Buffer len does not fit i64 for encoding as length-delimited field size",
 				)
-			})?)
-			.map_err(SerError::io)?;
+			})?)?;
 		Ok(Self::fixed(state, len))
 	}
 
@@ -113,10 +114,7 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 				} else {
 					let val =
 						value.serialize(super::extract_for_duration::ExtractU32ForDuration)?;
-					serializer_state
-						.writer
-						.write_all(&val.to_le_bytes())
-						.map_err(SerError::io)?;
+					serializer_state.writer.write_all(&val.to_le_bytes())?;
 					*n_values += 1;
 					Ok(())
 				}
@@ -139,8 +137,7 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 				}
 				serializer_state
 					.writer
-					.write_all(&[value.serialize(ExtractU8Serializer)?])
-					.map_err(SerError::io)?;
+					.write_all(&[value.serialize(ExtractU8Serializer)?])?;
 
 				Ok(())
 			}
@@ -150,7 +147,7 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 
 	fn end(mut self) -> Result<(), SerError> {
 		match self.kind {
-			Kind::Array { .. } => match std::mem::replace(&mut self.kind, Kind::Finished) {
+			Kind::Array { .. } => match core::mem::replace(&mut self.kind, Kind::Finished) {
 				Kind::Array { block_writer, .. } => block_writer.end(),
 				_ => unreachable!(),
 			},
@@ -184,7 +181,7 @@ impl<W> Drop for SerializeSeqOrTupleOrTupleStruct<'_, '_, '_, W> {
 		if let Kind::BufferedBytes {
 			serializer_state,
 			mut buffer,
-		} = std::mem::replace(&mut self.kind, Kind::Finished)
+		} = core::mem::replace(&mut self.kind, Kind::Finished)
 		{
 			if buffer.capacity() > 0 {
 				buffer.clear();
@@ -212,7 +209,7 @@ fn should_not_be_finished() -> SerError {
 macro_rules! impl_serialize_seq_or_tuple {
 	($($trait_: ident $f: ident,)+) => {
 		$(
-			impl<'r, 'c, 's, W: Write> $trait_ for SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
+			impl<'r, 'c, 's, W: VecWriter> $trait_ for SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 				type Ok = ();
 				type Error = SerError;
 
@@ -309,24 +306,22 @@ impl Serializer for ExtractU8Serializer {
 		})
 	}
 
-	serde::serde_if_integer128! {
-		fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
-			v.try_into().map_err(|_| {
-				SerError::new(
-					"Out of bounds i128->u8 element for sequence\
-						serialization as Fixed/Bytes",
-				)
-			})
-		}
+	fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+		v.try_into().map_err(|_| {
+			SerError::new(
+				"Out of bounds i128->u8 element for sequence\
+					serialization as Fixed/Bytes",
+			)
+		})
+	}
 
-		fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
-			v.try_into().map_err(|_| {
-				SerError::new(
-					"Out of bounds u128->u8 element for sequence\
-						serialization as Fixed/Bytes",
-				)
-			})
-		}
+	fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
+		v.try_into().map_err(|_| {
+			SerError::new(
+				"Out of bounds u128->u8 element for sequence\
+					serialization as Fixed/Bytes",
+			)
+		})
 	}
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {

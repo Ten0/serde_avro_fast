@@ -129,6 +129,9 @@
 // Get docs.rs to display all compression methods and corresponding feature flags.
 // That is used jointly with `package.metadata.docs.rs` in the `Cargo.toml`
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 pub mod de;
 pub mod schema;
@@ -137,10 +140,11 @@ pub mod ser;
 pub use schema::Schema;
 
 mod single_object_encoding;
-pub use single_object_encoding::{
-	from_single_object_reader, from_single_object_slice, to_single_object, to_single_object_vec,
-};
+#[cfg(feature = "std")]
+pub use single_object_encoding::{from_single_object_reader, to_single_object};
+pub use single_object_encoding::{from_single_object_slice, to_single_object_vec};
 
+#[cfg(feature = "std")]
 pub mod object_container_file_encoding;
 
 /// Deserialize from an avro "datum" (raw data, no headers...) slice
@@ -164,6 +168,7 @@ where
 /// If deserializing from a slice, a `Vec`, ... prefer using `from_datum_slice`,
 /// as it will be more performant and enable you to borrow `&str`s from the
 /// original slice.
+#[cfg(feature = "std")]
 pub fn from_datum_reader<R, T>(reader: R, schema: &Schema) -> Result<T, de::DeError>
 where
 	T: serde::de::DeserializeOwned,
@@ -192,6 +197,7 @@ where
 /// let serialized = serde_avro_fast::to_datum(&4, serialized, serializer_config).unwrap();
 /// assert_eq!(serialized, &[8]);
 /// ```
+#[cfg(feature = "std")]
 pub fn to_datum<T, W>(
 	value: &T,
 	writer: W,
@@ -217,9 +223,9 @@ where
 pub fn to_datum_vec<T>(
 	value: &T,
 	serializer_config: &mut ser::SerializerConfig<'_>,
-) -> Result<Vec<u8>, ser::SerError>
+) -> Result<alloc::vec::Vec<u8>, ser::SerError>
 where
 	T: serde::Serialize + ?Sized,
 {
-	to_datum(value, Vec::new(), serializer_config)
+	ser::to_datum_vec(value, serializer_config)
 }
