@@ -2,7 +2,11 @@ mod raw;
 
 use crate::schema::safe::*;
 
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
 use std::collections::HashMap;
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
 
 const LATE_NAME_LOOKUP_REMAP_BIT: usize = 1usize << (usize::BITS - 1);
 
@@ -12,7 +16,7 @@ struct SchemaConstructionState<'a> {
 	unresolved_names: Vec<NameKey<'a>>,
 }
 
-impl std::str::FromStr for SchemaMut {
+impl core::str::FromStr for SchemaMut {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let mut state = SchemaConstructionState {
@@ -336,8 +340,8 @@ impl NameKey<'_> {
 		}
 	}
 }
-impl std::fmt::Display for NameKey<'_> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for NameKey<'_> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self.namespace {
 			None => self.name.fmt(f),
 			Some(namespace) => write!(f, "{}.{}", namespace, self.name),

@@ -1,8 +1,13 @@
 use serde::de::*;
 
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 pub(super) enum SchemaNode<'a> {
 	Type(Type),
-	Ref(std::borrow::Cow<'a, str>),
+	Ref(Cow<'a, str>),
 	Object(Box<SchemaNodeObject<'a>>),
 	Union(Vec<SchemaNode<'a>>),
 }
@@ -74,18 +79,18 @@ pub(super) struct Field<'a> {
 }
 
 #[derive(serde_derive::Deserialize)]
-pub(super) struct BorrowedCowIfPossible<'a>(#[serde(borrow)] pub(crate) std::borrow::Cow<'a, str>);
+pub(super) struct BorrowedCowIfPossible<'a>(#[serde(borrow)] pub(crate) Cow<'a, str>);
 
 impl<'de> Deserialize<'de> for SchemaNode<'de> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		struct SchemaNodeVisitor<'de>(std::marker::PhantomData<&'de ()>);
+		struct SchemaNodeVisitor<'de>(core::marker::PhantomData<&'de ()>);
 		impl<'de> Visitor<'de> for SchemaNodeVisitor<'de> {
 			type Value = SchemaNode<'de>;
 
-			fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 				write!(
 					formatter,
 					"A string (type) or an object with a `type` field or an array (union)"
@@ -155,7 +160,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 				)
 			}
 		}
-		deserializer.deserialize_any(SchemaNodeVisitor(std::marker::PhantomData))
+		deserializer.deserialize_any(SchemaNodeVisitor(core::marker::PhantomData))
 	}
 }
 
@@ -163,7 +168,7 @@ impl<'de> Deserialize<'de> for SchemaNode<'de> {
 #[error("Failed to deserialize")]
 struct FailedDeserialization;
 impl Error for FailedDeserialization {
-	fn custom<T: std::fmt::Display>(_msg: T) -> Self {
+	fn custom<T: core::fmt::Display>(_msg: T) -> Self {
 		FailedDeserialization
 	}
 }
