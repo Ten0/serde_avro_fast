@@ -24,8 +24,8 @@ impl Rabin {
 	}
 }
 
-impl std::fmt::Write for Rabin {
-	fn write_str(&mut self, s: &str) -> std::fmt::Result {
+impl core::fmt::Write for Rabin {
+	fn write_str(&mut self, s: &str) -> core::fmt::Result {
 		self.write(s.as_bytes());
 		Ok(())
 	}
@@ -77,8 +77,8 @@ mod tests {
 	}
 }
 
-impl std::fmt::Debug for Rabin {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Rabin {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		f.debug_struct("Rabin")
 			.field("result", &format_args!("{:#018X}", self.result))
 			.finish()

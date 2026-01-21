@@ -1,4 +1,6 @@
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::string::ToString;
 
 /// Any error that may happen during serialization
 #[derive(thiserror::Error)]
@@ -19,11 +21,11 @@ impl SchemaError {
 		}
 	}
 
-	pub(crate) fn msg(s: std::fmt::Arguments<'_>) -> Self {
+	pub(crate) fn msg(s: core::fmt::Arguments<'_>) -> Self {
 		Self::display(s)
 	}
 
-	pub(crate) fn display(s: impl std::fmt::Display) -> Self {
+	pub(crate) fn display(s: impl core::fmt::Display) -> Self {
 		Self {
 			inner: Box::new(ErrorInner::Other(Cow::Owned(s.to_string()))),
 		}
@@ -36,20 +38,20 @@ impl SchemaError {
 	}
 }
 
-impl std::fmt::Debug for SchemaError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for SchemaError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match *self.inner {
-			ErrorInner::SerdeJson(ref e) => std::fmt::Debug::fmt(e, f),
-			ErrorInner::Other(ref s) => std::fmt::Debug::fmt(&**s, f),
+			ErrorInner::SerdeJson(ref e) => core::fmt::Debug::fmt(e, f),
+			ErrorInner::Other(ref s) => core::fmt::Debug::fmt(&**s, f),
 		}
 	}
 }
 
-impl std::fmt::Display for SchemaError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SchemaError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match *self.inner {
-			ErrorInner::SerdeJson(ref e) => std::fmt::Display::fmt(e, f),
-			ErrorInner::Other(ref s) => std::fmt::Display::fmt(&**s, f),
+			ErrorInner::SerdeJson(ref e) => core::fmt::Display::fmt(e, f),
+			ErrorInner::Other(ref s) => core::fmt::Display::fmt(&**s, f),
 		}
 	}
 }

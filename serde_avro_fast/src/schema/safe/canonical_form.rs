@@ -3,7 +3,8 @@ use crate::schema::{
 	SchemaError,
 };
 
-use std::fmt::Write;
+use alloc::vec;
+use core::fmt::Write;
 
 impl SchemaMut {
 	/// Obtain the Rabin fingerprint of the schema
@@ -30,7 +31,7 @@ impl SchemaMut {
 
 struct WriteCanonicalFormState<W> {
 	w: ErrorConversionWriter<W>,
-	named_type_written: Vec<bool>,
+	named_type_written: alloc::vec::Vec<bool>,
 }
 
 impl<W: Write> WriteCanonicalFormState<W> {
@@ -166,7 +167,7 @@ impl<W: Write> WriteCanonicalFormState<W> {
 	}
 }
 
-/// Convert errors from `std::fmt::Write` to `SchemaError`
+/// Convert errors from `core::fmt::Write` to `SchemaError`
 /// in order to be able to use `?` in `WriteCanonicalFormState`
 struct ErrorConversionWriter<W>(W);
 impl<W: Write> ErrorConversionWriter<W> {
@@ -179,7 +180,7 @@ impl<W: Write> ErrorConversionWriter<W> {
 		self.0.write_str(s).map_err(convert_error)
 	}
 }
-fn convert_error(e: std::fmt::Error) -> SchemaError {
+fn convert_error(e: core::fmt::Error) -> SchemaError {
 	SchemaError::msg(format_args!(
 		"Error writing schema parsing canonical form: {}",
 		e,
