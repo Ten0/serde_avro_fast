@@ -1,5 +1,7 @@
 use super::*;
 
+use alloc::string::String;
+
 pub(in super::super) fn read_enum_as_str<'de, R, V>(
 	state: &mut DeserializerState<'_, R>,
 	symbols: &[String],

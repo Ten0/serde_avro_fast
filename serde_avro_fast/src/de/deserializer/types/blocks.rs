@@ -1,6 +1,6 @@
 use super::*;
 
-use std::num::NonZeroUsize;
+use core::num::NonZeroUsize;
 
 fn read_block_len<'de, R>(
 	state: &mut DeserializerState<'_, R>,

@@ -44,6 +44,6 @@ impl<'de, V: Visitor<'de>> ReadVisitor<'de> for StringVisitor<V> {
 	}
 }
 fn parse_str(bytes: &[u8]) -> Result<&str, DeError> {
-	std::str::from_utf8(bytes)
+	core::str::from_utf8(bytes)
 		.map_err(|e| DeError::custom(format_args!("String is not valid utf-8: {e}")))
 }

@@ -2,7 +2,7 @@ use super::*;
 
 pub(in super::super) struct RecordMapAccess<'r, 's, R> {
 	pub(in super::super) state: &'r mut DeserializerState<'s, R>,
-	pub(in super::super) record_fields: std::slice::Iter<'s, RecordField<'s>>,
+	pub(in super::super) record_fields: core::slice::Iter<'s, RecordField<'s>>,
 	pub(in super::super) allowed_depth: AllowedDepth,
 }
 impl<'de, R: ReadSlice<'de>> MapAccess<'de> for RecordMapAccess<'_, '_, R> {

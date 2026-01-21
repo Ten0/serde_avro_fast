@@ -1,5 +1,7 @@
 use super::*;
 
+use alloc::vec::Vec;
+
 /// Deserialize from an avro
 /// [single object encoding](https://avro.apache.org/docs/current/specification/#single-object-encoding) slice
 ///
@@ -29,6 +31,7 @@ where
 /// If deserializing from a slice, a `Vec`, ... prefer using `from_datum_slice`,
 /// as it will be more performant and enable you to borrow `&str`s from the
 /// original slice.
+#[cfg(feature = "std")]
 pub fn from_single_object_reader<R, T>(mut reader: R, schema: &Schema) -> Result<T, de::DeError>
 where
 	T: serde::de::DeserializeOwned,
@@ -82,6 +85,7 @@ fn check_header(slice: &[u8; 10], schema: &Schema) -> Result<(), de::DeError> {
 /// 	&[0xC3, 0x01, 143, 92, 57, 63, 26, 213, 117, 114, 8]
 /// );
 /// ```
+#[cfg(feature = "std")]
 pub fn to_single_object<T, W>(
 	value: &T,
 	mut writer: W,
@@ -115,6 +119,9 @@ where
 	T: serde::Serialize + ?Sized,
 {
 	let mut buf = Vec::new();
-	to_single_object(value, &mut buf, serializer_config)?;
-	Ok(buf)
+	buf.extend_from_slice(&[0xC3, 0x01]);
+	buf.extend_from_slice(serializer_config.schema().rabin_fingerprint());
+	let mut serializer_state = ser::SerializerState::from_writer(buf, serializer_config);
+	serde::Serialize::serialize(value, serializer_state.serializer())?;
+	Ok(serializer_state.into_writer())
 }
