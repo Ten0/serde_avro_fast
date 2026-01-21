@@ -207,9 +207,10 @@ where
 	T: serde::Serialize + ?Sized,
 	W: std::io::Write,
 {
-	let mut serializer_state = ser::SerializerState::from_writer(writer, serializer_config);
+	let mut serializer_state =
+		ser::SerializerState::from_writer(ser::StdWriter(writer), serializer_config);
 	serde::Serialize::serialize(value, serializer_state.serializer())?;
-	Ok(serializer_state.into_writer())
+	Ok(serializer_state.into_writer().0)
 }
 
 /// Serialize an avro "datum" (raw data, no headers...)

@@ -320,7 +320,9 @@ impl<W: std::io::Write> VecWriter for StdWriter<W> {
 		std::io::Write::write_all(&mut self.0, buf).map_err(SerError::io)
 	}
 	fn write_varint<I: VarInt>(&mut self, n: I) -> Result<(), SerError> {
-		<Self as integer_encoding::VarIntWriter>::write_varint(&mut *self, n).map_err(SerError::io)
+		<Self as integer_encoding::VarIntWriter>::write_varint(&mut *self, n)
+			.map(|_| ())
+			.map_err(SerError::io)
 	}
 }
 

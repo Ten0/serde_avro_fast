@@ -51,7 +51,7 @@ mod private {
 
 /// Implements `Read<'de>` reading from `&'de [u8]`
 pub struct SliceRead<'de> {
-	slice: &'de [u8],
+	pub(crate) slice: &'de [u8],
 }
 impl<'de> SliceRead<'de> {
 	/// Construct a `SliceRead` from a `&'de [u8]`
@@ -110,6 +110,25 @@ impl<'de> ReadSlice<'de> for SliceRead<'de> {
 			self.slice = end;
 			visitor.visit_borrowed(just_read)
 		}
+	}
+}
+#[cfg(feature = "std")]
+impl std::io::Read for SliceRead<'_> {
+	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+		std::io::Read::read(&mut self.slice, buf)
+	}
+	fn read_vectored(&mut self, bufs: &mut [std::io::IoSliceMut<'_>]) -> std::io::Result<usize> {
+		std::io::Read::read_vectored(&mut self.slice, bufs)
+	}
+}
+#[cfg(feature = "std")]
+impl std::io::BufRead for SliceRead<'_> {
+	fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+		std::io::BufRead::fill_buf(&mut self.slice)
+	}
+
+	fn consume(&mut self, amt: usize) {
+		std::io::BufRead::consume(&mut self.slice, amt)
 	}
 }
 

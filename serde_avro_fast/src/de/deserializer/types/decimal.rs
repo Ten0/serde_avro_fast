@@ -1,9 +1,6 @@
 use super::*;
 
-use {
-	rust_decimal::prelude::ToPrimitive as _,
-	std::{io::Read, marker::PhantomData},
-};
+use {core::marker::PhantomData, rust_decimal::prelude::ToPrimitive as _};
 
 pub(in super::super) enum DecimalMode<'a> {
 	Big,
@@ -20,38 +17,47 @@ where
 	R: ReadSlice<'de>,
 	V: Visitor<'de>,
 {
-	let (size, mut reader) = match decimal_mode {
+	let (size, scale_reader) = match decimal_mode {
 		DecimalMode::Big => {
 			// BigDecimal are represented as bytes, and inside the bytes contain a length
 			// marker followed by the actual bytes, followed by another Long that represents
 			// the scale.
 
-			let bytes_len = state.read_varint::<i64>()?.try_into().map_err(|e| {
-				DeError::custom(format_args!(
-					"Invalid BigDecimal bytes length in stream: {e}"
-				))
-			})?;
-
-			let mut reader = (&mut state.reader).take(bytes_len);
+			let bytes_len: usize = state
+				.read_varint::<i64>()?
+				.try_into()
+				.map_err(|e| DeError::custom(format_args!("Invalid BigDecimal bytes length: {e}")))?;
 
 			// Read the unsized repr len
-			let unsized_len = integer_encoding::VarIntReader::read_varint::<i64>(&mut reader)
-				.map_err(DeError::io)?
-				.try_into()
-				.map_err(|e| {
-					DeError::custom(format_args!("Invalid BigDecimal length in bytes: {e}"))
-				})?;
+			let unsized_len: i64 = state.read_varint()?;
+			let unsized_len: usize = unsized_len.try_into().map_err(|e| {
+				DeError::custom(format_args!("Invalid BigDecimal length in bytes: {e}"))
+			})?;
 
-			(unsized_len, ReaderEither::Take(reader))
+			// Calculate the number of bytes read for varint encoding
+			let varint_bytes_used = {
+				let mut buf = [0u8; 10];
+				integer_encoding::VarInt::encode_var(unsized_len as i64, &mut buf)
+			};
+
+			// The scale will need to be read after reading the unscaled value
+			let remaining_for_scale = bytes_len
+				.checked_sub(varint_bytes_used)
+				.and_then(|v| v.checked_sub(unsized_len))
+				.ok_or_else(|| DeError::new("Invalid BigDecimal structure"))?;
+
+			(unsized_len, ScaleReader::Big { remaining_for_scale })
 		}
 		DecimalMode::Regular(Decimal {
 			repr: DecimalRepr::Bytes,
+			scale,
 			..
-		}) => (read_len(state)?, ReaderEither::Reader(&mut state.reader)),
+		}) => (read_len(state)?, ScaleReader::Regular(*scale)),
 		DecimalMode::Regular(Decimal {
 			repr: DecimalRepr::Fixed(fixed),
+			scale,
 			..
-		}) => (fixed.size, ReaderEither::Reader(&mut state.reader)),
+		}) => (fixed.size, ScaleReader::Regular(*scale)),
 	};
 	let mut buf = [0u8; 16];
 	let start = buf.len().checked_sub(size).ok_or_else(|| {
@@ -59,7 +65,13 @@ where
 			"Decimals of size larger than 16 are not supported (got size {size})"
 		))
 	})?;
-	reader.read_exact(&mut buf[start..]).map_err(DeError::io)?;
+
+	// Read the decimal bytes
+	state.read_slice(size, |bytes: &[u8]| {
+		buf[start..].copy_from_slice(bytes);
+		Ok(())
+	})?;
+
 	if buf.get(start).map_or(false, |&v| v & 0x80 != 0) {
 		// This is a negative number in CA2 repr, we need to maintain that for the
 		// larger number
@@ -68,30 +80,26 @@ where
 		}
 	}
 	let unscaled = i128::from_be_bytes(buf);
-	let scale = match decimal_mode {
-		DecimalMode::Big => integer_encoding::VarIntReader::read_varint::<i64>(&mut reader)
-			.map_err(DeError::io)?
-			.try_into()
-			.map_err(|e| {
-				DeError::custom(format_args!("Invalid BigDecimal scale in stream: {e}"))
-			})?,
-		DecimalMode::Regular(Decimal { scale, .. }) => *scale,
-	};
-	match reader {
-		ReaderEither::Take(take) => {
-			if take.limit() > 0 {
-				// This would be incorrect if we don't skip the extra bytes
-				// in the original reader.
-				// Arguably we could just ignore the extra bytes, but until proven
-				// that this is a real use-case we'll just do the conservative thing
-				// and encourage people to use the appropriate number of bytes.
+	let scale = match scale_reader {
+		ScaleReader::Big { remaining_for_scale } => {
+			let scale: i64 = state.read_varint()?;
+			// Calculate bytes used for scale varint
+			let scale_varint_bytes = {
+				let mut buf = [0u8; 10];
+				integer_encoding::VarInt::encode_var(scale, &mut buf)
+			};
+			if scale_varint_bytes != remaining_for_scale {
 				return Err(DeError::new(
 					"BigDecimal scale is not at the end of the bytes",
 				));
 			}
+			scale.try_into().map_err(|e| {
+				DeError::custom(format_args!("Invalid BigDecimal scale in stream: {e}"))
+			})?
 		}
-		ReaderEither::Reader(_) => {}
-	}
+		ScaleReader::Regular(scale) => scale,
+	};
+
 	if scale == 0 {
 		match hint {
 			VisitorHint::U64 => {
@@ -137,6 +145,11 @@ where
 	)
 }
 
+enum ScaleReader {
+	Big { remaining_for_scale: usize },
+	Regular(u32),
+}
+
 #[derive(PartialEq, Eq)]
 pub(in super::super) enum VisitorHint {
 	Str,
@@ -169,18 +182,5 @@ impl<'de, V: Visitor<'de>> serde::Serializer for SerializeToVisitorStr<'de, V> {
 		bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char bytes none some unit unit_struct
 		unit_variant newtype_struct newtype_variant seq tuple tuple_struct tuple_variant map struct
 		struct_variant i128 u128
-	}
-}
-
-enum ReaderEither<'a, R> {
-	Reader(&'a mut R),
-	Take(std::io::Take<&'a mut R>),
-}
-impl<R: Read> Read for ReaderEither<'_, R> {
-	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-		match self {
-			ReaderEither::Reader(reader) => reader.read(buf),
-			ReaderEither::Take(reader) => reader.read(buf),
-		}
 	}
 }

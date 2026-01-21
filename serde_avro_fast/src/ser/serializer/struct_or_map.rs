@@ -1,5 +1,7 @@
 use super::*;
 
+use alloc::vec::Vec;
+
 pub struct SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	kind: Kind<'r, 'c, 's, W>,
 }
@@ -23,7 +25,7 @@ struct KindRecord<'r, 'c, 's, W> {
 }
 
 struct RecordState<'s> {
-	expected_fields: std::slice::Iter<'s, RecordField<'s>>,
+	expected_fields: core::slice::Iter<'s, RecordField<'s>>,
 	current_idx: usize,
 	buffers: Vec<Option<Vec<u8>>>,
 	record: &'s Record<'s>,
@@ -44,7 +46,7 @@ impl<'r, 'c, 's, W> Drop for KindRecord<'r, 'c, 's, W> {
 					self.record_state
 						.buffers
 						.drain(..)
-						.filter_map(std::convert::identity)
+						.filter_map(core::convert::identity)
 						.map(|mut v| {
 							v.clear();
 							v
@@ -54,7 +56,7 @@ impl<'r, 'c, 's, W> Drop for KindRecord<'r, 'c, 's, W> {
 				.config
 				.buffers
 				.field_reordering_super_buffers
-				.push(std::mem::replace(
+				.push(core::mem::replace(
 					&mut self.record_state.buffers,
 					Vec::new(),
 				));
@@ -62,7 +64,7 @@ impl<'r, 'c, 's, W> Drop for KindRecord<'r, 'c, 's, W> {
 	}
 }
 
-impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	pub(super) fn record(
 		state: &'r mut SerializerState<'c, 's, W>,
 		record: &'s Record<'s>,
@@ -146,10 +148,7 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 										// without erroring (although providing it with type `()`
 										// will result in better perf because we won't need to
 										// buffer)
-										serializer_state
-											.writer
-											.write_varint(discriminant)
-											.map_err(SerError::io)?;
+										serializer_state.writer.write_varint(discriminant)?;
 									}
 									_ => return Err(missing_field()),
 								}
@@ -163,10 +162,7 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 					while let Some(mut already_serialized) =
 						buffers.get_mut(current_idx).and_then(|opt| opt.take())
 					{
-						serializer_state
-							.writer
-							.write_all(&already_serialized)
-							.map_err(SerError::io)?;
+						serializer_state.writer.write_all(&already_serialized)?;
 
 						already_serialized.clear();
 						serializer_state
@@ -201,10 +197,7 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 					let values = [a3, a2, a1, a0, b3, b2, b1, b0, c3, c2, c1, c0];
 
 					// Now we serialize
-					serializer_state
-						.writer
-						.write_all(&values)
-						.map_err(SerError::io)?;
+					serializer_state.writer.write_all(&values)?;
 				}
 			}
 		}
@@ -237,12 +230,12 @@ fn field_idx<'s>(
 					.get(field_name)
 					.ok_or_else(key_does_not_exist)?;
 				match field_idx.cmp(&record_state.current_idx) {
-					std::cmp::Ordering::Greater => Ok((
+					core::cmp::Ordering::Greater => Ok((
 						field_idx,
 						record_state.record.fields[field_idx].schema.as_ref(),
 					)),
-					std::cmp::Ordering::Less => Err(serializing_same_field_name_twice(field_name)),
-					std::cmp::Ordering::Equal => panic!(
+					core::cmp::Ordering::Less => Err(serializing_same_field_name_twice(field_name)),
+					core::cmp::Ordering::Equal => panic!(
 						"We should have hit the `first.name == field_name` branch - \
 								please open an issue at serde_avro_fast"
 					),
@@ -252,7 +245,7 @@ fn field_idx<'s>(
 	}
 }
 
-fn serialize_record_value<'r, 'c, 's, W: Write, T: ?Sized>(
+fn serialize_record_value<'r, 'c, 's, W: VecWriter, T: ?Sized>(
 	serializer_state: &'r mut SerializerState<'c, 's, W>,
 	record_state: &mut RecordState<'s>,
 	field_idx: usize,
@@ -276,10 +269,7 @@ where
 			.get_mut(record_state.current_idx)
 			.and_then(|opt| opt.take())
 		{
-			serializer_state
-				.writer
-				.write_all(&already_serialized)
-				.map_err(SerError::io)?;
+			serializer_state.writer.write_all(&already_serialized)?;
 
 			already_serialized.clear();
 			serializer_state
@@ -365,7 +355,7 @@ pub(super) fn duration_fields_incorrect() -> SerError {
 	)
 }
 
-impl<'r, 'c, 's, W: Write> SerializeStruct
+impl<'r, 'c, 's, W: VecWriter> SerializeStruct
 	for SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 {
 	type Ok = ();
@@ -424,7 +414,7 @@ impl<'r, 'c, 's, W: Write> SerializeStruct
 	}
 }
 
-impl<'r, 'c, 's, W: Write> SerializeStructVariant
+impl<'r, 'c, 's, W: VecWriter> SerializeStructVariant
 	for SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 {
 	type Ok = ();
@@ -461,7 +451,7 @@ enum KeyHint<'s> {
 	DurationField(extract_for_duration::DurationFieldName),
 }
 
-impl<'r, 'c, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	pub(super) fn record(
 		state: &'r mut SerializerState<'c, 's, W>,
 		record: &'s Record<'s>,
@@ -490,7 +480,7 @@ impl<'r, 'c, 's, W: Write> SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	}
 }
 
-impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
+impl<'r, 'c, 's, W: VecWriter> SerializeMap for SerializeMapAsRecordOrMapOrDuration<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
 
@@ -532,7 +522,7 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 			Kind::Record(KindRecord {
 				serializer_state,
 				record_state,
-			}) => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
+			}) => match core::mem::replace(&mut self.key_hint, KeyHint::None) {
 				KeyHint::KeyLocation {
 					field_idx,
 					schema_node,
@@ -556,7 +546,7 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 				values,
 				gotten_values,
 				..
-			} => match std::mem::replace(&mut self.key_hint, KeyHint::None) {
+			} => match core::mem::replace(&mut self.key_hint, KeyHint::None) {
 				KeyHint::DurationField(duration_field) => {
 					serialize_duration_field(values, gotten_values, duration_field, value)
 				}

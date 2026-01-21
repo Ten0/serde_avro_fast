@@ -7,7 +7,7 @@ pub(super) struct BlockWriter<'r, 'c, 's, W> {
 
 impl<'r, 'c, 's, W> BlockWriter<'r, 'c, 's, W>
 where
-	W: std::io::Write,
+	W: VecWriter,
 {
 	pub(super) fn new(
 		state: &'r mut SerializerState<'c, 's, W>,
@@ -17,7 +17,7 @@ where
 			let len: i64 = min_len
 				.try_into()
 				.map_err(|_| SerError::new("Array or map len overflows i64"))?;
-			state.writer.write_varint(len).map_err(SerError::io)?;
+			state.writer.write_varint(len)?;
 		}
 		Ok(BlockWriter {
 			state,
@@ -27,7 +27,7 @@ where
 	pub(super) fn signal_next_record(&mut self) -> Result<(), SerError> {
 		match self.current_block_len.checked_sub(1) {
 			None => {
-				self.state.writer.write_varint(1i32).map_err(SerError::io)?;
+				self.state.writer.write_varint(1i32)?;
 			}
 			Some(new_block_len) => {
 				self.current_block_len = new_block_len;
@@ -47,7 +47,7 @@ where
 					advertised by `Serialize` implementor (check your `impl Serialize` types)",
 			))
 		} else {
-			self.state.writer.write_varint(0i32).map_err(SerError::io)?;
+			self.state.writer.write_varint(0i32)?;
 			Ok(())
 		}
 	}
