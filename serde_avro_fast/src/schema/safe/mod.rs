@@ -9,6 +9,9 @@ mod serialize;
 
 use super::{Fixed, Name, SchemaError};
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 pub use check_for_cycles::UnconditionalCycle;
 
 /// An editable representation of an Avro schema
@@ -141,15 +144,15 @@ impl SchemaKey {
 		Self { idx: 0 }
 	}
 }
-impl std::ops::Index<SchemaKey> for SchemaMut {
+impl core::ops::Index<SchemaKey> for SchemaMut {
 	type Output = SchemaNode;
 	fn index(&self, key: SchemaKey) -> &Self::Output {
 		&self.nodes[key.idx]
 	}
 }
-impl std::fmt::Debug for SchemaKey {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Debug::fmt(&self.idx, f)
+impl core::fmt::Debug for SchemaKey {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Debug::fmt(&self.idx, f)
 	}
 }
 
