@@ -2,7 +2,10 @@ use super::*;
 
 use {
 	serde::ser::*,
-	std::{borrow::Cow, cell::Cell},
+	alloc::borrow::Cow,
+	alloc::vec,
+	alloc::format,
+	core::cell::Cell,
 };
 
 impl SchemaMut {

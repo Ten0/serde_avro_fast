@@ -2,6 +2,8 @@ mod raw;
 
 use crate::schema::safe::*;
 
+use alloc::borrow::ToOwned;
+use alloc::format;
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -19,82 +21,99 @@ struct SchemaConstructionState<'a> {
 impl core::str::FromStr for SchemaMut {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let mut state = SchemaConstructionState {
-			nodes: Vec::new(),
-			names: HashMap::new(),
-			unresolved_names: Vec::new(),
-		};
+		let nodes = {
+			let raw_schema: raw::SchemaNode<'_> =
+				serde_json::from_str(s).map_err(SchemaError::serde_json)?;
 
-		let raw_schema: raw::SchemaNode<'_> =
-			serde_json::from_str(s).map_err(SchemaError::serde_json)?;
-
-		state.register_node(&raw_schema, None)?;
-
-		// Support for unordered name definitions
-		if !state.unresolved_names.is_empty() {
-			let resolved_names: Vec<SchemaKey> = state
-				.unresolved_names
-				.into_iter()
-				.map(|name| {
-					state
-						.names
-						.get(&name)
-						.ok_or(SchemaError::msg(format_args!(
-							"The Schema contains an unknown reference: {}",
-							name,
-						)))
-						.map(|&idx| SchemaKey { idx })
-				})
-				.collect::<Result<_, _>>()?;
-			let fix_key = |key: &mut SchemaKey| {
-				if key.idx & LATE_NAME_LOOKUP_REMAP_BIT != 0 {
-					*key = resolved_names[key.idx ^ LATE_NAME_LOOKUP_REMAP_BIT];
-				}
+			let mut state = SchemaConstructionState {
+				nodes: Vec::new(),
+				names: HashMap::new(),
+				unresolved_names: Vec::new(),
 			};
-			for schema_node in &mut state.nodes {
-				match &mut schema_node.type_ {
-					RegularType::Array(Array { items: key })
-					| RegularType::Map(Map { values: key }) => fix_key(key),
-					RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
-					RegularType::Record(record) => {
-						record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
-					}
-					RegularType::Null
-					| RegularType::Boolean
-					| RegularType::Int
-					| RegularType::Long
-					| RegularType::Float
-					| RegularType::Double
-					| RegularType::Bytes
-					| RegularType::String
-					| RegularType::Enum(Enum {
-						symbols: _,
-						name: _,
+
+			state.register_node(&raw_schema, None)?;
+
+			// Support for unordered name definitions
+			if !state.unresolved_names.is_empty() {
+				let resolved_names: Vec<SchemaKey> = state
+					.unresolved_names
+					.into_iter()
+					.map(|name| {
+						state
+							.names
+							.get(&name)
+							.ok_or(SchemaError::msg(format_args!(
+								"The Schema contains an unknown reference: {}",
+								name,
+							)))
+							.map(|&idx| SchemaKey { idx })
 					})
-					| RegularType::Fixed(Fixed { size: _, name: _ }) => {}
+					.collect::<Result<_, _>>()?;
+				let fix_key = |key: &mut SchemaKey| {
+					if key.idx & LATE_NAME_LOOKUP_REMAP_BIT != 0 {
+						*key = resolved_names[key.idx ^ LATE_NAME_LOOKUP_REMAP_BIT];
+					}
+				};
+				for schema_node in &mut state.nodes {
+					match &mut schema_node.type_ {
+						RegularType::Array(Array { items: key })
+						| RegularType::Map(Map { values: key }) => fix_key(key),
+						RegularType::Union(union) => union.variants.iter_mut().for_each(fix_key),
+						RegularType::Record(record) => {
+							record.fields.iter_mut().for_each(|f| fix_key(&mut f.type_))
+						}
+						RegularType::Null
+						| RegularType::Boolean
+						| RegularType::Int
+						| RegularType::Long
+						| RegularType::Float
+						| RegularType::Double
+						| RegularType::Bytes
+						| RegularType::String
+						| RegularType::Enum(Enum {
+							symbols: _,
+							name: _,
+						})
+						| RegularType::Fixed(Fixed { size: _, name: _ }) => {}
+					}
 				}
 			}
-		}
+
+			// Explicitly drop state fields that borrow from raw_schema before ending the block
+			drop(state.names);
+			state.nodes
+		};
 
 		let schema = Self {
-			nodes: state.nodes,
-			schema_json: Some(
-				String::from_utf8({
-					// Sanitize & minify json, preserving all keys.
-					let mut serializer = serde_json::Serializer::new(Vec::new());
-					serde_transcode::transcode(
-						&mut serde_json::Deserializer::from_str(s),
-						&mut serializer,
-					)
-					.map_err(SchemaError::serde_json)?;
-					serializer.into_inner()
-				})
-				.map_err(|e| {
-					SchemaError::msg(format_args!(
-						"serde_json should not emit invalid UTF-8 but got {e}"
-					))
-				})?,
-			),
+			nodes,
+			schema_json: Some({
+				#[cfg(feature = "std")]
+				{
+					String::from_utf8({
+						// Sanitize & minify json, preserving all keys.
+						let mut serializer = serde_json::Serializer::new(Vec::new());
+						serde_transcode::transcode(
+							&mut serde_json::Deserializer::from_str(s),
+							&mut serializer,
+						)
+						.map_err(SchemaError::serde_json)?;
+						serializer.into_inner()
+					})
+					.map_err(|e| {
+						SchemaError::msg(format_args!(
+							"serde_json should not emit invalid UTF-8 but got {e}"
+						))
+					})?
+				}
+				#[cfg(not(feature = "std"))]
+				{
+					// In no_std, serde_json::Serializer is not available for transcoding.
+					// We use serde_json::to_string which works with alloc.
+					let json_value: serde_json::Value =
+						serde_json::from_str(s).map_err(SchemaError::serde_json)?;
+					serde_json::to_string(&json_value).map_err(SchemaError::serde_json)?
+				}
+			}),
 		};
 
 		schema

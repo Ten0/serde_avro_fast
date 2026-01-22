@@ -4,7 +4,10 @@ use super::{
 	SchemaError,
 };
 
-use std::{collections::HashMap, marker::PhantomData};
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::marker::PhantomData;
+use hashbrown::HashMap;
 
 pub(crate) use super::{Fixed, Name};
 
@@ -93,7 +96,7 @@ impl Schema {
 /// pass Miri's Stacked Borrows checks.
 /// This abstraction should be reasonably ergonomic, but pass miri.
 pub(crate) struct NodeRef<'a, N = SchemaNode<'a>> {
-	node: std::ptr::NonNull<N>,
+	node: core::ptr::NonNull<N>,
 	_spooky: PhantomData<&'a N>,
 }
 impl<'a, N> Copy for NodeRef<'a, N> {}
@@ -111,7 +114,7 @@ unsafe impl<T: Sync> Send for NodeRef<'_, T> {}
 impl<N> NodeRef<'static, N> {
 	const unsafe fn new(ptr: *mut N) -> Self {
 		Self {
-			node: std::ptr::NonNull::new_unchecked(ptr),
+			node: core::ptr::NonNull::new_unchecked(ptr),
 			_spooky: PhantomData,
 		}
 	}
@@ -120,7 +123,7 @@ impl<N> NodeRef<'static, N> {
 		// that we can turn it into a `&'static N`
 		unsafe {
 			Self {
-				node: std::ptr::NonNull::new_unchecked(actually_static as *const N as *mut N),
+				node: core::ptr::NonNull::new_unchecked(actually_static as *const N as *mut N),
 				_spooky: PhantomData,
 			}
 		}
@@ -134,7 +137,7 @@ impl<'a, N> NodeRef<'a, N> {
 		unsafe { self.node.as_ref() }
 	}
 }
-impl<'a, N> std::ops::Deref for NodeRef<'a, N> {
+impl<'a, N> core::ops::Deref for NodeRef<'a, N> {
 	type Target = N;
 	fn deref(&self) -> &Self::Target {
 		self.as_ref()
@@ -180,8 +183,8 @@ pub(crate) struct Union<'a> {
 	pub(crate) per_type_lookup: UnionVariantsPerTypeLookup<'a>,
 }
 
-impl std::fmt::Debug for Union<'_> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Union<'_> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		// Skip per_type_lookup for readability
 		f.debug_struct("Union")
 			.field("variants", &self.variants)
@@ -196,8 +199,8 @@ pub(crate) struct Record<'a> {
 	pub(crate) per_name_lookup: HashMap<String, usize>,
 }
 
-impl<'a> std::fmt::Debug for Record<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a> core::fmt::Debug for Record<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		// Skip per_type_lookup for readability
 		f.debug_struct("Record")
 			.field("fields", &self.fields)
@@ -221,8 +224,8 @@ pub(crate) struct Enum {
 	pub(crate) per_name_lookup: HashMap<String, usize>,
 }
 
-impl std::fmt::Debug for Enum {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Enum {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		// Skip per_type_lookup for readability
 		f.debug_struct("Enum")
 			.field("name", &self.name)
@@ -437,26 +440,27 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 	}
 }
 
-impl std::fmt::Debug for Schema {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		<SchemaNode<'_> as std::fmt::Debug>::fmt(self.root().as_ref(), f)
+impl core::fmt::Debug for Schema {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		<SchemaNode<'_> as core::fmt::Debug>::fmt(self.root().as_ref(), f)
 	}
 }
 
-impl<N: std::fmt::Debug> std::fmt::Debug for NodeRef<'_, N> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		<N as std::fmt::Debug>::fmt(self.as_ref(), f)
+impl<N: core::fmt::Debug> core::fmt::Debug for NodeRef<'_, N> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		<N as core::fmt::Debug>::fmt(self.as_ref(), f)
 	}
 }
 
-impl<'a> std::fmt::Debug for SchemaNode<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+#[cfg(feature = "std")]
+impl<'a> core::fmt::Debug for SchemaNode<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		// Avoid going into stack overflow when rendering SchemaNode's debug impl, in
 		// case there are loops
 
 		use std::cell::Cell;
 		struct SchemaNodeRenderingDepthGuard;
-		thread_local! {
+		std::thread_local! {
 			static DEPTH: Cell<u32> = const { Cell::new(0) };
 		}
 		impl Drop for SchemaNodeRenderingDepthGuard {
@@ -472,72 +476,90 @@ impl<'a> std::fmt::Debug for SchemaNode<'a> {
 		});
 		let _decrement_depth_guard = SchemaNodeRenderingDepthGuard;
 
-		match *self {
-			SchemaNode::Null => f.debug_tuple("Null").finish(),
-			SchemaNode::Boolean => f.debug_tuple("Boolean").finish(),
-			SchemaNode::Int => f.debug_tuple("Int").finish(),
-			SchemaNode::Long => f.debug_tuple("Long").finish(),
-			SchemaNode::Float => f.debug_tuple("Float").finish(),
-			SchemaNode::Double => f.debug_tuple("Double").finish(),
-			SchemaNode::Bytes => f.debug_tuple("Bytes").finish(),
-			SchemaNode::String => f.debug_tuple("String").finish(),
-			SchemaNode::Array(inner) => {
-				let mut d = f.debug_tuple("Array");
-				if depth < MAX_DEPTH {
-					d.field(inner.as_ref());
-				}
-				d.finish()
+		debug_schema_node(self, f, depth)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<'a> core::fmt::Debug for SchemaNode<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		// In no_std, we don't have thread_local!, so we use a simpler approach
+		// with a fixed max depth
+		debug_schema_node(self, f, 0)
+	}
+}
+
+fn debug_schema_node(
+	node: &SchemaNode<'_>,
+	f: &mut core::fmt::Formatter<'_>,
+	depth: u32,
+) -> core::fmt::Result {
+	const MAX_DEPTH: u32 = 2;
+	match *node {
+		SchemaNode::Null => f.debug_tuple("Null").finish(),
+		SchemaNode::Boolean => f.debug_tuple("Boolean").finish(),
+		SchemaNode::Int => f.debug_tuple("Int").finish(),
+		SchemaNode::Long => f.debug_tuple("Long").finish(),
+		SchemaNode::Float => f.debug_tuple("Float").finish(),
+		SchemaNode::Double => f.debug_tuple("Double").finish(),
+		SchemaNode::Bytes => f.debug_tuple("Bytes").finish(),
+		SchemaNode::String => f.debug_tuple("String").finish(),
+		SchemaNode::Array(inner) => {
+			let mut d = f.debug_tuple("Array");
+			if depth < MAX_DEPTH {
+				d.field(inner.as_ref());
 			}
-			SchemaNode::Map(inner) => {
-				let mut d = f.debug_tuple("Map");
-				if depth < MAX_DEPTH {
-					d.field(inner.as_ref());
-				}
-				d.finish()
-			}
-			SchemaNode::Union(ref inner) => {
-				let mut d = f.debug_tuple("Union");
-				if depth < MAX_DEPTH {
-					d.field(inner);
-				}
-				d.finish()
-			}
-			SchemaNode::Record(ref inner) => {
-				let mut d = f.debug_tuple("Record");
-				if depth < MAX_DEPTH {
-					d.field(inner);
-				}
-				d.finish()
-			}
-			SchemaNode::Enum(ref inner) => {
-				let mut d = f.debug_tuple("Enum");
-				if depth < MAX_DEPTH {
-					d.field(inner);
-				}
-				d.finish()
-			}
-			SchemaNode::Fixed(ref inner) => {
-				let mut d = f.debug_tuple("Fixed");
-				if depth < MAX_DEPTH {
-					d.field(inner);
-				}
-				d.finish()
-			}
-			SchemaNode::Decimal(ref inner) => {
-				let mut d = f.debug_tuple("Decimal");
-				if depth < MAX_DEPTH {
-					d.field(inner);
-				}
-				d.finish()
-			}
-			SchemaNode::BigDecimal => f.debug_tuple("BigDecimal").finish(),
-			SchemaNode::Uuid => f.debug_tuple("Uuid").finish(),
-			SchemaNode::Date => f.debug_tuple("Date").finish(),
-			SchemaNode::TimeMillis => f.debug_tuple("TimeMillis").finish(),
-			SchemaNode::TimeMicros => f.debug_tuple("TimeMicros").finish(),
-			SchemaNode::TimestampMillis => f.debug_tuple("TimestampMillis").finish(),
-			SchemaNode::TimestampMicros => f.debug_tuple("TimestampMicros").finish(),
-			SchemaNode::Duration => f.debug_tuple("Duration").finish(),
+			d.finish()
 		}
+		SchemaNode::Map(inner) => {
+			let mut d = f.debug_tuple("Map");
+			if depth < MAX_DEPTH {
+				d.field(inner.as_ref());
+			}
+			d.finish()
+		}
+		SchemaNode::Union(ref inner) => {
+			let mut d = f.debug_tuple("Union");
+			if depth < MAX_DEPTH {
+				d.field(inner);
+			}
+			d.finish()
+		}
+		SchemaNode::Record(ref inner) => {
+			let mut d = f.debug_tuple("Record");
+			if depth < MAX_DEPTH {
+				d.field(inner);
+			}
+			d.finish()
+		}
+		SchemaNode::Enum(ref inner) => {
+			let mut d = f.debug_tuple("Enum");
+			if depth < MAX_DEPTH {
+				d.field(inner);
+			}
+			d.finish()
+		}
+		SchemaNode::Fixed(ref inner) => {
+			let mut d = f.debug_tuple("Fixed");
+			if depth < MAX_DEPTH {
+				d.field(inner);
+			}
+			d.finish()
+		}
+		SchemaNode::Decimal(ref inner) => {
+			let mut d = f.debug_tuple("Decimal");
+			if depth < MAX_DEPTH {
+				d.field(inner);
+			}
+			d.finish()
+		}
+		SchemaNode::BigDecimal => f.debug_tuple("BigDecimal").finish(),
+		SchemaNode::Uuid => f.debug_tuple("Uuid").finish(),
+		SchemaNode::Date => f.debug_tuple("Date").finish(),
+		SchemaNode::TimeMillis => f.debug_tuple("TimeMillis").finish(),
+		SchemaNode::TimeMicros => f.debug_tuple("TimeMicros").finish(),
+		SchemaNode::TimestampMillis => f.debug_tuple("TimestampMillis").finish(),
+		SchemaNode::TimestampMicros => f.debug_tuple("TimestampMicros").finish(),
+		SchemaNode::Duration => f.debug_tuple("Duration").finish(),
 	}
 }

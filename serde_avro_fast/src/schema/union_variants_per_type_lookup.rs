@@ -5,7 +5,11 @@
 //!
 //! The contents of this module are very tied to the serializer's behavior
 
-use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
+use alloc::borrow::Cow;
+use alloc::borrow::ToOwned;
+use core::cmp::Ordering;
+use hashbrown::HashMap;
+use core::cell::RefCell;
 
 use super::self_referential::*;
 
@@ -75,7 +79,7 @@ impl<'a> PerTypeLookup<'a> {
 			},
 		}
 		let mut per_direct_union_variant = [NoneSomeOrConflict::None; N_VARIANTS];
-		let per_name = std::cell::RefCell::new(HashMap::new());
+		let per_name = RefCell::new(HashMap::new());
 		for (discriminant, &schema_node) in variants.iter().enumerate() {
 			let discriminant: i64 = discriminant
 				.try_into()

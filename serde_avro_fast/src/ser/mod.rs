@@ -314,6 +314,19 @@ impl VecWriter for Vec<u8> {
 	}
 }
 
+impl VecWriter for &mut Vec<u8> {
+	fn write_all(&mut self, buf: &[u8]) -> Result<(), SerError> {
+		self.extend_from_slice(buf);
+		Ok(())
+	}
+	fn write_varint<I: VarInt>(&mut self, n: I) -> Result<(), SerError> {
+		let mut buf = [0u8; 10];
+		let len = n.encode_var(&mut buf);
+		self.extend_from_slice(&buf[..len]);
+		Ok(())
+	}
+}
+
 #[cfg(feature = "std")]
 impl<W: std::io::Write> VecWriter for StdWriter<W> {
 	fn write_all(&mut self, buf: &[u8]) -> Result<(), SerError> {

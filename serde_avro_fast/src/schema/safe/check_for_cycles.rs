@@ -1,5 +1,8 @@
 use super::{RegularType, SchemaMut};
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 impl SchemaMut {
 	/// Check that the schema does not contain zero-sized unconditional cycles.
 	///

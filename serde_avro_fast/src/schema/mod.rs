@@ -5,11 +5,13 @@ mod safe;
 pub(crate) mod self_referential;
 mod union_variants_per_type_lookup;
 
+use alloc::string::String;
+
 pub use {error::SchemaError, safe::*, self_referential::Schema};
 
 pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 
-impl std::str::FromStr for Schema {
+impl core::str::FromStr for Schema {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let safe_schema: safe::SchemaMut = s.parse()?;
@@ -43,9 +45,9 @@ pub struct Name {
 	namespace_delimiter_idx: Option<usize>,
 }
 
-impl std::fmt::Debug for Name {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Debug::fmt(&self.fully_qualified_name, f)
+impl core::fmt::Debug for Name {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Debug::fmt(&self.fully_qualified_name, f)
 	}
 }
 

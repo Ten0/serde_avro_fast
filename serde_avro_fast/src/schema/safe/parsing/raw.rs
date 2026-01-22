@@ -1,6 +1,7 @@
 use serde::de::*;
 
 use alloc::borrow::Cow;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;

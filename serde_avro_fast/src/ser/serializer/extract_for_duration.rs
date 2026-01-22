@@ -25,9 +25,9 @@ pub(super) enum DurationFieldName {
 	Days,
 	Milliseconds,
 }
-impl std::fmt::Display for DurationFieldName {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(
+impl core::fmt::Display for DurationFieldName {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Display::fmt(
 			match self {
 				DurationFieldName::Months => "months",
 				DurationFieldName::Days => "days",
