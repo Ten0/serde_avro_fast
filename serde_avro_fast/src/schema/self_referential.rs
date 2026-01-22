@@ -483,9 +483,10 @@ impl<'a> core::fmt::Debug for SchemaNode<'a> {
 #[cfg(not(feature = "std"))]
 impl<'a> core::fmt::Debug for SchemaNode<'a> {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		// In no_std, we don't have thread_local!, so we use a simpler approach
-		// with a fixed max depth
-		debug_schema_node(self, f, 0)
+		// In no_std, we don't have thread_local! for depth tracking.
+		// To prevent potential infinite recursion with cyclic schemas,
+		// we simply don't recurse into nested nodes.
+		debug_schema_node(self, f, u32::MAX)
 	}
 }
 
