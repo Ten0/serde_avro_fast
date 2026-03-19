@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 /// Implementation of the Rabin fingerprint algorithm using the Digest trait as described in [schema_fingerprints](https://avro.apache.org/docs/current/specification/#schema_fingerprints).
 ///
 /// The digest is returned as the 8-byte little-endian encoding of the Rabin
