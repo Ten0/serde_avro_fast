@@ -529,12 +529,12 @@ impl<'c, 's> WriterInner<'c, 's> {
 		let buf_len_before_attempt = self.serializer_state.writer().len();
 		value
 			.serialize(self.serializer_state.serializer())
-		.inspect_err(|_| {
-			// If the flush is going wrong though there's nothing we can do
-			self.serializer_state
-				.writer_mut()
-				.truncate(buf_len_before_attempt);
-		})?;
+			.inspect_err(|_| {
+				// If the flush is going wrong though there's nothing we can do
+				self.serializer_state
+					.writer_mut()
+					.truncate(buf_len_before_attempt);
+			})?;
 		self.n_elements_in_block += 1;
 		if self.serializer_state.writer().len() >= self.approx_block_size as usize {
 			self.finish_block()?;
