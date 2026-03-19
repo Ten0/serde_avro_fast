@@ -21,7 +21,7 @@ where
 			if rust_decimal.scale() != decimal.scale {
 				return Err(SerError::new(
 					"Decimal number cannot be scaled to fit in schema scale \
-				with a 96 bit mantissa (number or scale too large)",
+						with a 96 bit mantissa (number or scale too large)",
 				));
 			}
 			&[]
