@@ -60,7 +60,7 @@ where
 		))
 	})?;
 	reader.read_exact(&mut buf[start..]).map_err(DeError::io)?;
-	if buf.get(start).map_or(false, |&v| v & 0x80 != 0) {
+	if buf.get(start).is_some_and(|&v| v & 0x80 != 0) {
 		// This is a negative number in CA2 repr, we need to maintain that for the
 		// larger number
 		for v in &mut buf[0..start] {

@@ -41,7 +41,7 @@ fn skip_block() {
 	let deserialized: TestSkip = serde_avro_fast::from_datum_slice(input, &schema).unwrap();
 	assert_eq!(deserialized, expected);
 
-	let mut reader = &input[..];
+	let mut reader = input; // copy the slice as a reader
 	let deserialized: TestSkip = serde_avro_fast::from_datum_reader(&mut reader, &schema).unwrap();
 	assert_eq!(deserialized, expected);
 	// Also make sure that the reader stopped at the end of the block

@@ -197,7 +197,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			Some(enforced_sync_marker) => enforced_sync_marker,
 			None => {
 				let mut random_sync_marker = [0; 16];
-				rand::Rng::fill(&mut rand::thread_rng(), &mut random_sync_marker);
+				rand::RngExt::fill(&mut rand::rng(), &mut random_sync_marker);
 				random_sync_marker
 			}
 		};
@@ -529,12 +529,11 @@ impl<'c, 's> WriterInner<'c, 's> {
 		let buf_len_before_attempt = self.serializer_state.writer().len();
 		value
 			.serialize(self.serializer_state.serializer())
-			.map_err(|e| {
+			.inspect_err(|_| {
 				// If the flush is going wrong though there's nothing we can do
 				self.serializer_state
 					.writer_mut()
 					.truncate(buf_len_before_attempt);
-				e
 			})?;
 		self.n_elements_in_block += 1;
 		if self.serializer_state.writer().len() >= self.approx_block_size as usize {
@@ -581,10 +580,17 @@ impl<'c, 's> WriterInner<'c, 's> {
 			self.compression_codec_state
 				.encode(self.serializer_state.writer().as_slice())?;
 
+			let n_elements_in_block: i64 = self.n_elements_in_block.try_into().map_err(|_| {
+				SerError::new(
+					"n_elements_in_block exceeds i64::MAX \
+						(probably provided incorrect n_elements to write_serialized)",
+				)
+			})?;
 			let n = <i64 as integer_encoding::VarInt>::encode_var(
-				self.n_elements_in_block as i64,
+				n_elements_in_block,
 				&mut self.block_header_buffer,
 			);
+			#[allow(clippy::cast_possible_wrap)]
 			let n2 = <i64 as integer_encoding::VarInt>::encode_var(
 				self.compressed_block().len() as i64,
 				&mut self.block_header_buffer[n..],

@@ -21,7 +21,7 @@ where
 			if rust_decimal.scale() != decimal.scale {
 				return Err(SerError::new(
 					"Decimal number cannot be scaled to fit in schema scale \
-				with a 96 bit mantissa (number or scale too large)",
+						with a 96 bit mantissa (number or scale too large)",
 				));
 			}
 			&[]
@@ -40,21 +40,21 @@ where
 		let mut can_truncate = 0;
 		if buf[0] & 0x80 == 0 {
 			// Positive number
-			while buf.get(can_truncate).map_or(false, |&v| v == 0x00) {
+			while buf.get(can_truncate).is_some_and(|&v| v == 0x00) {
 				can_truncate += 1;
 			}
 			// In case some other deserializers explode when giving empty bytes to
 			// represent zero we'll play it safe and still serialize it as a
 			// single byte with zeroes
-			if can_truncate != 0 && buf.get(can_truncate).map_or(true, |&v| v & 0x80 != 0) {
+			if can_truncate != 0 && buf.get(can_truncate).is_none_or(|&v| v & 0x80 != 0) {
 				can_truncate -= 1;
 			}
 		} else {
 			// Negative number
-			while buf.get(can_truncate).map_or(false, |&v| v == 0xFF) {
+			while buf.get(can_truncate).is_some_and(|&v| v == 0xFF) {
 				can_truncate += 1;
 			}
-			if can_truncate != 0 && buf.get(can_truncate).map_or(true, |&v| v & 0x80 == 0) {
+			if can_truncate != 0 && buf.get(can_truncate).is_none_or(|&v| v & 0x80 == 0) {
 				can_truncate -= 1;
 			}
 		}
@@ -69,6 +69,8 @@ where
 			// If it's a negative number we can ignore all 0xff followed by MSB
 			// at 1 If it's a positive number we can ignore all 0x00 followed by MSB at 0
 			let start = can_truncate_without_altering_number(&buf);
+			// #[allow] is sound: buf is [u8; 16], so buf.len() - start is at most 16
+			#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 			let len = (buf.len() - start) as i32;
 			match decimal_mode {
 				DecimalMode::Big => {
@@ -79,7 +81,16 @@ where
 					let len_len = <i32 as integer_encoding::VarInt>::encode_var(len, &mut len_buf);
 					state
 						.writer
-						.write_varint::<i32>(len_len as i32 + len + scale_to_write.len() as i32)
+						.write_varint::<i32>({
+							// #[allow] is sound because:
+							// len_len <= 5 (VarInt of i32)
+							// len <= 16
+							// scale_to_write.len() <= 10 (VarInt of i64)
+							#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+							{
+								len_len as i32 + len + scale_to_write.len() as i32
+							}
+						})
 						.map_err(SerError::io)?;
 					state
 						.writer

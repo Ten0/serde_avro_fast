@@ -78,6 +78,7 @@ enum Kind {
 impl CompressionCodecState {
 	/// If none, this means the codec is Null and the original
 	/// buffer should be used instead
+	#[allow(clippy::cast_possible_truncation)]
 	pub(super) fn compressed_buffer(&self) -> Option<&[u8]> {
 		match self.kind {
 			Kind::Null => None,
@@ -94,6 +95,7 @@ impl CompressionCodecState {
 		}
 	}
 
+	#[allow(clippy::cast_possible_truncation)]
 	pub(super) fn encode(&mut self, input: &[u8]) -> Result<(), SerError> {
 		fn error(protocol: &str, error: &dyn std::fmt::Display) -> SerError {
 			<SerError as serde::ser::Error>::custom(format_args!(

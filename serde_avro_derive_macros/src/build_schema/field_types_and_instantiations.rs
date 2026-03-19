@@ -347,16 +347,15 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 				result: false,
 			};
 			is_relevant_generic.visit_type(&*ty);
-			if is_relevant_generic.result {
-				if self
+			if is_relevant_generic.result
+				&& self
 					.added_where_clause_predicate_for_types
 					.insert(ty.clone())
-				{
-					self.generics
-						.make_where_clause()
-						.predicates
-						.push(parse_quote!(#ty: serde_avro_derive::BuildSchema));
-				}
+			{
+				self.generics
+					.make_where_clause()
+					.predicates
+					.push(parse_quote!(#ty: serde_avro_derive::BuildSchema));
 			}
 		}
 

@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 /// Implementation of the Rabin fingerprint algorithm using the Digest trait as described in [schema_fingerprints](https://avro.apache.org/docs/current/specification/#schema_fingerprints).
 ///
 /// The digest is returned as the 8-byte little-endian encoding of the Rabin
@@ -15,7 +17,8 @@ impl Default for Rabin {
 impl Rabin {
 	pub(crate) fn write(&mut self, data: &[u8]) {
 		for &b in data {
-			self.result = (self.result >> 8) ^ FP_TABLE[((self.result ^ b as u64) & 0xFF) as usize];
+			self.result =
+				(self.result >> 8) ^ FP_TABLE[((self.result ^ u64::from(b)) & 0xFF) as usize];
 		}
 	}
 
@@ -64,13 +67,16 @@ mod tests {
 	#[test]
 	fn fp_table() {
 		let mut fp_table: [u64; 256] = [0; 256];
-		for i in 0..256 {
+		for i in 0u64..256 {
 			let mut fp = i;
 			for _ in 0..8 {
 				fp = (fp >> 1)
-					^ (super::EMPTY64 & u64::from_ne_bytes((-((fp & 1) as i64)).to_ne_bytes()));
+					^ (super::EMPTY64
+						& u64::from_ne_bytes((-(fp & 1).cast_signed()).to_ne_bytes()));
 			}
-			fp_table[i as usize] = fp;
+			#[allow(clippy::cast_possible_truncation)]
+			let idx = i as usize;
+			fp_table[idx] = fp;
 			println!("\t{:#018X},", fp);
 		}
 		assert!(super::FP_TABLE as &[_] == &fp_table as &[_]);

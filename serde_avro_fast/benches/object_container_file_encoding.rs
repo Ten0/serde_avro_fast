@@ -267,7 +267,7 @@ fn bench_object_container_file_deserialization(c: &mut Criterion) {
 					.deserialize::<BigStructOwned>()
 					.try_for_each(|r| {
 						let s = r?;
-						n += s.age as u64;
+						n += u64::from(s.age);
 						Ok::<_, serde_avro_fast::de::DeError>(())
 					})
 					.unwrap();
@@ -286,7 +286,7 @@ fn bench_object_container_file_deserialization(c: &mut Criterion) {
 						.try_for_each(|res| {
 							let value = res?;
 							let deserialized: BigStructOwned = apache_avro::from_value(&value)?;
-							n += deserialized.age as u64;
+							n += u64::from(deserialized.age);
 							Ok::<_, apache_avro::Error>(())
 						})
 						.unwrap();

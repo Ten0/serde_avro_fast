@@ -19,6 +19,7 @@ pub struct DatumSerializer<'r, 'c, 's, W> {
 	pub(super) schema_node: &'s SchemaNode<'s>,
 }
 
+#[allow(clippy::only_used_in_recursion)]
 impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	type Ok = ();
 	type Error = SerError;
@@ -36,7 +37,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 			SchemaNode::Boolean => self
 				.state
 				.writer
-				.write_all(&[v as u8])
+				.write_all(&[u8::from(v)])
 				.map_err(SerError::io),
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Boolean, |ser| {
@@ -120,11 +121,14 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				.writer
 				.write_all(&v.to_le_bytes())
 				.map_err(SerError::io),
-			SchemaNode::Float => self
-				.state
-				.writer
-				.write_all(&(v as f32).to_le_bytes())
-				.map_err(SerError::io),
+			SchemaNode::Float => {
+				#[allow(clippy::cast_possible_truncation)]
+				let v = v as f32;
+				self.state
+					.writer
+					.write_all(&v.to_le_bytes())
+					.map_err(SerError::io)
+			}
 			SchemaNode::Decimal(decimal) => {
 				let rust_decimal: rust_decimal::Decimal = num_traits::FromPrimitive::from_f64(v)
 					.ok_or_else(|| {
@@ -273,9 +277,9 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 		self.serialize_unit()
 	}
 
-	fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+	fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		// If there are union lookups to do, they can be performed
 		// directly by the functions that serialize the value
@@ -336,18 +340,18 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 		}
 	}
 
-	fn serialize_newtype_struct<T: ?Sized>(
+	fn serialize_newtype_struct<T>(
 		self,
 		name: &'static str,
 		value: &T,
 	) -> Result<Self::Ok, Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		self.serialize_lookup_union_variant_by_name(name, |serializer| value.serialize(serializer))
 	}
 
-	fn serialize_newtype_variant<T: ?Sized>(
+	fn serialize_newtype_variant<T>(
 		self,
 		_name: &'static str,
 		_variant_index: u32,
@@ -355,7 +359,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 		value: &T,
 	) -> Result<Self::Ok, Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		self.serialize_lookup_union_variant_by_name(variant, |serializer| {
 			value.serialize(serializer)
@@ -369,7 +373,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				elements_schema.as_ref(),
 			)),
 			SchemaNode::Duration => {
-				if len.map_or(false, |l| l != 3) {
+				if len.is_some_and(|l| l != 3) {
 					Err(seq_or_tuple::duration_seq_len_incorrect())
 				} else {
 					Ok(SerializeSeqOrTupleOrTupleStruct::duration(self.state))
@@ -384,7 +388,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 			}
 			SchemaNode::Fixed(fixed) => {
 				self.state.check_allowed_slow_sequence_to_bytes()?;
-				if len.map_or(false, |l| l != fixed.size) {
+				if len.is_some_and(|l| l != fixed.size) {
 					Err(SerError::new(
 						"Could not serialize sequence, tuple or tuple struct to fixed: \
 							advertised size mismatch",
@@ -440,7 +444,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				SerializeMapAsRecordOrMapOrDuration::map(self.state, map.as_ref(), len.unwrap_or(0))
 			}
 			SchemaNode::Duration => {
-				if len.map_or(false, |l| l != 3) {
+				if len.is_some_and(|l| l != 3) {
 					return Err(struct_or_map::duration_fields_incorrect());
 				}
 				SerializeMapAsRecordOrMapOrDuration::duration(self.state)

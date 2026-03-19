@@ -126,7 +126,7 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 			let mut prev = None;
 			for _ in 0..10 {
 				encoded.clear();
-				keys.shuffle(&mut rand::thread_rng());
+				keys.shuffle(&mut rand::rng());
 				tuple_vec_map::serialize(
 					&keys,
 					serde_avro_fast::ser::SerializerState::from_writer(
@@ -415,7 +415,7 @@ fn test_bytes_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Bytes(b) => b.iter().map(|&b| b as u64).collect(),
+		Value::Bytes(b) => b.iter().map(|&b| u64::from(b)).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
@@ -436,7 +436,7 @@ fn test_fixed_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Fixed(_, b) => b.iter().map(|&b| b as u64).collect(),
+		Value::Fixed(_, b) => b.iter().map(|&b| u64::from(b)).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
