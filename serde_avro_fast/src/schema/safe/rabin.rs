@@ -17,7 +17,8 @@ impl Default for Rabin {
 impl Rabin {
 	pub(crate) fn write(&mut self, data: &[u8]) {
 		for &b in data {
-			self.result = (self.result >> 8) ^ FP_TABLE[((self.result ^ u64::from(b)) & 0xFF) as usize];
+			self.result =
+				(self.result >> 8) ^ FP_TABLE[((self.result ^ u64::from(b)) & 0xFF) as usize];
 		}
 	}
 
@@ -70,7 +71,8 @@ mod tests {
 			let mut fp = i;
 			for _ in 0..8 {
 				fp = (fp >> 1)
-					^ (super::EMPTY64 & u64::from_ne_bytes((-(fp & 1).cast_signed()).to_ne_bytes()));
+					^ (super::EMPTY64
+						& u64::from_ne_bytes((-(fp & 1).cast_signed()).to_ne_bytes()));
 			}
 			#[allow(clippy::cast_possible_truncation)]
 			let idx = i as usize;
