@@ -37,7 +37,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 			SchemaNode::Boolean => self
 				.state
 				.writer
-				.write_all(&[v as u8])
+				.write_all(&[u8::from(v)])
 				.map_err(SerError::io),
 			SchemaNode::Union(union) => {
 				self.serialize_union_unnamed(union, UnionVariantLookupKey::Boolean, |ser| {
@@ -121,11 +121,14 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				.writer
 				.write_all(&v.to_le_bytes())
 				.map_err(SerError::io),
-			SchemaNode::Float => self
-				.state
-				.writer
-				.write_all(&(v as f32).to_le_bytes())
-				.map_err(SerError::io),
+			SchemaNode::Float => {
+				#[allow(clippy::cast_possible_truncation)]
+				let v = v as f32;
+				self.state
+					.writer
+					.write_all(&v.to_le_bytes())
+					.map_err(SerError::io)
+			}
 			SchemaNode::Decimal(decimal) => {
 				let rust_decimal: rust_decimal::Decimal = num_traits::FromPrimitive::from_f64(v)
 					.ok_or_else(|| {

@@ -580,10 +580,17 @@ impl<'c, 's> WriterInner<'c, 's> {
 			self.compression_codec_state
 				.encode(self.serializer_state.writer().as_slice())?;
 
+			let n_elements_in_block: i64 = self.n_elements_in_block.try_into().map_err(|_| {
+				SerError::new(
+					"n_elements_in_block exceeds i64::MAX \
+						(probably provided incorrect n_elements to write_serialized)",
+				)
+			})?;
 			let n = <i64 as integer_encoding::VarInt>::encode_var(
-				self.n_elements_in_block as i64,
+				n_elements_in_block,
 				&mut self.block_header_buffer,
 			);
+			#[allow(clippy::cast_possible_wrap)]
 			let n2 = <i64 as integer_encoding::VarInt>::encode_var(
 				self.compressed_block().len() as i64,
 				&mut self.block_header_buffer[n..],

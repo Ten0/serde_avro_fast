@@ -31,7 +31,7 @@ where
 				let _: u64 = state.read_varint()?;
 			}
 		} else {
-			res = len as u64;
+			res = len.cast_unsigned();
 		}
 		break res
 			.try_into()

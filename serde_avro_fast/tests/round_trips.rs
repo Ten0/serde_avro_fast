@@ -415,7 +415,7 @@ fn test_bytes_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Bytes(b) => b.iter().map(|&b| b as u64).collect(),
+		Value::Bytes(b) => b.iter().map(|&b| u64::from(b)).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
@@ -436,7 +436,7 @@ fn test_fixed_with_serde_json_value() {
 	let schema: serde_avro_fast::Schema = raw_schema.parse().unwrap();
 
 	let decoded: serde_json::Value = match value {
-		Value::Fixed(_, b) => b.iter().map(|&b| b as u64).collect(),
+		Value::Fixed(_, b) => b.iter().map(|&b| u64::from(b)).collect(),
 		_ => unreachable!(),
 	};
 	let config = &mut serde_avro_fast::ser::SerializerConfig::new(&schema);
