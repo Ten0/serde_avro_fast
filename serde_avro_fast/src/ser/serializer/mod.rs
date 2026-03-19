@@ -325,6 +325,14 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
 			SchemaNode::Null if variant == "Null" => Ok(()),
+			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Enum(_) => {
+				self.serialize_str(variant)
+			}
+			SchemaNode::Union(union) => {
+				self.serialize_union_unnamed(union, UnionVariantLookupKey::UnitVariant, |ser| {
+					ser.serialize_unit_variant(name, variant_index, variant)
+				})
+			}
 			SchemaNode::Null => {
 				// We don't allow anything but "Null" as name here, for round-trip consistency
 				// with deserializer that will always give "Null" as variant name.
@@ -335,14 +343,6 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 					- consider renaming the variant to `Null` using `#[serde(rename = \"Null\")]`",
 					self.schema_node
 				)))
-			}
-			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Enum(_) => {
-				self.serialize_str(variant)
-			}
-			SchemaNode::Union(union) => {
-				self.serialize_union_unnamed(union, UnionVariantLookupKey::UnitVariant, |ser| {
-					ser.serialize_unit_variant(name, variant_index, variant)
-				})
 			}
 			_ => Err(SerError::custom(format_args!(
 				"Could not serialize unit variant `{name}::{variant}` to {:?}",
