@@ -311,7 +311,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize unit struct to {:?}",
+				"Could not serialize unit struct `{name}` to {:?}",
 				self.schema_node
 			))),
 		}
@@ -325,6 +325,17 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 	) -> Result<Self::Ok, Self::Error> {
 		match self.schema_node {
 			SchemaNode::Null if variant == "Null" => Ok(()),
+			SchemaNode::Null => {
+				// We don't allow anything but "Null" as name here, for round-trip consistency
+				// with deserializer that will always give "Null" as variant name.
+				// It's easy and more readable to `#[serde(rename = "Null")]` the variant than
+				// allow it here anyway.
+				Err(SerError::custom(format_args!(
+					"Could not serialize unit variant `{name}::{variant}` to {:?} \
+					- consider renaming the variant to `Null` using `#[serde(rename = \"Null\")]`",
+					self.schema_node
+				)))
+			}
 			SchemaNode::String | SchemaNode::Bytes | SchemaNode::Enum(_) => {
 				self.serialize_str(variant)
 			}
@@ -334,7 +345,7 @@ impl<'r, 'c, 's, W: Write> Serializer for DatumSerializer<'r, 'c, 's, W> {
 				})
 			}
 			_ => Err(SerError::custom(format_args!(
-				"Could not serialize unit variant to {:?}",
+				"Could not serialize unit variant `{name}::{variant}` to {:?}",
 				self.schema_node
 			))),
 		}
@@ -680,7 +691,7 @@ impl<'r, 'c, 's, W: Write> DatumSerializer<'r, 'c, 's, W> {
 					|ser| ser.serialize_struct_or_struct_variant(variant_or_struct_name, len),
 				),
 				_ => Err(SerError::custom(format_args!(
-					"Could not serialize struct to {:?}",
+					"Could not serialize struct `{variant_or_struct_name}` to {:?}",
 					serializer.schema_node
 				))),
 			}
