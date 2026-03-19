@@ -126,7 +126,7 @@ fn test_round_trip_fast_apache<T: serde::de::DeserializeOwned + serde::Serialize
 			let mut prev = None;
 			for _ in 0..10 {
 				encoded.clear();
-				keys.shuffle(&mut rand::thread_rng());
+				keys.shuffle(&mut rand::rng());
 				tuple_vec_map::serialize(
 					&keys,
 					serde_avro_fast::ser::SerializerState::from_writer(

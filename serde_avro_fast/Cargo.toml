@@ -21,7 +21,7 @@
 	flate2 = { version = "1", optional = true }
 	integer-encoding = { default-features = false, version = "4" }
 	num-traits = "0.2"
-	rand = "0.8"
+	rand = "0.10"
 	rust_decimal = { version = "1", default-features = false, features = ["serde-with-str"] }
 	serde = "1"
 	serde-transcode = "1"

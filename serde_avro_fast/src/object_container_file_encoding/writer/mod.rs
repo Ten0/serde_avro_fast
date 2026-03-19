@@ -197,7 +197,7 @@ impl<'c, 's> WriterBuilder<'c, 's> {
 			Some(enforced_sync_marker) => enforced_sync_marker,
 			None => {
 				let mut random_sync_marker = [0; 16];
-				rand::Rng::fill(&mut rand::thread_rng(), &mut random_sync_marker);
+				rand::RngExt::fill(&mut rand::rng(), &mut random_sync_marker);
 				random_sync_marker
 			}
 		};
