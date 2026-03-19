@@ -69,6 +69,8 @@ where
 			// If it's a negative number we can ignore all 0xff followed by MSB
 			// at 1 If it's a positive number we can ignore all 0x00 followed by MSB at 0
 			let start = can_truncate_without_altering_number(&buf);
+			// #[allow] is sound: buf is [u8; 16], so buf.len() - start is at most 16
+			#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 			let len = (buf.len() - start) as i32;
 			match decimal_mode {
 				DecimalMode::Big => {
@@ -79,7 +81,16 @@ where
 					let len_len = <i32 as integer_encoding::VarInt>::encode_var(len, &mut len_buf);
 					state
 						.writer
-						.write_varint::<i32>(len_len as i32 + len + scale_to_write.len() as i32)
+						.write_varint::<i32>({
+							// #[allow] is sound because:
+							// len_len <= 5 (VarInt of i32)
+							// len <= 16
+							// scale_to_write.len() <= 10 (VarInt of i64)
+							#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+							{
+								len_len as i32 + len + scale_to_write.len() as i32
+							}
+						})
 						.map_err(SerError::io)?;
 					state
 						.writer
