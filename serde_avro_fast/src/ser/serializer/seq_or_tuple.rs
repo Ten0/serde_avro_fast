@@ -89,9 +89,9 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 		}
 	}
 
-	fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), SerError>
+	fn serialize_element<T>(&mut self, value: &T) -> Result<(), SerError>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		match self.kind {
 			Kind::Array {
@@ -216,9 +216,9 @@ macro_rules! impl_serialize_seq_or_tuple {
 				type Ok = ();
 				type Error = SerError;
 
-				fn $f<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+				fn $f<T>(&mut self, value: &T) -> Result<(), Self::Error>
 				where
-					T: Serialize,
+					T: Serialize + ?Sized,
 				{
 					self.serialize_element(value)
 				}
@@ -309,24 +309,22 @@ impl Serializer for ExtractU8Serializer {
 		})
 	}
 
-	serde::serde_if_integer128! {
-		fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
-			v.try_into().map_err(|_| {
-				SerError::new(
-					"Out of bounds i128->u8 element for sequence\
-						serialization as Fixed/Bytes",
-				)
-			})
-		}
+	fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+		v.try_into().map_err(|_| {
+			SerError::new(
+				"Out of bounds i128->u8 element for sequence\
+					serialization as Fixed/Bytes",
+			)
+		})
+	}
 
-		fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
-			v.try_into().map_err(|_| {
-				SerError::new(
-					"Out of bounds u128->u8 element for sequence\
-						serialization as Fixed/Bytes",
-				)
-			})
-		}
+	fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
+		v.try_into().map_err(|_| {
+			SerError::new(
+				"Out of bounds u128->u8 element for sequence\
+					serialization as Fixed/Bytes",
+			)
+		})
 	}
 
 	serde_serializer_quick_unsupported::serializer_unsupported! {
