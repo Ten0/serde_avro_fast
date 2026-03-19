@@ -59,6 +59,7 @@ impl From<TestSingleObjectReader> for Value {
 	}
 }
 
+#[allow(clippy::result_large_err)]
 fn apache_encode(
 	value: impl Into<Value>,
 	schema: &apache_avro::Schema,
