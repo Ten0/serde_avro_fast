@@ -48,7 +48,6 @@ impl CompressionCodecState {
 }
 
 /// This is potentially a large enum due to the snap encoder's buffer
-#[allow(clippy::large_enum_variant)]
 enum Kind {
 	Null,
 	#[cfg(feature = "deflate")]

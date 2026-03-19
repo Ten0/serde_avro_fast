@@ -76,14 +76,12 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 						.config
 						.buffers
 						.field_reordering_super_buffers
-						.pop()
-						.map(|v| {
-							// To be replaced with `Option::inspect` once that is stabilized
-							assert!(v.is_empty());
-							v
-						})
-						.unwrap_or_else(Vec::new),
-					record,
+					.pop()
+					.inspect(|v| {
+						assert!(v.is_empty());
+					})
+					.unwrap_or_else(Vec::new),
+				record,
 				},
 				serializer_state: state,
 			}),
@@ -252,7 +250,7 @@ fn field_idx<'s>(
 	}
 }
 
-fn serialize_record_value<'r, 'c, 's, W: Write, T: ?Sized>(
+fn serialize_record_value<'r, 'c, 's, W: Write, T>(
 	serializer_state: &'r mut SerializerState<'c, 's, W>,
 	record_state: &mut RecordState<'s>,
 	field_idx: usize,
@@ -260,7 +258,7 @@ fn serialize_record_value<'r, 'c, 's, W: Write, T: ?Sized>(
 	value: &T,
 ) -> Result<(), SerError>
 where
-	T: Serialize,
+	T: Serialize + ?Sized,
 {
 	if field_idx == record_state.current_idx {
 		// Fast case: fields are ordered so we don't need to buffer nor
@@ -309,14 +307,12 @@ where
 				.config
 				.buffers
 				.field_reordering_buffers
-				.pop()
-				.map(|v| {
-					// To be replaced with `Option::inspect` once that is stabilized
-					assert!(v.is_empty());
-					v
-				})
-				.unwrap_or_else(Vec::new),
-			config: SerializerConfigRef::Borrowed(&mut *serializer_state.config),
+			.pop()
+			.inspect(|v| {
+				assert!(v.is_empty());
+			})
+			.unwrap_or_else(Vec::new),
+		config: SerializerConfigRef::Borrowed(&mut *serializer_state.config),
 		};
 		value.serialize(DatumSerializer {
 			state: &mut buf_serializer_state,
@@ -372,13 +368,13 @@ impl<'r, 'c, 's, W: Write> SerializeStruct
 
 	type Error = SerError;
 
-	fn serialize_field<T: ?Sized>(
+	fn serialize_field<T>(
 		&mut self,
 		key: &'static str,
 		value: &T,
 	) -> Result<(), Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		match &mut self.kind {
 			Kind::Record(KindRecord {
@@ -431,13 +427,13 @@ impl<'r, 'c, 's, W: Write> SerializeStructVariant
 
 	type Error = SerError;
 
-	fn serialize_field<T: ?Sized>(
+	fn serialize_field<T>(
 		&mut self,
 		key: &'static str,
 		value: &T,
 	) -> Result<(), Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		<Self as SerializeStruct>::serialize_field(self, key, value)
 	}
@@ -494,9 +490,9 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 	type Ok = ();
 	type Error = SerError;
 
-	fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+	fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		match &mut self.inner.kind {
 			Kind::Record(KindRecord { record_state, .. }) => {
@@ -524,9 +520,9 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 		}
 	}
 
-	fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+	fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: Serialize,
+		T: Serialize + ?Sized,
 	{
 		match &mut self.inner.kind {
 			Kind::Record(KindRecord {
@@ -565,14 +561,14 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 		}
 	}
 
-	fn serialize_entry<K: ?Sized, V: ?Sized>(
+	fn serialize_entry<K, V>(
 		&mut self,
 		key: &K,
 		value: &V,
 	) -> Result<(), Self::Error>
 	where
-		K: Serialize,
-		V: Serialize,
+		K: Serialize + ?Sized,
+		V: Serialize + ?Sized,
 	{
 		match &mut self.inner.kind {
 			Kind::Record(KindRecord {

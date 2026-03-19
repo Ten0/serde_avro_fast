@@ -40,21 +40,21 @@ where
 		let mut can_truncate = 0;
 		if buf[0] & 0x80 == 0 {
 			// Positive number
-			while buf.get(can_truncate).map_or(false, |&v| v == 0x00) {
+			while buf.get(can_truncate).is_some_and(|&v| v == 0x00) {
 				can_truncate += 1;
 			}
 			// In case some other deserializers explode when giving empty bytes to
 			// represent zero we'll play it safe and still serialize it as a
 			// single byte with zeroes
-			if can_truncate != 0 && buf.get(can_truncate).map_or(true, |&v| v & 0x80 != 0) {
+			if can_truncate != 0 && buf.get(can_truncate).is_none_or(|&v| v & 0x80 != 0) {
 				can_truncate -= 1;
 			}
 		} else {
 			// Negative number
-			while buf.get(can_truncate).map_or(false, |&v| v == 0xFF) {
+			while buf.get(can_truncate).is_some_and(|&v| v == 0xFF) {
 				can_truncate += 1;
 			}
-			if can_truncate != 0 && buf.get(can_truncate).map_or(true, |&v| v & 0x80 == 0) {
+			if can_truncate != 0 && buf.get(can_truncate).is_none_or(|&v| v & 0x80 == 0) {
 				can_truncate -= 1;
 			}
 		}

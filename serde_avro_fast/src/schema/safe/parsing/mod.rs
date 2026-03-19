@@ -175,7 +175,7 @@ impl<'a> SchemaConstructionState<'a> {
 					name,
 				}
 			};
-			if let Some(_) = self.names.insert(name_key, idx) {
+			if self.names.insert(name_key, idx).is_some() {
 				return Err(SchemaError::msg(format_args!(
 					"The Schema contains duplicate definitions for {}",
 					name_key

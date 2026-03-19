@@ -54,11 +54,9 @@ impl<'r, 'c, 's, W: Write> SerializeSeqOrTupleOrTupleStruct<'r, 'c, 's, W> {
 					.buffers
 					.field_reordering_buffers
 					.pop()
-					.map(|v| {
-						// To be replaced with `Option::inspect` once that is stabilized
-						assert!(v.is_empty());
-						v
-					})
+				.inspect(|v| {
+					assert!(v.is_empty());
+				})
 					.unwrap_or_else(Vec::new),
 				serializer_state: state,
 			},

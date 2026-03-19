@@ -147,7 +147,7 @@ impl<'a, N> std::ops::Deref for NodeRef<'a, N> {
 ///
 /// For details about the meaning of the variants, see the
 /// [`SchemaNode`](crate::schema::SchemaNode) documentation.
-#[allow(clippy::large_enum_variant)] // TODO
+#[allow(clippy::large_enum_variant)]
 #[non_exhaustive]
 pub(crate) enum SchemaNode<'a> {
 	Null,
