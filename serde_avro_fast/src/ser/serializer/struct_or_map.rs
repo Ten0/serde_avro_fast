@@ -76,12 +76,10 @@ impl<'r, 'c, 's, W: Write> SerializeStructAsRecordOrMapOrDuration<'r, 'c, 's, W>
 						.config
 						.buffers
 						.field_reordering_super_buffers
-					.pop()
-					.inspect(|v| {
-						assert!(v.is_empty());
-					})
-					.unwrap_or_else(Vec::new),
-				record,
+						.pop()
+						.inspect(|v| assert!(v.is_empty()))
+						.unwrap_or_else(Vec::new),
+					record,
 				},
 				serializer_state: state,
 			}),
@@ -307,12 +305,10 @@ where
 				.config
 				.buffers
 				.field_reordering_buffers
-			.pop()
-			.inspect(|v| {
-				assert!(v.is_empty());
-			})
-			.unwrap_or_else(Vec::new),
-		config: SerializerConfigRef::Borrowed(&mut *serializer_state.config),
+				.pop()
+				.inspect(|v| assert!(v.is_empty()))
+				.unwrap_or_else(Vec::new),
+			config: SerializerConfigRef::Borrowed(&mut *serializer_state.config),
 		};
 		value.serialize(DatumSerializer {
 			state: &mut buf_serializer_state,
@@ -368,11 +364,7 @@ impl<'r, 'c, 's, W: Write> SerializeStruct
 
 	type Error = SerError;
 
-	fn serialize_field<T>(
-		&mut self,
-		key: &'static str,
-		value: &T,
-	) -> Result<(), Self::Error>
+	fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
 	where
 		T: Serialize + ?Sized,
 	{
@@ -427,11 +419,7 @@ impl<'r, 'c, 's, W: Write> SerializeStructVariant
 
 	type Error = SerError;
 
-	fn serialize_field<T>(
-		&mut self,
-		key: &'static str,
-		value: &T,
-	) -> Result<(), Self::Error>
+	fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
 	where
 		T: Serialize + ?Sized,
 	{
@@ -561,11 +549,7 @@ impl<'r, 'c, 's, W: Write> SerializeMap for SerializeMapAsRecordOrMapOrDuration<
 		}
 	}
 
-	fn serialize_entry<K, V>(
-		&mut self,
-		key: &K,
-		value: &V,
-	) -> Result<(), Self::Error>
+	fn serialize_entry<K, V>(&mut self, key: &K, value: &V) -> Result<(), Self::Error>
 	where
 		K: Serialize + ?Sized,
 		V: Serialize + ?Sized,
