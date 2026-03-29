@@ -128,7 +128,7 @@
 
 // Get docs.rs to display all compression methods and corresponding feature flags.
 // That is used jointly with `package.metadata.docs.rs` in the `Cargo.toml`
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod de;
 pub mod schema;
