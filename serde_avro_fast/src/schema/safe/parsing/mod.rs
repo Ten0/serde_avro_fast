@@ -15,6 +15,14 @@ struct SchemaConstructionState<'a> {
 impl std::str::FromStr for SchemaMut {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Self::from_schemata(s, &[])
+	}
+}
+
+impl SchemaMut {
+	/// Parse a main schema together with dependency schemata into a
+	/// [`SchemaMut`].
+	pub fn from_schemata(schema_str: &str, schemata_str: &[&str]) -> Result<Self, SchemaError> {
 		let mut state = SchemaConstructionState {
 			nodes: Vec::new(),
 			names: HashMap::new(),
@@ -22,9 +30,16 @@ impl std::str::FromStr for SchemaMut {
 		};
 
 		let raw_schema: raw::SchemaNode<'_> =
-			serde_json::from_str(s).map_err(SchemaError::serde_json)?;
-
+			serde_json::from_str(schema_str).map_err(SchemaError::serde_json)?;
 		state.register_node(&raw_schema, None)?;
+
+		let raw_schemata: Vec<raw::SchemaNode<'_>> = schemata_str
+			.iter()
+			.map(|schema_str| serde_json::from_str(schema_str).map_err(SchemaError::serde_json))
+			.collect::<Result<_, _>>()?;
+		for raw_schema in &raw_schemata {
+			state.register_node(raw_schema, None)?;
+		}
 
 		// Support for unordered name definitions
 		if !state.unresolved_names.is_empty() {
@@ -72,14 +87,13 @@ impl std::str::FromStr for SchemaMut {
 			}
 		}
 
-		let schema = Self {
-			nodes: state.nodes,
-			schema_json: Some(
+		let schema_json = if schemata_str.is_empty() {
+			Some(
 				String::from_utf8({
 					// Sanitize & minify json, preserving all keys.
 					let mut serializer = serde_json::Serializer::new(Vec::new());
 					serde_transcode::transcode(
-						&mut serde_json::Deserializer::from_str(s),
+						&mut serde_json::Deserializer::from_str(schema_str),
 						&mut serializer,
 					)
 					.map_err(SchemaError::serde_json)?;
@@ -90,14 +104,15 @@ impl std::str::FromStr for SchemaMut {
 						"serde_json should not emit invalid UTF-8 but got {e}"
 					))
 				})?,
-			),
+			)
+		} else {
+			None
 		};
 
-		schema
-			.check_for_cycles()
-			.map_err(|e: UnconditionalCycle| SchemaError::display(e))?;
-
-		Ok(schema)
+		Ok(Self {
+			nodes: state.nodes,
+			schema_json,
+		})
 	}
 }
 
