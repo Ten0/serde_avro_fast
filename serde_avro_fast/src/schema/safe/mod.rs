@@ -24,7 +24,7 @@ pub use check_for_cycles::UnconditionalCycle;
 ///
 /// For details about the meaning of the fields, see the
 /// [`SchemaNode`](crate::schema::SchemaNode) documentation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct SchemaMut {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
@@ -161,7 +161,7 @@ impl std::fmt::Debug for SchemaKey {
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`SchemaMut`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct SchemaNode {
 	/// The underlying regular type of this node
@@ -195,7 +195,7 @@ impl SchemaNode {
 ///
 /// In there, references to other nodes are represented as [`SchemaKey`], which
 /// allow to index into [`SchemaMut`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum RegularType {
 	/// A `null` Avro schema.
 	Null,
@@ -288,7 +288,7 @@ impl RegularType {
 }
 
 /// Component of a [`SchemaMut`]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Array {
 	/// The key (in the [`SchemaMut`]) of the schema of each item that will be
@@ -307,7 +307,7 @@ impl Array {
 ///
 /// An Avro map is a collection of key-value pairs, where the keys are assumed
 /// to be strings.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Map {
 	/// The key (in the [`SchemaMut`]) of the schema of each value that will be
@@ -327,7 +327,7 @@ impl Map {
 }
 
 /// Component of a [`SchemaMut`]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Union {
 	/// The keys (in the [`SchemaMut`]) of the schemas of each variant that
@@ -345,7 +345,7 @@ impl Union {
 /// Component of a [`SchemaMut`]
 ///
 /// An avro `record` is ~equivalent to a Rust struct.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Record {
 	/// The list of fields in this *record* (~= `struct`)
@@ -362,7 +362,7 @@ impl Record {
 }
 
 /// Component of a [`SchemaMut`]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct RecordField {
 	/// Name of the field
@@ -385,7 +385,7 @@ impl RecordField {
 ///
 /// This is the ~equivalent of a Rust `enum` where none of the variants would
 /// hold any inner value. (e.g. `enum Foo { Bar, Baz }`)
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Enum {
 	/// All the variants of the enum (e.g. `["Bar", "Baz"]`)
@@ -404,7 +404,7 @@ impl Enum {
 /// Logical type
 ///
 /// <https://avro.apache.org/docs/current/specification/#logical-types>
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum LogicalType {
 	/// Logical type which represents `Decimal` values. The underlying type is
@@ -493,7 +493,7 @@ pub enum LogicalType {
 }
 
 /// Component of a [`SchemaMut`]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Decimal {
 	/// The scale of the decimal number, which is the number of digits to the
@@ -515,7 +515,7 @@ impl Decimal {
 ///
 /// Represents a logical type that is not known or not handled in any particular
 /// way by this library.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct UnknownLogicalType {
 	/// The name of the logical type, as it appears in the schema JSON

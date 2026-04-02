@@ -10,7 +10,6 @@ impl SchemaMut {
 		let key_remap = build_remap(&reachable_nodes);
 		remap_nodes(self, &reachable_nodes, &key_remap)?;
 		remove_unreachable_nodes(self, &reachable_nodes);
-		self.schema_json = None;
 		Ok(())
 	}
 }
@@ -176,15 +175,10 @@ mod tests {
 
 		schema.remove_unreferenced_nodes().unwrap();
 
+		assert_eq!(schema.nodes().len(), 2);
 		assert_eq!(
-			schema,
-			SchemaMut::from_nodes(vec![
-				SchemaNode::new(RegularType::Record(Record::new(
-					Name::from_fully_qualified_name("Root"),
-					vec![RecordField::new("f", SchemaKey::from_idx(1))],
-				))),
-				SchemaNode::new(RegularType::Int),
-			])
+			serde_json::to_string(&schema).unwrap(),
+			r#"{"type":"record","name":"Root","fields":[{"name":"f","type":"int"}]}"#
 		);
 	}
 
