@@ -221,7 +221,7 @@ where
 	/// [`Reader::from_slice`], `R = `[`SliceRead<'_>`](de::read::SliceRead))
 	///
 	/// Note that this may fail if the provided `T` requires to borrow from the
-	/// input and the blocks are compressed. (`deserialize_next` typechecks that
+	/// input and the blocks are compressed. (`deserialize` typechecks that
 	/// we have `DeserializeOwned` to make sure that is never the case).
 	pub fn deserialize_borrowed<'r, 'de, T: Deserialize<'de>>(
 		&'r mut self,
