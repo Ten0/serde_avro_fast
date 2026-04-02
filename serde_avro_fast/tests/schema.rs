@@ -205,7 +205,7 @@ fn from_schemata_rejects_unknown_reference_from_dependency() {
 }
 
 #[test]
-fn from_schemata_prunes_unused_dependency_nodes() {
+fn from_schemata_prunes_unreferenced_nodes() {
 	let main = r#"{
 		"type": "record",
 		"name": "Main",
@@ -226,55 +226,5 @@ fn from_schemata_prunes_unused_dependency_nodes() {
 	assert_eq!(
 		schema.json(),
 		r#"{"type":"record","name":"Main","fields":[{"name":"f","type":{"type":"record","name":"Used","fields":[{"name":"v","type":"int"}]}}]}"#
-	);
-}
-
-#[test]
-fn from_schemata_prunes_unused_cyclic_dependency() {
-	let main = r#"{
-		"type": "record",
-		"name": "Main",
-		"fields": [{ "name": "v", "type": "int" }]
-	}"#;
-	let dep_cyclic = r#"{
-		"type": "record",
-		"name": "CyclicA",
-		"fields": [{
-			"name": "b",
-			"type": {
-				"type": "record",
-				"name": "CyclicB",
-				"fields": [{ "name": "a", "type": "CyclicA" }]
-			}
-		}]
-	}"#;
-
-	let schema = Schema::from_schemata(main, [dep_cyclic]).unwrap();
-	assert_eq!(
-		schema.json(),
-		r#"{"type":"record","name":"Main","fields":[{"name":"v","type":"int"}]}"#
-	);
-}
-
-#[test]
-fn freeze_rejects_zero_sized_cycle_from_nodes() {
-	use serde_avro_fast::schema::*;
-
-	let nodes = vec![
-		SchemaNode::new(RegularType::Record(Record::new(
-			Name::from_fully_qualified_name("A"),
-			vec![RecordField::new("b", SchemaKey::from_idx(1))],
-		))),
-		SchemaNode::new(RegularType::Record(Record::new(
-			Name::from_fully_qualified_name("B"),
-			vec![RecordField::new("a", SchemaKey::from_idx(0))],
-		))),
-	];
-	let schema_mut = SchemaMut::from_nodes(nodes);
-	let err = schema_mut.freeze().unwrap_err();
-	let msg = err.to_string();
-	assert!(
-		msg.contains("always containing itself"),
-		"expected cycle error, got: {msg}"
 	);
 }

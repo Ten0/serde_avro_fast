@@ -23,17 +23,17 @@ impl SchemaMut {
 	/// Parse a main schema together with dependency schemata into a single
 	/// [`Schema`].
 	pub fn from_schemata(
-		schema_str: &str,
-		schemata_str: impl IntoIterator<Item = impl AsRef<str>>,
+		main_schema: &str,
+		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
 	) -> Result<Self, SchemaError> {
-		let owned: Vec<_> = schemata_str.into_iter().collect();
-		let owned_refs: Vec<&str> = owned.iter().map(|s| s.as_ref()).collect();
-		Self::from_schemata_inner(schema_str, &owned_refs)
+		let owned: Vec<_> = dep_schemas.into_iter().collect();
+		let owned_dep_schemas: Vec<&str> = owned.iter().map(|s| s.as_ref()).collect();
+		Self::from_schemata_inner(main_schema, &owned_dep_schemas)
 	}
 
 	pub(crate) fn from_schemata_inner(
-		schema_str: &str,
-		schemata_str: &[&str],
+		main_schema: &str,
+		dep_schemas: &[&str],
 	) -> Result<Self, SchemaError> {
 		let mut state = SchemaConstructionState {
 			nodes: Vec::new(),
@@ -41,16 +41,16 @@ impl SchemaMut {
 			unresolved_names: Vec::new(),
 		};
 
-		let raw_schema: raw::SchemaNode<'_> =
-			serde_json::from_str(schema_str).map_err(SchemaError::serde_json)?;
-		state.register_node(&raw_schema, None)?;
+		let raw_main_schema: raw::SchemaNode<'_> =
+			serde_json::from_str(main_schema).map_err(SchemaError::serde_json)?;
+		state.register_node(&raw_main_schema, None)?;
 
-		let raw_schemata: Vec<raw::SchemaNode<'_>> = schemata_str
+		let raw_dep_schemas: Vec<raw::SchemaNode<'_>> = dep_schemas
 			.iter()
 			.map(|schema_str| serde_json::from_str(schema_str).map_err(SchemaError::serde_json))
 			.collect::<Result<_, _>>()?;
-		for raw_schema in &raw_schemata {
-			state.register_node(raw_schema, None)?;
+		for raw_dep_schema in &raw_dep_schemas {
+			state.register_node(raw_dep_schema, None)?;
 		}
 
 		// Support for unordered name definitions
@@ -98,15 +98,15 @@ impl SchemaMut {
 				}
 			}
 		}
-		let mut schema = Self {
+		let schema = Self {
 			nodes: state.nodes,
-			schema_json: if schemata_str.is_empty() {
+			schema_json: if dep_schemas.is_empty() {
 				Some(
 					String::from_utf8({
 						// Sanitize & minify json, preserving all keys.
 						let mut serializer = serde_json::Serializer::new(Vec::new());
 						serde_transcode::transcode(
-							&mut serde_json::Deserializer::from_str(schema_str),
+							&mut serde_json::Deserializer::from_str(main_schema),
 							&mut serializer,
 						)
 						.map_err(SchemaError::serde_json)?;
@@ -123,7 +123,6 @@ impl SchemaMut {
 			},
 		};
 
-		schema.remove_unreferenced_nodes()?;
 		schema
 			.check_for_cycles()
 			.map_err(|e: UnconditionalCycle| SchemaError::display(e))?;

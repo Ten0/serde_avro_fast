@@ -20,10 +20,10 @@ impl Schema {
 	/// Parse a main schema together with dependency schemata into a single
 	/// [`Schema`].
 	pub fn from_schemata(
-		schema_str: &str,
-		schemata_str: impl IntoIterator<Item = impl AsRef<str>>,
+		main_schema: &str,
+		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
 	) -> Result<Self, SchemaError> {
-		safe::SchemaMut::from_schemata(schema_str, schemata_str)?.try_into()
+		safe::SchemaMut::from_schemata(main_schema, dep_schemas)?.try_into()
 	}
 }
 

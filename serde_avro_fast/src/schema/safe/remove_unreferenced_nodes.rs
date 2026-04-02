@@ -8,7 +8,7 @@ impl SchemaMut {
 		let mut reachable_nodes = vec![false; self.nodes.len()];
 		mark_reachable(self, SchemaKey::root(), &mut reachable_nodes)?;
 		let key_remap = build_remap(&reachable_nodes);
-		remap_nodes(self, &reachable_nodes, &key_remap)?;
+		remap_nodes(self, &reachable_nodes, &key_remap);
 		remove_unreachable_nodes(self, &reachable_nodes);
 		Ok(())
 	}
@@ -39,54 +39,32 @@ fn build_remap(reachable_nodes: &[bool]) -> Vec<Option<SchemaKey>> {
 		.collect()
 }
 
-fn remap_nodes(
-	schema: &mut SchemaMut,
-	reachable_nodes: &[bool],
-	key_remap: &[Option<SchemaKey>],
-) -> Result<(), SchemaError> {
+fn remap_nodes(schema: &mut SchemaMut, reachable_nodes: &[bool], key_remap: &[Option<SchemaKey>]) {
+	let get_remapped_key = |key: SchemaKey| {
+		key_remap
+			.get(key.idx())
+			.expect("SchemaKey referring to a non-existing node should have been caught by mark_reachable")
+			.expect("An unreachable node should not be able to be referred to by a reachable node")
+	};
 	for (idx, node) in schema.nodes.iter_mut().enumerate() {
 		if !reachable_nodes[idx] {
 			continue;
 		}
 		match &mut node.type_ {
 			RegularType::Array(Array { items, .. }) => {
-				*items = *key_remap
-					.get(items.idx())
-					.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?
-					.as_ref()
-					.ok_or_else(|| {
-						SchemaError::new("Remapped SchemaKey refers to an unreachable node")
-					})?;
+				*items = get_remapped_key(*items);
 			}
 			RegularType::Map(Map { values, .. }) => {
-				*values = *key_remap
-					.get(values.idx())
-					.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?
-					.as_ref()
-					.ok_or_else(|| {
-						SchemaError::new("Remapped SchemaKey refers to an unreachable node")
-					})?;
+				*values = get_remapped_key(*values);
 			}
 			RegularType::Union(Union { variants, .. }) => {
 				for variant in variants {
-					*variant = *key_remap
-						.get(variant.idx())
-						.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?
-						.as_ref()
-						.ok_or_else(|| {
-							SchemaError::new("Remapped SchemaKey refers to an unreachable node")
-						})?;
+					*variant = get_remapped_key(*variant);
 				}
 			}
 			RegularType::Record(Record { fields, .. }) => {
 				for field in fields {
-					field.type_ = *key_remap
-						.get(field.type_.idx())
-						.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?
-						.as_ref()
-						.ok_or_else(|| {
-							SchemaError::new("Remapped SchemaKey refers to an unreachable node")
-						})?;
+					field.type_ = get_remapped_key(field.type_);
 				}
 			}
 			RegularType::Null
@@ -101,7 +79,6 @@ fn remap_nodes(
 			| RegularType::Fixed(_) => {}
 		}
 	}
-	Ok(())
 }
 
 fn mark_reachable(
@@ -152,6 +129,9 @@ fn mark_reachable(
 	Ok(())
 }
 
+// Mainly to verify correctness of `remove_unreferenced_nodes` implementation,
+// which is an internal method that we don't want to expose publicly, which is
+// why it lives here instead of in the tests module.
 #[cfg(test)]
 mod tests {
 	use {
@@ -173,8 +153,8 @@ mod tests {
 			))),
 		]);
 
+		assert_eq!(schema.nodes().len(), 3);
 		schema.remove_unreferenced_nodes().unwrap();
-
 		assert_eq!(schema.nodes().len(), 2);
 		assert_eq!(
 			serde_json::to_string(&schema).unwrap(),
