@@ -86,9 +86,17 @@ fn mark_reachable(
 	key: SchemaKey,
 	reachable_nodes: &mut [bool],
 ) -> Result<(), SchemaError> {
+	let out_of_bounds_error = || {
+		SchemaError::msg(format_args!(
+			"SchemaKey index {} is out of bounds (len: {})",
+			key.idx(),
+			schema.nodes.len()
+		))
+	};
+
 	let reachable = reachable_nodes
 		.get_mut(key.idx())
-		.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
+		.ok_or_else(out_of_bounds_error)?;
 
 	if *reachable {
 		return Ok(());
@@ -97,7 +105,7 @@ fn mark_reachable(
 	let node = schema
 		.nodes
 		.get(key.idx())
-		.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
+		.ok_or_else(out_of_bounds_error)?;
 	match &node.type_ {
 		RegularType::Array(Array { items, .. }) => {
 			mark_reachable(schema, *items, reachable_nodes)?;
