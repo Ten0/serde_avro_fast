@@ -28,6 +28,15 @@ pub use check_for_cycles::UnconditionalCycle;
 pub struct SchemaMut {
 	// First node in the array is considered to be the root
 	pub(super) nodes: Vec<SchemaNode>,
+	/// If the schema was parsed from a JSON string, this will contain the
+	/// original JSON string (whitespace removed). This is used to preserve the
+	/// same exact original JSON string when the schema is "serialized back to
+	/// JSON", to avoid losing attributes like `doc`, `default`, ...
+	/// that this library does not care about.
+	///
+	/// If the schema was not parsed from a JSON string, or was modified later
+	/// on, this field will have been cleared and schema will be serialized to
+	/// JSON again as necessary.
 	pub(super) schema_json: Option<String>,
 }
 
