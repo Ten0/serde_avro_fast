@@ -5,17 +5,17 @@ impl SchemaMut {
 		if self.nodes.is_empty() {
 			return Ok(());
 		}
-		let mut reachable_nodes = vec![false; self.nodes.len()];
-		mark_reachable(self, SchemaKey::root(), &mut reachable_nodes)?;
-		let key_remap = build_remap(&reachable_nodes);
-		remap_and_remove_unreachable_nodes(self, &reachable_nodes, &key_remap);
+		let mut is_node_reachable_by_idx = vec![false; self.nodes.len()];
+		mark_reachable(self, SchemaKey::root(), &mut is_node_reachable_by_idx)?;
+		let key_remap = build_remap(&is_node_reachable_by_idx);
+		remap_and_remove_unreachable_nodes(self, &is_node_reachable_by_idx, &key_remap);
 		Ok(())
 	}
 }
 
-fn build_remap(reachable_nodes: &[bool]) -> Vec<Option<SchemaKey>> {
+fn build_remap(is_node_reachable_by_idx: &[bool]) -> Vec<Option<SchemaKey>> {
 	let mut new_idx = 0;
-	reachable_nodes
+	is_node_reachable_by_idx
 		.iter()
 		.map(|&reachable| {
 			if reachable {
@@ -31,7 +31,7 @@ fn build_remap(reachable_nodes: &[bool]) -> Vec<Option<SchemaKey>> {
 
 fn remap_and_remove_unreachable_nodes(
 	schema: &mut SchemaMut,
-	reachable_nodes: &[bool],
+	is_node_reachable_by_idx: &[bool],
 	key_remap: &[Option<SchemaKey>],
 ) {
 	let get_remapped_key = |key: SchemaKey| {
@@ -42,9 +42,9 @@ fn remap_and_remove_unreachable_nodes(
 	};
 	let mut i = 0;
 	schema.nodes.retain_mut(|node| {
-		let idx = i;
+		let node_is_reachable = is_node_reachable_by_idx[i];
 		i += 1;
-		if !reachable_nodes[idx] {
+		if !node_is_reachable {
 			return false;
 		}
 		match &mut node.type_ {
@@ -82,7 +82,7 @@ fn remap_and_remove_unreachable_nodes(
 fn mark_reachable(
 	schema: &SchemaMut,
 	key: SchemaKey,
-	reachable_nodes: &mut [bool],
+	is_node_reachable_by_idx: &mut [bool],
 ) -> Result<(), SchemaError> {
 	let out_of_bounds_error = || {
 		SchemaError::msg(format_args!(
@@ -92,7 +92,7 @@ fn mark_reachable(
 		))
 	};
 
-	let reachable = reachable_nodes
+	let reachable = is_node_reachable_by_idx
 		.get_mut(key.idx())
 		.ok_or_else(out_of_bounds_error)?;
 
@@ -106,19 +106,19 @@ fn mark_reachable(
 		.ok_or_else(out_of_bounds_error)?;
 	match &node.type_ {
 		RegularType::Array(Array { items, .. }) => {
-			mark_reachable(schema, *items, reachable_nodes)?;
+			mark_reachable(schema, *items, is_node_reachable_by_idx)?;
 		}
 		RegularType::Map(Map { values, .. }) => {
-			mark_reachable(schema, *values, reachable_nodes)?;
+			mark_reachable(schema, *values, is_node_reachable_by_idx)?;
 		}
 		RegularType::Union(Union { variants, .. }) => {
 			for variant in variants {
-				mark_reachable(schema, *variant, reachable_nodes)?;
+				mark_reachable(schema, *variant, is_node_reachable_by_idx)?;
 			}
 		}
 		RegularType::Record(Record { fields, .. }) => {
 			for field in fields {
-				mark_reachable(schema, field.type_, reachable_nodes)?;
+				mark_reachable(schema, field.type_, is_node_reachable_by_idx)?;
 			}
 		}
 		RegularType::Null
