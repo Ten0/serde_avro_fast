@@ -180,7 +180,7 @@ mod tests {
 
 		assert_eq!(
 			schema.remove_unreferenced_nodes().unwrap_err().to_string(),
-			"SchemaKey refers to non-existing node"
+			"SchemaKey index 999 is out of bounds (len: 1)"
 		);
 	}
 }
