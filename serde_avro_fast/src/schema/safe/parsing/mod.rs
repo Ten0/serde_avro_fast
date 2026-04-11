@@ -26,9 +26,9 @@ impl SchemaMut {
 		main_schema: &str,
 		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
 	) -> Result<Self, SchemaError> {
-		let owned: Vec<_> = dep_schemas.into_iter().collect();
-		let owned_dep_schemas: Vec<&str> = owned.iter().map(|s| s.as_ref()).collect();
-		Self::from_schemata_inner(main_schema, &owned_dep_schemas)
+		let collected_schemas: Vec<_> = dep_schemas.into_iter().collect();
+		let schemas_str_slice: Vec<&str> = collected_schemas.iter().map(|s| s.as_ref()).collect();
+		Self::from_schemata_inner(main_schema, &schemas_str_slice)
 	}
 
 	pub(crate) fn from_schemata_inner(
