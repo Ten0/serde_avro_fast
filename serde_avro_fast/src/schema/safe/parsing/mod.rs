@@ -31,6 +31,7 @@ impl SchemaMut {
 		Self::from_schemata_inner(main_schema, &schemas_str_slice)
 	}
 
+	/// Non-generic inner function to avoid monomorphizing it several times.
 	pub(crate) fn from_schemata_inner(
 		main_schema: &str,
 		dep_schemas: &[&str],
