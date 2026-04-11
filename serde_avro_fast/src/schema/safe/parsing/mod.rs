@@ -15,16 +15,44 @@ struct SchemaConstructionState<'a> {
 impl std::str::FromStr for SchemaMut {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Self::from_schemata_inner(s, &[])
+	}
+}
+
+impl SchemaMut {
+	/// Parse a main schema together with dependency schemata into a single
+	/// [`Schema`].
+	pub fn from_schemata(
+		main_schema: &str,
+		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
+	) -> Result<Self, SchemaError> {
+		let collected_schemas: Vec<_> = dep_schemas.into_iter().collect();
+		let schemas_str_slice: Vec<&str> = collected_schemas.iter().map(|s| s.as_ref()).collect();
+		Self::from_schemata_inner(main_schema, &schemas_str_slice)
+	}
+
+	/// Non-generic inner function to avoid monomorphizing it several times.
+	pub(crate) fn from_schemata_inner(
+		main_schema: &str,
+		dep_schemas: &[&str],
+	) -> Result<Self, SchemaError> {
 		let mut state = SchemaConstructionState {
 			nodes: Vec::new(),
 			names: HashMap::new(),
 			unresolved_names: Vec::new(),
 		};
 
-		let raw_schema: raw::SchemaNode<'_> =
-			serde_json::from_str(s).map_err(SchemaError::serde_json)?;
+		let raw_main_schema: raw::SchemaNode<'_> =
+			serde_json::from_str(main_schema).map_err(SchemaError::serde_json)?;
+		state.register_node(&raw_main_schema, None)?;
 
-		state.register_node(&raw_schema, None)?;
+		let raw_dep_schemas: Vec<raw::SchemaNode<'_>> = dep_schemas
+			.iter()
+			.map(|schema_str| serde_json::from_str(schema_str).map_err(SchemaError::serde_json))
+			.collect::<Result<_, _>>()?;
+		for raw_dep_schema in &raw_dep_schemas {
+			state.register_node(raw_dep_schema, None)?;
+		}
 
 		// Support for unordered name definitions
 		if !state.unresolved_names.is_empty() {
@@ -71,26 +99,29 @@ impl std::str::FromStr for SchemaMut {
 				}
 			}
 		}
-
 		let schema = Self {
 			nodes: state.nodes,
-			schema_json: Some(
-				String::from_utf8({
-					// Sanitize & minify json, preserving all keys.
-					let mut serializer = serde_json::Serializer::new(Vec::new());
-					serde_transcode::transcode(
-						&mut serde_json::Deserializer::from_str(s),
-						&mut serializer,
-					)
-					.map_err(SchemaError::serde_json)?;
-					serializer.into_inner()
-				})
-				.map_err(|e| {
-					SchemaError::msg(format_args!(
-						"serde_json should not emit invalid UTF-8 but got {e}"
-					))
-				})?,
-			),
+			schema_json: if dep_schemas.is_empty() {
+				Some(
+					String::from_utf8({
+						// Sanitize & minify json, preserving all keys.
+						let mut serializer = serde_json::Serializer::new(Vec::new());
+						serde_transcode::transcode(
+							&mut serde_json::Deserializer::from_str(main_schema),
+							&mut serializer,
+						)
+						.map_err(SchemaError::serde_json)?;
+						serializer.into_inner()
+					})
+					.map_err(|e| {
+						SchemaError::msg(format_args!(
+							"serde_json should not emit invalid UTF-8 but got {e}"
+						))
+					})?,
+				)
+			} else {
+				None
+			},
 		};
 
 		schema

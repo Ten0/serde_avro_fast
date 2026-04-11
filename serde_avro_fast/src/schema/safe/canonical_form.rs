@@ -42,10 +42,13 @@ impl<W: Write> WriteCanonicalFormState<W> {
 		schema: &SchemaMut,
 		key: SchemaKey,
 	) -> Result<(), SchemaError> {
-		let node = schema
-			.nodes
-			.get(key.idx)
-			.ok_or_else(|| SchemaError::new("SchemaKey refers to non-existing node"))?;
+		let node = schema.nodes.get(key.idx).ok_or_else(|| {
+			SchemaError::msg(format_args!(
+				"SchemaKey index {} is out of bounds (len: {})",
+				key.idx,
+				schema.nodes.len()
+			))
+		})?;
 
 		let mut first_time = true;
 		let should_not_write_only_name =

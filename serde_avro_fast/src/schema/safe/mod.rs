@@ -5,6 +5,7 @@ mod canonical_form;
 mod check_for_cycles;
 mod parsing;
 mod rabin;
+mod remove_unreferenced_nodes;
 mod serialize;
 
 use super::{Fixed, Name, SchemaError};

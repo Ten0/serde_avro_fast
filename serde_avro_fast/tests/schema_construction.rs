@@ -70,3 +70,54 @@ fn impossible_schema_construction() {
 		"Schema contains a cycle that can't be avoided using named references"
 	);
 }
+
+#[test]
+fn schema_mut_from_schemata_denies_cycles() {
+	let main = r#"{
+		"type": "record",
+		"name": "Main",
+		"fields": [{ "name": "v", "type": "int" }]
+	}"#;
+	let dep_cyclic = r#"{
+		"type": "record",
+		"name": "CyclicA",
+		"fields": [{
+			"name": "b",
+			"type": {
+				"type": "record",
+				"name": "CyclicB",
+				"fields": [{ "name": "a", "type": "CyclicA" }]
+			}
+		}]
+	}"#;
+
+	let schema_mut_res = SchemaMut::from_schemata(main, [dep_cyclic]);
+	assert_eq!(
+		schema_mut_res.unwrap_err().to_string(),
+		"The schema contains a record that ends up always containing itself"
+	);
+}
+
+#[test]
+fn schema_mut_from_schemata_allows_unreferenced_nodes() {
+	let main = r#"{
+		"type": "record",
+		"name": "Main",
+		"fields": [{ "name": "f", "type": "Used" }]
+	}"#;
+	let dep_used = r#"{
+		"type": "record",
+		"name": "Used",
+		"fields": [{ "name": "v", "type": "int" }]
+	}"#;
+	let dep_unused = r#"{
+		"type": "record",
+		"name": "Unused",
+		"fields": [{ "name": "w", "type": "string" }]
+	}"#;
+
+	let schema_mut = SchemaMut::from_schemata(main, [dep_used, dep_unused]).unwrap();
+	let minimal_schema_mut = SchemaMut::from_schemata(main, [dep_used]).unwrap();
+	assert_eq!(schema_mut.nodes().len(), 5);
+	assert_eq!(minimal_schema_mut.nodes().len(), 3);
+}

@@ -249,12 +249,17 @@ pub(crate) enum DecimalRepr {
 
 impl TryFrom<super::safe::SchemaMut> for Schema {
 	type Error = SchemaError;
-	fn try_from(safe: super::safe::SchemaMut) -> Result<Self, SchemaError> {
+	fn try_from(mut safe: super::safe::SchemaMut) -> Result<Self, SchemaError> {
 		if safe.nodes().is_empty() {
 			return Err(SchemaError::new(
 				"Schema must have at least one node (the root)",
 			));
 		}
+
+		safe.remove_unreferenced_nodes()?;
+
+		safe.check_for_cycles()
+			.map_err(|e: super::safe::UnconditionalCycle| SchemaError::display(e))?;
 
 		// The `nodes` allocation should never be moved otherwise references will become
 		// invalid

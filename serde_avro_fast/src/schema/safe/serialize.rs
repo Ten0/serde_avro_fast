@@ -151,10 +151,13 @@ impl NoCycleGuard<'_> {
 
 impl Serialize for SerializeSchema<'_, SchemaKey> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		let node = self
-			.schema_nodes
-			.get(self.key.idx)
-			.ok_or_else(|| S::Error::custom("SchemaKey refers to non-existing node"))?;
+		let node = self.schema_nodes.get(self.key.idx).ok_or_else(|| {
+			S::Error::custom(format!(
+				"SchemaKey index {} is out of bounds (len: {})",
+				self.key.idx,
+				self.schema_nodes.len()
+			))
+		})?;
 
 		let serialize_type_and_logical_type = |type_: &str, map: &mut S::SerializeMap| {
 			if let Some(logical_type) = &node.logical_type {

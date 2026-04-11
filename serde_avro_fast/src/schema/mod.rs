@@ -12,8 +12,18 @@ pub(crate) use union_variants_per_type_lookup::UnionVariantLookupKey;
 impl std::str::FromStr for Schema {
 	type Err = SchemaError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let safe_schema: safe::SchemaMut = s.parse()?;
-		safe_schema.try_into()
+		safe::SchemaMut::from_str(s)?.try_into()
+	}
+}
+
+impl Schema {
+	/// Parse a main schema together with dependency schemata into a single
+	/// [`Schema`].
+	pub fn from_schemata(
+		main_schema: &str,
+		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
+	) -> Result<Self, SchemaError> {
+		safe::SchemaMut::from_schemata(main_schema, dep_schemas)?.try_into()
 	}
 }
 
