@@ -21,7 +21,7 @@ impl std::str::FromStr for SchemaMut {
 
 impl SchemaMut {
 	/// Parse a main schema together with dependency schemata into a single
-	/// [`Schema`].
+	/// [`SchemaMut`].
 	pub fn from_schemata(
 		main_schema: &str,
 		dep_schemas: impl IntoIterator<Item = impl AsRef<str>>,
