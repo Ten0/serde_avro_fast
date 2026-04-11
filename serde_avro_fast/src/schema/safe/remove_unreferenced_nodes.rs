@@ -8,19 +8,9 @@ impl SchemaMut {
 		let mut reachable_nodes = vec![false; self.nodes.len()];
 		mark_reachable(self, SchemaKey::root(), &mut reachable_nodes)?;
 		let key_remap = build_remap(&reachable_nodes);
-		remap_nodes(self, &reachable_nodes, &key_remap);
-		remove_unreachable_nodes(self, &reachable_nodes);
+		remap_and_remove_unreachable_nodes(self, &reachable_nodes, &key_remap);
 		Ok(())
 	}
-}
-
-fn remove_unreachable_nodes(schema: &mut SchemaMut, reachable_nodes: &[bool]) {
-	let mut i = 0;
-	schema.nodes.retain(|_| {
-		let keep = reachable_nodes[i];
-		i += 1;
-		keep
-	});
 }
 
 fn build_remap(reachable_nodes: &[bool]) -> Vec<Option<SchemaKey>> {
@@ -39,16 +29,23 @@ fn build_remap(reachable_nodes: &[bool]) -> Vec<Option<SchemaKey>> {
 		.collect()
 }
 
-fn remap_nodes(schema: &mut SchemaMut, reachable_nodes: &[bool], key_remap: &[Option<SchemaKey>]) {
+fn remap_and_remove_unreachable_nodes(
+	schema: &mut SchemaMut,
+	reachable_nodes: &[bool],
+	key_remap: &[Option<SchemaKey>],
+) {
 	let get_remapped_key = |key: SchemaKey| {
 		key_remap
 			.get(key.idx())
 			.expect("SchemaKey referring to a non-existing node should have been caught by mark_reachable")
 			.expect("An unreachable node should not be able to be referred to by a reachable node")
 	};
-	for (idx, node) in schema.nodes.iter_mut().enumerate() {
+	let mut i = 0;
+	schema.nodes.retain_mut(|node| {
+		let idx = i;
+		i += 1;
 		if !reachable_nodes[idx] {
-			continue;
+			return false;
 		}
 		match &mut node.type_ {
 			RegularType::Array(Array { items, .. }) => {
@@ -78,7 +75,8 @@ fn remap_nodes(schema: &mut SchemaMut, reachable_nodes: &[bool], key_remap: &[Op
 			| RegularType::Enum(_)
 			| RegularType::Fixed(_) => {}
 		}
-	}
+		true
+	});
 }
 
 fn mark_reachable(
