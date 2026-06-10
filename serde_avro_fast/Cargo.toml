@@ -12,7 +12,7 @@
 	default = ["deflate"]
 	deflate = ["flate2"]
 	snappy = ["snap", "crc32fast"]
-	xz = ["xz2"]
+	xz = ["liblzma"]
 	zstandard = ["zstd"]
 
 [dependencies]
@@ -30,12 +30,12 @@
 	serde_serializer_quick_unsupported = "1"
 	snap = { version = "1", optional = true }
 	thiserror = "2"
-	xz2 = { version = "0.1", optional = true }
+	liblzma = { version = "0.4", optional = true }
 	zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 	anyhow = "1"
-	apache-avro = { version = "0.17", features = ["bzip", "snappy", "xz", "zstandard"] }
+	apache-avro = { version = "0.21", features = ["bzip", "snappy", "xz", "zstandard"] }
 	criterion = "0.8"
 	lazy_static = "1"
 	paste = "1"

@@ -199,9 +199,9 @@ impl CompressionCodecState {
 			}
 			#[cfg(feature = "xz")]
 			Kind::Xz { len, level } => {
-				let mut compress = xz2::stream::Stream::new_easy_encoder(
+				let mut compress = liblzma::stream::Stream::new_easy_encoder(
 					level.instantiate_nb(6),
-					xz2::stream::Check::Crc64,
+					liblzma::stream::Check::Crc64,
 				)
 				.map_err(|err| error("Xz", &err))?;
 				if self.output_vec.is_empty() {
@@ -214,25 +214,25 @@ impl CompressionCodecState {
 						.process(
 							input,
 							&mut self.output_vec[compress.total_out() as usize..],
-							xz2::stream::Action::Finish,
+							liblzma::stream::Action::Finish,
 						)
 						.map_err(|deflate_error| error("Xz", &deflate_error))?;
 					let written = compress.total_in() as usize - before_in;
 					match status {
-						xz2::stream::Status::MemNeeded => {
+						liblzma::stream::Status::MemNeeded => {
 							// There may be more to write.
 							// That may be true even if the input is empty, because bzip2
 							// may have buffered some input.
 							input = &input[written..];
 							self.output_vec.resize(self.output_vec.len() * 2, 0);
 						}
-						xz2::stream::Status::Ok | xz2::stream::Status::GetCheck => {
+						liblzma::stream::Status::Ok | liblzma::stream::Status::GetCheck => {
 							return Err(error(
 								"Xz",
 								&format_args!("got unexpected status from xz2: {status:?}"),
 							));
 						}
-						xz2::stream::Status::StreamEnd => {
+						liblzma::stream::Status::StreamEnd => {
 							assert_eq!(input.len(), written);
 							*len = compress.total_out() as usize;
 							break;

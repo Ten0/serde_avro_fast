@@ -113,7 +113,7 @@ impl CompressionCodec {
 			CompressionCodec::Xz => DecompressionState::BufReader {
 				deserializer_state: de::DeserializerState::with_config(
 					de::read::ReaderRead::new(std::io::BufReader::new(
-						DecompressionReaderForBufReader::Xz(xz2::bufread::XzDecoder::new(
+						DecompressionReaderForBufReader::Xz(liblzma::bufread::XzDecoder::new(
 							de::read::take::Take::take(reader, block_size)?,
 						)),
 					)),
@@ -179,7 +179,7 @@ pub(super) enum DecompressionReaderForBufReader<R: std::io::BufRead> {
 	#[cfg(feature = "bzip2")]
 	Bzip2(bzip2::bufread::BzDecoder<R>),
 	#[cfg(feature = "xz")]
-	Xz(xz2::bufread::XzDecoder<R>),
+	Xz(liblzma::bufread::XzDecoder<R>),
 	#[cfg(feature = "zstandard")]
 	Zstandard(zstd::stream::read::Decoder<'static, R>),
 }
