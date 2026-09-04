@@ -294,12 +294,11 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 			// SAFETY:
 			// - The nodes we create here are never moving in memory since the entire vec is
 			//   preallocated, and even when moving a vec, the pointed space doesn't move.
-			// - The fake `'static` lifetimes are always downgraded before being made
-			//   available.
-			// - We only use pointers from the point at which we call `as_mut_ptr` so the
-			//   compiler will not have aliasing constraints.
-			// - We don't dereference the ~references (NodeRef) we create in key_to_ref
-			//   until all nodes are initialized.
+			// - The fake `'static` lifetimes are always downgraded before being made available.
+			// - We only use pointers from the point at which we call `as_mut_ptr` so the compiler
+			//   will not have aliasing constraints.
+			// - We don't dereference the ~references (NodeRef) we create in key_to_ref until all
+			//   nodes are initialized.
 
 			let new_node = match safe_node {
 				SafeSchemaNode {
@@ -424,8 +423,8 @@ impl TryFrom<super::safe::SchemaMut> for Schema {
 		curr_storage_node_ptr = storage_start_ptr;
 		for _ in 0..len {
 			// Safety:
-			// - UnionVariantsPerTypeLookup won't ever read `per_type_lookup` of the other
-			//   nodes, so there are no aliasing issues.
+			// - UnionVariantsPerTypeLookup won't ever read `per_type_lookup` of the other nodes, so
+			//   there are no aliasing issues.
 			unsafe {
 				match *curr_storage_node_ptr {
 					SchemaNode::Union(Union {

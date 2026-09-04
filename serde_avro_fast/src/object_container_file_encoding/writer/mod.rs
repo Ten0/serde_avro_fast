@@ -360,13 +360,11 @@ impl<'c, 's, W: Write> Writer<'c, 's, W> {
 	/// logic outside of the thread that forms the blocks and compresses them.
 	///
 	/// It is expected that:
-	/// - The provided slice is a valid Avro object serialized with the same
-	///   schema as the one provided to the [`WriterBuilder`] that constructed
-	///   this [`Writer`] (via [`to_datum`](crate::to_datum) or
-	///   [`to_datum_vec`](crate::to_datum_vec) or
+	/// - The provided slice is a valid Avro object serialized with the same schema as the one
+	///   provided to the [`WriterBuilder`] that constructed this [`Writer`] (via
+	///   [`to_datum`](crate::to_datum) or [`to_datum_vec`](crate::to_datum_vec) or
 	///   [`SerializerState::serializer`])
-	/// - `n_elements` is the number of elements that were serialized in the
-	///   provided slice
+	/// - `n_elements` is the number of elements that were serialized in the provided slice
 	///
 	/// If these conditions are not satisfied, the generated object container
 	/// file will be invalid.

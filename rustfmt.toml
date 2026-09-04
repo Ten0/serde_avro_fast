@@ -4,6 +4,7 @@ newline_style = "Unix"
 use_field_init_shorthand = true
 use_try_shorthand = true
 # nightly
+comment_width = 120
 condense_wildcard_suffixes = false
 format_code_in_doc_comments = true
 format_macro_bodies = true
