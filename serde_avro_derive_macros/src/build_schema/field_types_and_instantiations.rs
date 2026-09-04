@@ -274,38 +274,24 @@ impl<'t> FieldTypeAndInstantiationsBuilder<'t, '_> {
 						(schema::Decimal::new(#scale, #precision))
 					});
 				} else {
-					match logical_type_str_pascal.as_str() {
-						"TimestampMillis" | "TimestampMicros" | "TimeMicros" => {
-							if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i64")) {
-								ty = Cow::Owned(
-									parse_quote_spanned!(logical_type_litstr.span() => i64),
-								);
-							}
+					// The spec mandates which Avro type each of these logical types annotates,
+					// so if the field's type is not already the matching one, we override it
+					let mandated_type = match logical_type_str_pascal.as_str() {
+						"TimestampMillis" | "TimestampMicros" | "TimeMicros" => Some("i64"),
+						"TimeMillis" | "Date" => Some("i32"),
+						// It is specified that
+						// "A uuid logical type annotates an Avro string"
+						"Uuid" => Some("String"),
+						_ => None,
+					};
+					if let Some(mandated_type) = mandated_type {
+						if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident(mandated_type)) {
+							let mandated_type =
+								syn::Ident::new(mandated_type, logical_type_litstr.span());
+							ty = Cow::Owned(
+								parse_quote_spanned!(logical_type_litstr.span() => #mandated_type),
+							);
 						}
-						"TimeMillis" => {
-							if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i32")) {
-								ty = Cow::Owned(
-									parse_quote_spanned!(logical_type_litstr.span() => i32),
-								);
-							}
-						}
-						"Uuid" => {
-							if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("String")) {
-								// It is specified that
-								// "A uuid logical type annotates an Avro string"
-								ty = Cow::Owned(
-									parse_quote_spanned!(logical_type_litstr.span() => String),
-								);
-							}
-						}
-						"Date" => {
-							if !matches!(&*ty, syn::Type::Path(p) if p.path.is_ident("i32")) {
-								ty = Cow::Owned(
-									parse_quote_spanned!(logical_type_litstr.span() => i32),
-								);
-							}
-						}
-						_ => {}
 					}
 					let mut error = |field_that_should_not_be_here: &WithMetaPath<syn::LitInt>| {
 						self.errors.extend(

@@ -287,7 +287,7 @@ fn bench_object_container_file_deserialization(c: &mut Criterion) {
 							let value = res?;
 							let deserialized: BigStructOwned = apache_avro::from_value(&value)?;
 							n += u64::from(deserialized.age);
-							Ok::<_, apache_avro::Error>(())
+							Ok::<_, Box<apache_avro::Error>>(())
 						})
 						.unwrap();
 					n

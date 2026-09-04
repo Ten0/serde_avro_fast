@@ -178,7 +178,7 @@ fn test_schema_parse_round_trip(raw_schema: &str) -> (String, [u8; 8]) {
 	let fast_schema_2: SchemaMut = serialized_schema.parse().unwrap();
 	let serialized_schema_2 = serde_json::to_string_pretty(&fast_schema_2).unwrap();
 	assert_eq!(serialized_schema, serialized_schema_2);
-	println!("{}", &serialized_schema);
+	println!("{}", serialized_schema);
 	assert_eq!(
 		fast_schema_2.canonical_form_rabin_fingerprint().unwrap(),
 		fast_fingerprint

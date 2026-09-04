@@ -93,7 +93,7 @@ where
 	let mut writer = WriterBuilder::new(&mut serializer_config)
 		.compression(compression)
 		.build(writer)?;
-	writer.serialize_all(iterator.into_iter())?;
+	writer.serialize_all(iterator)?;
 	writer.into_inner()
 }
 
