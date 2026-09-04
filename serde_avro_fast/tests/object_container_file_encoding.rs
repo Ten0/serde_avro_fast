@@ -290,6 +290,55 @@ fn test_writer_zstandard() {
 	);
 }
 
+/// Once the whole avro block has been deserialized, the zstd decoder may not
+/// have read the end of the compressed frame yet, because it can hand out the
+/// last of the decompressed data before reading the frame epilogue. We still
+/// have to consume it, otherwise we'd consider that there's data left in the
+/// block. That only happens if the block decompresses to more than the buffer
+/// we decompress into, so use blocks that are large enough for that.
+/// https://github.com/gyscos/zstd-rs/issues/255
+#[cfg(feature = "zstandard")]
+#[test]
+fn test_writer_zstandard_block_larger_than_decompression_buffer() {
+	#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+	struct OwnedSchemaRecord {
+		a: i64,
+		b: String,
+	}
+
+	let input: Vec<OwnedSchemaRecord> = (0..1000)
+		.map(|i| OwnedSchemaRecord {
+			a: i,
+			b: format!("{i:0>100}"),
+		})
+		.collect();
+
+	let schema: Schema = SCHEMA.parse().unwrap();
+
+	for approx_block_size in [8 * 1024, 64 * 1024, 1024 * 1024] {
+		let mut serializer_config = SerializerConfig::new(&schema);
+		let mut writer = WriterBuilder::new(&mut serializer_config)
+			.compression(Compression::Zstandard {
+				level: CompressionLevel::default(),
+			})
+			.approx_block_size(approx_block_size)
+			.build(Vec::new())
+			.unwrap();
+		writer.serialize_all(input.iter()).unwrap();
+		let serialized = writer.into_inner().unwrap();
+
+		let mut reader = Reader::from_slice(&serialized).unwrap();
+		let from_slice: Vec<OwnedSchemaRecord> =
+			reader.deserialize().collect::<Result<_, _>>().unwrap();
+		assert_eq!(input, from_slice);
+
+		let mut reader = Reader::from_reader(&serialized[..]).unwrap();
+		let from_reader: Vec<OwnedSchemaRecord> =
+			reader.deserialize().collect::<Result<_, _>>().unwrap();
+		assert_eq!(input, from_reader);
+	}
+}
+
 #[test]
 fn test_reader_invalid_header() {
 	//let schema: Schema = SCHEMA.parse().unwrap();

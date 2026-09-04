@@ -217,28 +217,16 @@ impl<'s, R: de::read::take::Take> DecompressionState<'s, R> {
 						DecompressionReaderForBufReader::Xz(reader) => reader.into_inner(),
 						#[cfg(feature = "zstandard")]
 						DecompressionReaderForBufReader::Zstandard(mut reader) => {
-							// With zstandard, we need to manually drive the reader to the end by
-							// asking to deserialize the rest of the data. If the serialized avro is
-							// correct, this should not yield anything, but if we don't, it won't
-							// read the last bytes of the compressed data, resulting in an error
-							// when checking that there's no data left in the block.
-							// https://github.com/gyscos/zstd-rs/issues/255
-							let mut drive_reader_to_end_buf = [0];
-							let read =
-								std::io::Read::read(&mut reader, &mut drive_reader_to_end_buf)
-									.map_err(|e| {
-										de::DeError::custom_io(
-											"Zstandard error when driving decompressor to end",
-											e,
-										)
-									})?;
-							if read != 0 {
-								return Err(de::DeError::new(
-									"Zstandard decompression error: There's \
-									decompressed data left in the \
-									block after reading the whole avro block out of it",
-								));
-							}
+							// `finish` reads the last bytes of the compressed frame, which we need,
+							// otherwise we would error when checking that there's no data left in
+							// the block. It ignores any IO error encountered while doing so
+							// however, so we call `finish_frame` first to surface those.
+							reader.finish_frame().map_err(|e| {
+								de::DeError::custom_io(
+									"Zstandard error when reading the end of the frame",
+									e,
+								)
+							})?;
 							reader.finish()
 						}
 					})
