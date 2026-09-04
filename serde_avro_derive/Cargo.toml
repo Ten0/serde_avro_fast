@@ -5,12 +5,12 @@
 	license = "MPL-2.0"
 	name = "serde_avro_derive"
 	repository = "https://github.com/Ten0/serde_avro_fast"
-	version = "0.3.2"
+	version = "0.3.3"
 	workspace = ".."
 
 [dependencies]
-	serde_avro_derive_macros = { path = "../serde_avro_derive_macros", version = "0.3.2" }
-	serde_avro_fast = { path = "../serde_avro_fast", version = "2.0.1" }
+	serde_avro_derive_macros = { path = "../serde_avro_derive_macros", version = "0.3.3" }
+	serde_avro_fast = { path = "../serde_avro_fast", version = "2.1.1" }
 
 [dev-dependencies]
 	lazy_static = "1"
