@@ -60,8 +60,7 @@ impl<'a> PerTypeLookup<'a> {
 	///
 	/// Note that the safety/correctness of the self-referential construction
 	/// relies on that this function:
-	/// - Does not read `per_type_lookup` of the other nodes (doesn't need to do
-	///   so anyway)
+	/// - Does not read `per_type_lookup` of the other nodes (doesn't need to do so anyway)
 	pub(crate) fn new(variants: &[NodeRef<'a>]) -> PerTypeLookup<'a> {
 		#[derive(Clone, Copy)]
 		enum NoneSomeOrConflict<'a> {

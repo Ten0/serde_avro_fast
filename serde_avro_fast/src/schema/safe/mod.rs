@@ -236,10 +236,9 @@ pub enum RegularType {
 	///
 	/// These can be deserialized into rust enums, where the variant name
 	/// should match:
-	/// - If it's not a named type, the PascalCase of the type (e.g. `String`,
-	///   `Uuid`...)
-	/// - If it's a named type, the fully qualified name of the type (e.g for a
-	///   record `{"namespace": "foo", "name": "bar"}`, `foo.bar`)
+	/// - If it's not a named type, the PascalCase of the type (e.g. `String`, `Uuid`...)
+	/// - If it's a named type, the fully qualified name of the type (e.g for a record
+	///   `{"namespace": "foo", "name": "bar"}`, `foo.bar`)
 	///
 	/// See the `tests/unions.rs` file for more examples.
 	Union(Union),
