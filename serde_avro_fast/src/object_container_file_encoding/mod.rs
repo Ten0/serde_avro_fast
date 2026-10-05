@@ -207,6 +207,11 @@ enum CompressionCodec {
 	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
 	Zstandard,
 }
+impl Default for CompressionCodec {
+	fn default() -> Self {
+		Self::Null
+	}
+}
 
 const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
 
@@ -214,7 +219,7 @@ const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
 struct Metadata<S, M> {
 	#[serde(rename = "avro.schema")]
 	schema: S,
-	#[serde(rename = "avro.codec")]
+	#[serde(rename = "avro.codec", default)]
 	codec: CompressionCodec,
 	#[serde(flatten)]
 	user_metadata: M,
