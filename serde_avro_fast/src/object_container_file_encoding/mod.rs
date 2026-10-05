@@ -178,10 +178,13 @@ impl Compression {
 }
 
 /// The compression codec used to compress blocks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde_derive::Deserialize, serde_derive::Serialize)]
+#[derive(
+	Clone, Copy, Debug, Default, Eq, PartialEq, serde_derive::Deserialize, serde_derive::Serialize,
+)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 enum CompressionCodec {
+	#[default]
 	/// The `Null` codec simply passes through data uncompressed.
 	Null,
 	#[cfg(feature = "deflate")]
@@ -206,11 +209,6 @@ enum CompressionCodec {
 	#[cfg(feature = "zstandard")]
 	/// The `zstandard` codec uses Facebook’s [Zstandard](https://facebook.github.io/zstd/) compression library
 	Zstandard,
-}
-impl Default for CompressionCodec {
-	fn default() -> Self {
-		Self::Null
-	}
 }
 
 const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
