@@ -178,10 +178,13 @@ impl Compression {
 }
 
 /// The compression codec used to compress blocks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde_derive::Deserialize, serde_derive::Serialize)]
+#[derive(
+	Clone, Copy, Debug, Default, Eq, PartialEq, serde_derive::Deserialize, serde_derive::Serialize,
+)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 enum CompressionCodec {
+	#[default]
 	/// The `Null` codec simply passes through data uncompressed.
 	Null,
 	#[cfg(feature = "deflate")]
@@ -214,7 +217,7 @@ const HEADER_CONST: [u8; 4] = [b'O', b'b', b'j', 1u8];
 struct Metadata<S, M> {
 	#[serde(rename = "avro.schema")]
 	schema: S,
-	#[serde(rename = "avro.codec")]
+	#[serde(rename = "avro.codec", default)]
 	codec: CompressionCodec,
 	#[serde(flatten)]
 	user_metadata: M,
