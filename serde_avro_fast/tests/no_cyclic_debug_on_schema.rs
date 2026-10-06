@@ -30,7 +30,8 @@ fn test_no_cyclic_debug_on_schema() {
 		RegularType::Union(union) => union.variants[1],
 		_ => panic!(),
 	};
-	assert_eq!(sub_root_some, SchemaKey::from_idx(0)); // This is a case where we have to pay attention
+	assert_eq!(sub_root_some, SchemaKey::from_idx(0)); // This is a case where we have to pay
+													   // attention
 	dbg!(&root);
 	let schema: Schema = schema.try_into().unwrap();
 
