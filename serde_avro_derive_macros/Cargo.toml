@@ -2,6 +2,10 @@
 	authors = ["Thomas BESSOU <thomas.bessou@hotmail.fr>"]
 	description = "Derive avro schema for Rust structs for serde_avro_fast"
 	edition = "2021"
+	keywords = [
+		"avro",
+		"serde",
+	]
 	license = "MPL-2.0"
 	name = "serde_avro_derive_macros"
 	repository = "https://github.com/Ten0/serde_avro_fast"
